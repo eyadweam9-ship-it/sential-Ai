@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Login | Sential AI — Autonomous Security</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232563eb'><path d='M12 2 4.5 5v6c0 5 3.2 8.7 7.5 11 4.3-2.3 7.5-6 7.5-11V5z'/></svg>">
+</head>
+<body>
+
+  <div class="auth-shell">
+
+    <!-- Top Left Brand on Visual Column -->
+    <div class="auth-brand">
+      <a href="../index.html" class="brand-container">
+        <div class="brand-mark">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2 4.5 5v6c0 5 3.2 8.7 7.5 11 4.3-2.3 7.5-6 7.5-11V5z"/>
+            <path d="m8.5 12 2.2 2.2 4.8-5"/>
+          </svg>
+        </div>
+        <div>
+          <div class="brand-name">
+            Sential <span class="brand-ai">AI</span>
+          </div>
+          <div class="brand-tagline">Autonomous Security</div>
+        </div>
+      </a>
+    </div>
+
+    <!-- Left Visual Column (1:1 Figma Sential AI Design) -->
+    <div class="auth-visual">
+      <div class="visual-grid"></div>
+      <div class="visual-content">
+        <div class="hero-shield">
+          <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2 4.5 5v6c0 5 3.2 8.7 7.5 11 4.3-2.3 7.5-6 7.5-11V5z"/>
+            <path d="m8.5 12 2.2 2.2 4.8-5"/>
+          </svg>
+        </div>
+
+        <p class="eyebrow-light">Built for modern teams</p>
+        <h1 class="visual-title">
+          Security clarity,<br>without the noise.
+        </h1>
+        <p class="visual-desc">
+          From first scan to verified fix, Sential AI makes every vulnerability actionable with real-time database verification.
+        </p>
+
+        <div class="visual-stats">
+          <div>
+            <div class="stat-item-val">10k+</div>
+            <div class="stat-item-lbl">Assessments</div>
+          </div>
+          <div>
+            <div class="stat-item-val">99.9%</div>
+            <div class="stat-item-lbl">Uptime</div>
+          </div>
+          <div>
+            <div class="stat-item-val">&lt; 1 min</div>
+            <div class="stat-item-lbl">Setup time</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Form Column -->
+    <div class="auth-form-wrap">
+      <div class="auth-form">
+
+        <div>
+          <span class="eyebrow">Admin Portal • Role Verification</span>
+          <h2 class="form-header-title">Log in to Sential AI</h2>
+          <p class="form-header-copy">Sign in with your Administrator credentials to manage security scans and database audit logs.</p>
+        </div>
+
+        <!-- Feedback Alert Box -->
+        <div id="alertBox" class="alert-box" style="display: none; margin-top: 16px; margin-bottom: 8px;">
+          <div id="alertText"></div>
+        </div>
+
+        <!-- Login Form -->
+        <form id="adminLoginForm" autocomplete="off">
+          <div class="field">
+            <label class="field-label" for="email">Work Email</label>
+            <div class="input-wrap">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="20" height="16" x="2" y="4" rx="2"/>
+                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+              </svg>
+              <input 
+                type="email" 
+                id="email" 
+                name="email" 
+                value=""
+                placeholder="" 
+                autocomplete="off"
+                required
+              >
+            </div>
+          </div>
+
+          <div class="field">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.55rem;">
+              <label class="field-label" for="password" style="margin-bottom: 0;">Password</label>
+              <span style="font-size: 0.75rem; color: #64748b; font-weight: 600;">Hashed with BCrypt</span>
+            </div>
+            <div class="input-wrap">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              <input 
+                type="password" 
+                id="password" 
+                name="password" 
+                value=""
+                placeholder="" 
+                autocomplete="new-password"
+                required
+              >
+              <button type="button" id="togglePasswordBtn" class="btn-toggle-eye" title="Toggle password visibility">
+                <svg id="eyeIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" id="submitBtn" class="button-primary">
+            <span id="btnText">Log in to Admin Portal</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12h14"/>
+              <path d="m12 5 7 7-7 7"/>
+            </svg>
+            <div id="btnSpinner" class="spinner" style="display: none;"></div>
+          </button>
+        </form>
+
+        <div style="margin-top: 28px; text-align: center; font-size: 0.85rem; color: #64748b;">
+          <a href="../index.html" style="color: #2563eb; font-weight: 700; text-decoration: none;">← Return to Main Application</a>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <script src="js/login.js"></script>
+</body>
+</html>

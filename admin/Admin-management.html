@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Management | Sential AI</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body class="sential-dashboard">
+
+    <header class="sential-topbar">
+        <a href="dashboard.html" class="brand-container">
+            <div class="brand-mark">
+                <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11z"/>
+                    <path d="m9 12 2 2 4-4"/>
+                </svg>
+            </div>
+            <div>
+                <div class="brand-name">
+                    Sential <span class="brand-ai">AI</span>
+                </div>
+                <div class="brand-tagline">Autonomous Security</div>
+            </div>
+        </a>
+
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <a href="add-admin.html" class="dashboard-btn primary">
+                + Add New Admin
+            </a>
+            <a href="dashboard.html" class="dashboard-btn">
+                Back to Dashboard
+            </a>
+        </div>
+    </header>
+
+    <main class="dashboard-content-area">
+
+        <section class="dash-heading">
+            <div>
+                <p class="dash-eyebrow" style="letter-spacing: 0.16em; text-transform: uppercase; color: #2563eb; font-size: 0.72rem; font-weight: 800;">ADMINISTRATION</p>
+                <h1 class="dash-title" style="margin-top: 8px;">Admin Management</h1>
+                <p class="dash-subtitle">Review active administrators, manage permissions, and toggle access status.</p>
+            </div>
+        </section>
+
+        <section class="sential-card">
+            <div class="sential-card-head">
+                <div>
+                    <h2 class="sential-card-title">Administrator Accounts</h2>
+                    <p class="dash-subtitle">List of users with verified ADMIN role in SQLite database.</p>
+                </div>
+
+                <button
+                    type="button"
+                    class="dashboard-btn"
+                    id="refreshUsersBtn">
+                    Refresh Admins
+                </button>
+            </div>
+
+            <div class="table-scroll">
+                <table class="clean-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Last Login</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTableBody">
+                        <tr>
+                            <td colspan="6" class="dashboard-empty">
+                                Loading administrators...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="padding: 0 24px 16px;">
+                <p id="usersMessage" role="status" aria-live="polite"></p>
+            </div>
+        </section>
+
+        <footer style="margin-top: 40px; text-align: center; font-size: 0.8rem; color: #94a3b8;">
+            <span>Sential AI &bull; Administrator Directory &bull; Access Strictly Role-Enforced</span>
+        </footer>
+
+    </main>
+
+    <script src="js/Admin-management.js"></script>
+</body>
+</html>

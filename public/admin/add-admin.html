@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add New Admin | Sential AI</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body class="sential-dashboard">
+
+  <header class="sential-topbar">
+    <a href="dashboard.html" class="brand-container">
+      <div class="brand-mark">
+        <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11z"/>
+          <path d="m9 12 2 2 4-4"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">
+          Sential <span class="brand-ai">AI</span>
+        </div>
+        <div class="brand-tagline">Autonomous Security</div>
+      </div>
+    </a>
+
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <a href="Admin-management.html" class="dashboard-btn">
+        Admin Management
+      </a>
+      <a href="dashboard.html" class="dashboard-btn">
+        Back to Dashboard
+      </a>
+    </div>
+  </header>
+
+  <main class="dashboard-content-area">
+
+    <div class="dash-heading">
+      <div>
+        <span class="eyebrow">ADMINISTRATION / USERS</span>
+        <h1 class="dash-title" style="margin-top: 8px">
+          Add New Admin
+        </h1>
+        <p class="dash-subtitle">
+          Provision a new administrator account with full security management privileges.
+        </p>
+      </div>
+    </div>
+
+    <section class="sential-card" style="max-width: 800px;">
+      <div class="sential-card-head">
+        <h2 class="sential-card-title">Administrator Credentials</h2>
+      </div>
+
+      <form id="addAdminForm" class="dashboard-form" autocomplete="off">
+
+        <div class="field">
+          <label class="field-label" for="adminFullName">
+            Full Name
+          </label>
+          <input id="adminFullName" name="name" type="text"
+            value="" placeholder="" autocomplete="off" required>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="adminEmail">
+            Work Email Address
+          </label>
+          <input id="adminEmail" name="email" type="email"
+            value="" placeholder="" autocomplete="off" required>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="adminPassword">
+            Password (min. 8 characters)
+          </label>
+          <input id="adminPassword" name="password" type="password"
+            value="" placeholder="" autocomplete="new-password"
+            minlength="8" required>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="adminConfirmPassword">
+            Confirm Password
+          </label>
+          <input id="adminConfirmPassword" name="confirmPassword"
+            value="" placeholder="" autocomplete="new-password"
+            minlength="8" required>
+        </div>
+
+        <div class="dashboard-form-actions">
+          <button type="submit" class="dashboard-btn primary">
+            Create Admin
+          </button>
+
+          <button type="reset" class="dashboard-btn">
+            Clear Form
+          </button>
+        </div>
+
+        <div style="grid-column: 1 / -1;">
+          <p id="addAdminMessage" role="status" aria-live="polite"></p>
+        </div>
+
+      </form>
+    </section>
+
+    <footer style="margin-top: 40px; text-align: center; font-size: 0.8rem; color: #94a3b8;">
+      <span>Sential AI &bull; Role-Based Access Control (RBAC) &bull; Bcrypt Encrypted</span>
+    </footer>
+
+  </main>
+
+  <script src="js/add-admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sential AI — Admin Portal</title>
+    <script>
+        (function() {
+            var token = localStorage.getItem('adminToken');
+            if (token) {
+                window.location.replace('dashboard.html');
+            } else {
+                window.location.replace('login.html');
+            }
+        })();
+    </script>
+</head>
+<body>
+    <p>Redirecting to Sential AI Admin Portal...</p>
+</body>
+</html>

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sential AI — Admin Portal Redirect</title>
+    <script>
+        (function() {
+            var token = localStorage.getItem('adminToken') || localStorage.getItem('sentinel_admin_token');
+            if (token) {
+                window.location.replace('admin/dashboard.html');
+            } else {
+                window.location.replace('admin/login.html');
+            }
+        })();
+    </script>
+</head>
+<body>
+    <div style="font-family: sans-serif; text-align: center; padding: 40px;">
+        <h2>Connecting to Sential AI Admin Portal...</h2>
+        <p>If you are not redirected automatically, <a href="admin/login.html">click here to open Admin Login</a>.</p>
+    </div>
+</body>
+</html>

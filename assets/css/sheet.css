@@ -1,0 +1,306 @@
+/* =========================================================
+   SentinelAI - Google Sheets View Stylesheet
+   Full spreadsheet UI experience with colored pills & English columns
+   ========================================================= */
+
+.sheet-container {
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 0.75rem;
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.08);
+    overflow: hidden;
+    margin-top: 1.5rem;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Sheets Top Bar */
+.sheet-topbar {
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0.6rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.sheet-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.sheet-icon {
+    width: 22px;
+    height: 22px;
+    color: #0f9d58; /* Google Sheets green */
+}
+
+.sheet-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+}
+
+.sheet-badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: #047857;
+    background: #d1fae5;
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+}
+
+.sheet-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.sheet-tool-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #334155;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sheet-tool-btn:hover {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+}
+
+.sheet-tool-btn.primary {
+    background: #0f9d58;
+    color: #ffffff;
+    border-color: #0b8043;
+}
+
+.sheet-tool-btn.primary:hover {
+    background: #0b8043;
+}
+
+/* Formula Bar */
+.sheet-formula-bar {
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0.4rem 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.75rem;
+}
+
+.sheet-cell-address {
+    font-weight: 700;
+    color: #475569;
+    background: #f1f5f9;
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.25rem;
+    min-width: 45px;
+    text-align: center;
+    font-family: monospace;
+}
+
+.sheet-fx-symbol {
+    font-weight: 900;
+    font-style: italic;
+    color: #94a3b8;
+    user-select: none;
+}
+
+.sheet-formula-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-family: monospace;
+    font-size: 0.78rem;
+    color: #0f172a;
+    background: transparent;
+}
+
+/* Spreadsheet Grid View */
+.sheet-grid-wrapper {
+    overflow-x: auto;
+    max-height: 520px;
+    background: #ffffff;
+}
+
+.sheet-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+    table-layout: auto;
+}
+
+.sheet-table th,
+.sheet-table td {
+    border: 1px solid #e2e8f0;
+    padding: 0.5rem 0.75rem;
+    white-space: nowrap;
+    text-align: left;
+}
+
+/* Column Header Row */
+.sheet-table thead tr:first-child th {
+    background: #f8fafc;
+    color: #64748b;
+    font-weight: 700;
+    font-size: 0.68rem;
+    text-align: center;
+    user-select: none;
+    border-bottom: 1px solid #cbd5e1;
+}
+
+.sheet-table thead tr:nth-child(2) th {
+    background: #f1f5f9;
+    color: #1e293b;
+    font-weight: 800;
+    font-size: 0.72rem;
+    border-bottom: 2px solid #cbd5e1;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+/* Row Numbers Column */
+.sheet-row-num {
+    background: #f8fafc !important;
+    color: #94a3b8 !important;
+    font-weight: 700;
+    text-align: center !important;
+    width: 38px;
+    user-select: none;
+    font-family: monospace;
+}
+
+/* Active Cell Highlighting */
+.sheet-table tr:hover td:not(.sheet-row-num) {
+    background-color: #f8fafc;
+}
+
+.sheet-table td.sheet-active-cell {
+    outline: 2px solid #1a73e8 !important;
+    outline-offset: -2px;
+    background-color: #eff6ff !important;
+}
+
+/* Color-Coded Pills for Severity */
+.sheet-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 9999px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    border: 1px solid transparent;
+}
+
+.sheet-pill-critical {
+    color: #dc2626;
+    background: #fef2f2;
+    border-color: #fca5a5;
+}
+
+.sheet-pill-high {
+    color: #ea580c;
+    background: #fff7ed;
+    border-color: #fdba74;
+}
+
+.sheet-pill-medium {
+    color: #d97706;
+    background: #fffbeb;
+    border-color: #fcd34d;
+}
+
+.sheet-pill-low {
+    color: #2563eb;
+    background: #eff6ff;
+    border-color: #bfdbfe;
+}
+
+.sheet-pill-info {
+    color: #64748b;
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+/* Status Pills */
+.sheet-pill-status-fix-ready {
+    color: #059669;
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+}
+
+.sheet-pill-status-confirmed {
+    color: #d97706;
+    background: #fffbeb;
+    border-color: #fde68a;
+}
+
+.sheet-pill-status-reviewing,
+.sheet-pill-status-in-progress {
+    color: #4f46e5;
+    background: #eef2ff;
+    border-color: #c7d2fe;
+}
+
+.sheet-pill-status-open {
+    color: #e11d48;
+    background: #ffe4e6;
+    border-color: #fecdd3;
+}
+
+.sheet-pill-status-fixed {
+    color: #0d9488;
+    background: #f0fdfa;
+    border-color: #99f6e4;
+}
+
+/* Sheet Footer */
+.sheet-footer {
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    padding: 0.4rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    color: #64748b;
+}
+
+.sheet-tabs {
+    display: flex;
+    gap: 0.3rem;
+}
+
+.sheet-tab {
+    padding: 0.25rem 0.75rem;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-bottom: 2px solid #0f9d58;
+    font-weight: 700;
+    color: #0f172a;
+    border-radius: 0.25rem 0.25rem 0 0;
+    cursor: pointer;
+}
+
+.sheet-stats-summary {
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+    font-weight: 600;
+}
