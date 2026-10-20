@@ -1258,51 +1258,36 @@ const App = {
                 </div>
 
                 ${env === 'development' ? `
-                    <!-- Calm, Compact Source Code Upload for Development (SAST) -->
-                    <div class="mt-6">
-                        ${file ? `
-                            <div class="calm-file-staged">
-                                <div class="flex items-center gap-3 min-w-0">
-                                    <div class="calm-optional-icon">
-                                        ${isArchive ? Icons.get('file', 'size-4') : Icons.get('code', 'size-4')}
+                    <!-- ChatGPT-style Minimalist Source Code Upload for Development (SAST) -->
+                    <div class="mt-5">
+                        <div class="chatgpt-attach-bar ${file ? 'has-file' : ''}">
+                            <div class="chatgpt-attach-left">
+                                <button type="button" class="chatgpt-clip-btn" onclick="App.triggerFileInput()" title="Attach file">
+                                    ${Icons.get('file', 'size-3.5')}
+                                </button>
+                                ${file ? `
+                                    <div class="chatgpt-attach-pill">
+                                        <span class="font-semibold text-slate-800 truncate max-w-xs">${escapeHtml(file.name)}</span>
+                                        <span class="text-[11px] text-slate-400">${fileExt} · ${(file.size / (1024 * 1024)).toFixed(2)} MB · Ready</span>
+                                        <button type="button" class="chatgpt-remove-pill-btn" onclick="App.removeStagedFile()" title="Remove file">&times;</button>
                                     </div>
-                                    <div class="min-w-0">
-                                        <div class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(file.name)}</div>
-                                        <div class="text-xs text-slate-400">${fileExt} · ${(file.size / (1024 * 1024)).toFixed(2)} MB · Ready for SAST</div>
-                                    </div>
-                                </div>
-                                <div class="flex items-center gap-2 flex-shrink-0">
-                                    <button type="button" class="calm-action-btn" onclick="App.triggerFileInput()">
-                                        ${Icons.get('refresh', 'size-3')} Change
-                                    </button>
-                                    <button type="button" class="calm-remove-btn" onclick="App.removeStagedFile()" title="Remove file">
-                                        ${Icons.get('x', 'size-3.5')}
-                                    </button>
-                                </div>
+                                ` : `
+                                    <span class="text-xs text-slate-400">Attach source code archive for SAST (.zip, .ts, .js, .py, max 50MB)</span>
+                                `}
                             </div>
-                        ` : `
-                            <div class="calm-dev-upload ${isUploading ? 'opacity-50 pointer-events-none' : ''}" 
-                                 id="dev-upload-dropzone"
-                                 ondragover="App.handleDragOver(event)" 
-                                 ondragleave="App.handleDragLeave(event)" 
-                                 ondrop="App.handleFileDrop(event)">
-                                <div class="calm-dev-icon">
-                                    ${isUploading ? '<span class="spinner"></span>' : Icons.get('upload', 'size-4')}
-                                </div>
-                                <div class="calm-dev-text">
-                                    <div class="text-xs font-semibold text-slate-800">Upload Project Code Archive (SAST)</div>
-                                    <p class="text-[11px] text-slate-400 mt-0.5">Drag &amp; drop .ZIP or choose files (.zip, .ts, .js, .py, max 50MB)</p>
-                                </div>
-                                <div class="calm-dev-btns" onclick="event.stopPropagation()">
-                                    <button type="button" class="calm-action-btn" onclick="App.triggerFileInput()">
-                                        ${Icons.get('file', 'size-3.5')} Choose ZIP / File
+                            <div class="flex items-center gap-1.5 flex-shrink-0">
+                                ${file ? `
+                                    <button type="button" class="chatgpt-attach-btn" onclick="App.triggerFileInput()">Change</button>
+                                ` : `
+                                    <button type="button" class="chatgpt-attach-btn" onclick="App.triggerFileInput()">
+                                        ${Icons.get('file', 'size-3')} Attach ZIP
                                     </button>
-                                    <button type="button" class="calm-action-btn" onclick="App.triggerFolderInput()">
-                                        ${Icons.get('folder', 'size-3.5')} Folder
+                                    <button type="button" class="chatgpt-attach-btn" onclick="App.triggerFolderInput()">
+                                        ${Icons.get('folder', 'size-3')} Folder
                                     </button>
-                                </div>
+                                `}
                             </div>
-                        `}
+                        </div>
 
                         <input type="file" id="target-file-input" class="hidden" accept=".zip,.tar,.gz,.tgz,.js,.ts,.py,.php,.html,.json" onchange="App.handleFileSelect(event)">
                         <input type="file" id="target-folder-input" class="hidden" webkitdirectory directory multiple onchange="App.handleFolderSelect(event)">
@@ -1329,93 +1314,79 @@ const App = {
                             ${env === 'production' ? 'Production safe-mode active: Rate limited to 10 req/s with non-destructive tests (SSRF protected)' : 'Staging mode active: Validates reachable HTTP or HTTPS endpoints (25 req/s)'}
                         </span>
 
-                        <!-- Real-time URL Validation / SSRF Shield Badge -->
+                        <!-- Real-time Minimalist URL Validation Pill -->
                         ${this.scanState.isValidatingUrl ? `
-                            <div class="url-validation-box validating">
-                                <span class="spinner"></span>
-                                <div>
-                                    <div class="font-medium text-slate-700">Validating Target Security &amp; Connectivity...</div>
-                                    <p class="text-xs text-slate-500 mt-0.5">Checking DNS resolution, TLS handshake, and enforcing anti-SSRF boundaries.</p>
+                            <div class="chatgpt-val-pill validating">
+                                <div class="flex items-center gap-2">
+                                    <span class="spinner" style="width:12px;height:12px;"></span>
+                                    <span class="text-xs text-slate-500">Checking DNS resolution, TLS handshake &amp; SSRF boundaries...</span>
                                 </div>
                             </div>
                         ` : (this.scanState.urlValidation ? `
                             ${(this.scanState.urlValidation.valid || this.scanState.urlValidation.isValid) ? `
-                                <div class="url-validation-box valid">
-                                    <div class="icon-tile mint size-7 flex-shrink-0">${Icons.get('check', 'size-4')}</div>
-                                    <div class="flex-1">
-                                        <div class="font-bold text-slate-900 flex items-center justify-between">
-                                            <span>Target Verified &amp; Safe for Assessment</span>
-                                            <span class="text-xs text-emerald-700 font-semibold">${this.scanState.urlValidation.isLocalTest ? 'Local / Sandbox' : (this.scanState.urlValidation.isMockDemo ? 'Verified Demo Target' : 'Verified')}</span>
-                                        </div>
-                                        <div class="url-meta-chips">
-                                            <span class="url-meta-chip green">${Icons.get('shield', 'size-3')} SSRF Protected</span>
-                                            <span class="url-meta-chip blue">${Icons.get('globe', 'size-3')} IP: ${this.scanState.urlValidation.ip || 'Resolved'}</span>
-                                            ${this.scanState.urlValidation.tls ? `
-                                                <span class="url-meta-chip green">${Icons.get('lock', 'size-3')} ${this.scanState.urlValidation.tls?.protocol || 'TLSv1.3'}</span>
-                                            ` : `
-                                                <span class="url-meta-chip amber">${Icons.get('globe', 'size-3')} HTTP (Unencrypted)</span>
-                                            `}
-                                            ${this.scanState.urlValidation.responseTimeMs ? `<span class="url-meta-chip">${this.scanState.urlValidation.responseTimeMs}ms latency</span>` : ''}
-                                            <button type="button" class="url-meta-chip blue hover:bg-blue-100 cursor-pointer flex items-center gap-1 font-semibold transition" onclick="App.toggleDiscoveryModal()">
-                                                ${this.scanState.isLoadingDiscovery ? '<span class="spinner" style="width:10px;height:10px;"></span>' : Icons.get('folder', 'size-3')}
-                                                <span>${this.scanState.discoverySummary?.resources?.length ? `${this.scanState.discoverySummary.resources.length} Files Reached` : 'View Reached Files'}</span>
-                                            </button>
-                                        </div>
+                                <div class="chatgpt-val-pill valid">
+                                    <div class="flex items-center gap-2">
+                                        <span class="chatgpt-val-icon text-emerald-600">${Icons.get('check', 'size-3.5')}</span>
+                                        <span class="text-xs font-semibold text-slate-800">Target Verified</span>
+                                        <span class="text-[11px] text-slate-400 font-mono hidden sm:inline">(${escapeHtml(this.scanState.urlValidation.hostname || '')})</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <span class="chatgpt-subtle-tag">${Icons.get('shield', 'size-2.5')} SSRF Safe</span>
+                                        <span class="chatgpt-subtle-tag font-mono">${this.scanState.urlValidation.ip || 'Resolved'}</span>
+                                        <span class="chatgpt-subtle-tag ${this.scanState.urlValidation.tls ? 'text-emerald-700 font-semibold' : 'text-amber-700'}">
+                                            ${this.scanState.urlValidation.tls ? (this.scanState.urlValidation.tls.protocol || 'TLSv1.3') : 'HTTP'}
+                                        </span>
+                                        ${this.scanState.urlValidation.responseTimeMs ? `<span class="chatgpt-subtle-tag">${this.scanState.urlValidation.responseTimeMs}ms</span>` : ''}
+                                        <button type="button" class="chatgpt-subtle-btn" onclick="App.toggleDiscoveryModal()" title="View reached assets in modal">
+                                            ${this.scanState.isLoadingDiscovery ? '<span class="spinner" style="width:9px;height:9px;"></span>' : Icons.get('folder', 'size-2.5')}
+                                            <span>${this.scanState.discoverySummary?.resources?.length ? `${this.scanState.discoverySummary.resources.length} files` : 'Files'}</span>
+                                        </button>
                                     </div>
                                 </div>
-                                ${this.renderDiscoveredFolderTree()}
                             ` : `
-                                <div class="url-validation-box invalid">
-                                    <div class="icon-tile size-7 text-rose-600 bg-rose-50 flex-shrink-0">${Icons.get('alert', 'size-4')}</div>
-                                    <div class="flex-1">
-                                        <div class="font-bold text-rose-800">Target Validation Failed</div>
-                                        <p class="text-xs text-rose-700 mt-0.5">${escapeHtml(this.scanState.urlValidation.error || 'Blocked by security policy or DNS resolution failed.')}</p>
+                                <div class="chatgpt-val-pill invalid">
+                                    <div class="flex items-center gap-2">
+                                        <span class="chatgpt-val-icon text-rose-500">${Icons.get('alert', 'size-3.5')}</span>
+                                        <span class="text-xs font-medium text-rose-700">${escapeHtml(this.scanState.urlValidation.error || 'Blocked by security policy or DNS resolution failed.')}</span>
                                     </div>
                                 </div>
                             `}
                         ` : '')}
                     </label>
 
-                    <!-- Calm & Minimal Optional Source Code Bar for Staging & Production -->
-                    <div class="calm-optional-box ${(this.scanState.optionalCodeFile || this.scanState.gitRepoUrl) ? 'has-code' : ''}">
-                        <div class="calm-optional-left">
-                            <div class="calm-optional-icon">
+                    <!-- ChatGPT-Style Minimalist Optional Source Code for Staging & Production -->
+                    <div class="chatgpt-attach-bar ${(this.scanState.optionalCodeFile || this.scanState.gitRepoUrl) ? 'has-file' : ''}">
+                        <div class="chatgpt-attach-left">
+                            <button type="button" class="chatgpt-clip-btn" onclick="App.triggerOptionalFileInput()" title="Attach code">
                                 ${Icons.get('code', 'size-3.5')}
-                            </div>
-                            <div>
-                                <div class="flex items-center gap-1.5">
-                                    <span class="text-xs font-semibold text-slate-800">Optional Source Code</span>
-                                    <span class="calm-subtle-badge">SAST + DAST</span>
-                                </div>
-                                <span class="text-[11px] text-slate-400">
-                                    ${this.scanState.optionalCodeFile 
-                                        ? `ZIP: ${escapeHtml(this.scanState.optionalCodeFile.name)} · Staged` 
-                                        : (this.scanState.gitRepoUrl 
-                                            ? `Git: ${escapeHtml(this.scanState.gitRepoUrl)}` 
-                                            : 'Attach repo or ZIP to inspect code alongside web tests')}
-                                </span>
-                            </div>
-                        </div>
-
-                        <div class="calm-optional-right">
+                            </button>
                             ${this.scanState.optionalCodeFile ? `
-                                <span class="calm-chip-pill">
-                                    ${escapeHtml(this.scanState.optionalCodeFile.name)}
-                                    <button type="button" onclick="App.removeOptionalCodeFile()" title="Remove file">&times;</button>
-                                </span>
+                                <div class="chatgpt-attach-pill">
+                                    <span class="font-semibold text-slate-800 truncate max-w-xs">${escapeHtml(this.scanState.optionalCodeFile.name)}</span>
+                                    <span class="text-[11px] text-slate-400">SAST Staged</span>
+                                    <button type="button" class="chatgpt-remove-pill-btn" onclick="App.removeOptionalCodeFile()" title="Remove file">&times;</button>
+                                </div>
                             ` : (this.scanState.gitRepoUrl ? `
-                                <span class="calm-chip-pill">
-                                    ${escapeHtml(this.scanState.gitRepoUrl.split('/').slice(-1)[0] || 'Git Linked')}
-                                    <button type="button" onclick="App.clearGitRepoUrl()" title="Remove git repo">&times;</button>
-                                </span>
+                                <div class="chatgpt-attach-pill">
+                                    <span class="font-semibold text-slate-800 truncate max-w-xs">${escapeHtml(this.scanState.gitRepoUrl.split('/').slice(-1)[0] || 'Git Linked')}</span>
+                                    <span class="text-[11px] text-slate-400">Git Linked</span>
+                                    <button type="button" class="chatgpt-remove-pill-btn" onclick="App.clearGitRepoUrl()" title="Remove git repo">&times;</button>
+                                </div>
                             ` : `
-                                <button type="button" class="calm-action-btn" onclick="App.triggerOptionalFileInput()">
+                                <span class="text-xs text-slate-400">Optional source code for Hybrid SAST + DAST (.zip or Git)</span>
+                            `)}
+                        </div>
+                        <div class="flex items-center gap-1.5 flex-shrink-0">
+                            ${(this.scanState.optionalCodeFile || this.scanState.gitRepoUrl) ? `
+                                <button type="button" class="chatgpt-attach-btn" onclick="App.triggerOptionalFileInput()">Change</button>
+                            ` : `
+                                <button type="button" class="chatgpt-attach-btn" onclick="App.triggerOptionalFileInput()">
                                     ${Icons.get('file', 'size-3')} Attach ZIP
                                 </button>
-                                <button type="button" class="calm-action-btn" onclick="App.toggleGitInput()">
+                                <button type="button" class="chatgpt-attach-btn" onclick="App.toggleGitInput()">
                                     ${Icons.get('folder', 'size-3')} Git Link
                                 </button>
-                            `)}
+                            `}
                         </div>
                     </div>
 
