@@ -296,7 +296,7 @@ const App = {
         treeCollapsed: false,
         scope: {
             includedPaths: ['/*'],
-            excludedPaths: ['/logout', '/payments', '/api/delete-account'],
+            excludedPaths: ['None'],
             rateLimit: '10 req/sec'
         },
         verifyMethod: 0,
@@ -2806,7 +2806,7 @@ const App = {
         if (!this.scanState.scope) {
             this.scanState.scope = {
                 includedPaths: ['/*'],
-                excludedPaths: ['/logout', '/payments', '/api/delete-account'],
+                excludedPaths: ['None'],
                 rateLimit: '10 req/sec'
             };
         }
@@ -2825,7 +2825,14 @@ const App = {
                 .map(s => s.trim())
                 .filter(Boolean);
         } else if (!Array.isArray(this.scanState.scope.excludedPaths)) {
-            this.scanState.scope.excludedPaths = ['/logout', '/payments', '/api/delete-account'];
+            this.scanState.scope.excludedPaths = ['None'];
+        }
+
+        if (this.scanState.scope.includedPaths.length === 0) {
+            this.scanState.scope.includedPaths = ['/*'];
+        }
+        if (this.scanState.scope.excludedPaths.length === 0) {
+            this.scanState.scope.excludedPaths = ['None'];
         }
     },
 
@@ -2833,27 +2840,31 @@ const App = {
         this.ensureScopeArrays();
         const isInc = type === 'included';
         const list = isInc ? this.scanState.scope.includedPaths : this.scanState.scope.excludedPaths;
-        const placeholder = isInc ? 'Type /path to add or filter...' : 'Type /path to exclude (e.g. /logout)...';
 
         return `
-            <div class="scope-tag-box" id="scope-tag-box-${type}" onclick="document.getElementById('scope-tag-input-${type}')?.focus()">
-                ${list.map((tag, idx) => `
-                    <span class="scope-tag-chip ${isInc ? 'included' : 'excluded'}">
-                        <span>${escapeHtml(tag)}</span>
-                        <span class="scope-tag-remove" onclick="event.stopPropagation(); App.removeScopeTag('${type}', ${idx})" title="Remove ${escapeHtml(tag)}">&times;</span>
-                    </span>
-                `).join('')}
-                <input type="text" 
-                    id="scope-tag-input-${type}" 
-                    class="scope-tag-input" 
-                    placeholder="${list.length === 0 ? 'Type /path...' : ''}" 
-                    autocomplete="off"
-                    oninput="App.onScopeInput(event, '${type}')"
-                    onkeydown="App.onScopeKeyDown(event, '${type}')"
-                    onfocus="App.onScopeInput(event, '${type}')"
-                >
+            <div class="scope-tag-field">
+                <div class="scope-tag-box" id="scope-tag-box-${type}" onclick="document.getElementById('scope-tag-input-${type}')?.focus(); App.onScopeInput({ target: { value: '' } }, '${type}');">
+                    ${list.map((tag, idx) => {
+                        const isNone = String(tag).toLowerCase() === 'none';
+                        return `
+                            <span class="scope-tag-chip ${isNone ? 'none-chip' : (isInc ? 'included' : 'excluded')}">
+                                <span>${escapeHtml(tag)}</span>
+                                ${isNone ? '' : `<span class="scope-tag-remove" onclick="event.stopPropagation(); App.removeScopeTag('${type}', ${idx})" title="Remove">&times;</span>`}
+                            </span>
+                        `;
+                    }).join('')}
+                    <input type="text" 
+                        id="scope-tag-input-${type}" 
+                        class="scope-tag-input" 
+                        placeholder="${(list.length === 0 || (list.length === 1 && String(list[0]).toLowerCase() === 'none')) ? 'Type /path or choose from list...' : ''}" 
+                        autocomplete="off"
+                        oninput="App.onScopeInput(event, '${type}')"
+                        onkeydown="App.onScopeKeyDown(event, '${type}')"
+                        onfocus="App.onScopeInput(event, '${type}')"
+                    >
+                </div>
+                <div id="scope-autocomplete-${type}" class="scope-autocomplete-dropdown" style="display: none;"></div>
             </div>
-            <div id="scope-autocomplete-${type}" class="scope-autocomplete-dropdown" style="display: none;"></div>
         `;
     },
 
@@ -2872,9 +2883,35 @@ const App = {
         this.ensureScopeArrays();
         if (!rawPath) return;
         let p = rawPath.trim();
+
+        if (type === 'excluded') {
+            if (p.toLowerCase() === 'none') {
+                this.scanState.scope.excludedPaths = ['None'];
+                this.closeScopeAutocomplete();
+                this.renderScopeTags(type);
+                return;
+            }
+            // Remove 'None' placeholder tag when adding a real exclusion
+            this.scanState.scope.excludedPaths = this.scanState.scope.excludedPaths.filter(x => x.toLowerCase() !== 'none');
+        }
+
+        if (type === 'included') {
+            if (p === '/*' || p.toLowerCase() === 'all') {
+                this.scanState.scope.includedPaths = ['/*'];
+                this.closeScopeAutocomplete();
+                this.renderScopeTags(type);
+                return;
+            }
+            // If currently only '/*', replace with the specific path
+            if (this.scanState.scope.includedPaths.length === 1 && this.scanState.scope.includedPaths[0] === '/*') {
+                this.scanState.scope.includedPaths = [];
+            }
+        }
+
         if (!p.startsWith('/') && !p.startsWith('*') && !p.startsWith('.')) {
             p = '/' + p;
         }
+
         const list = type === 'included' ? this.scanState.scope.includedPaths : this.scanState.scope.excludedPaths;
         if (!list.includes(p)) {
             list.push(p);
@@ -2888,6 +2925,12 @@ const App = {
         const list = type === 'included' ? this.scanState.scope.includedPaths : this.scanState.scope.excludedPaths;
         if (index >= 0 && index < list.length) {
             list.splice(index, 1);
+        }
+        if (type === 'included' && this.scanState.scope.includedPaths.length === 0) {
+            this.scanState.scope.includedPaths = ['/*'];
+        }
+        if (type === 'excluded' && this.scanState.scope.excludedPaths.length === 0) {
+            this.scanState.scope.excludedPaths = ['None'];
         }
         this.renderScopeTags(type);
     },
@@ -2905,9 +2948,9 @@ const App = {
             }
         } else {
             if (preset === 'none') {
-                this.scanState.scope.excludedPaths = [];
+                this.scanState.scope.excludedPaths = ['None'];
             } else if (preset === 'sensitive') {
-                this.scanState.scope.excludedPaths = ['/logout', '/payments', '/api/delete-account', '/admin/critical-operation'];
+                this.scanState.scope.excludedPaths = ['/logout', '/payments', '/api/delete-account'];
             } else {
                 this.addScopeTag('excluded', preset);
                 return;
@@ -2926,45 +2969,33 @@ const App = {
 
         const addCandidate = (path, badge, badgeClass) => {
             if (!path) return;
-            const norm = (path.startsWith('/') || path.startsWith('*')) ? path : '/' + path;
+            const norm = (path.startsWith('/') || path.startsWith('*') || path.toLowerCase() === 'none') ? path : '/' + path;
             if (seen.has(norm.toLowerCase())) return;
             seen.add(norm.toLowerCase());
             candidates.push({ path: norm, badge, badgeClass });
         };
 
-        // 1. Endpoints from Step 2 Discovery
-        if (this.scanState.discoverySummary && Array.isArray(this.scanState.discoverySummary.resources)) {
-            for (const r of this.scanState.discoverySummary.resources) {
-                try {
-                    const u = new URL(r.url);
-                    const p = u.pathname;
-                    if (p && p !== '/' && !seen.has(p.toLowerCase())) {
-                        addCandidate(p, r.type || 'PAGE', r.type === 'API_ENDPOINT' ? 'api' : 'page');
-                    }
-                } catch {}
-            }
-        }
-
-        // 2. Pre-configured Common Web Endpoints
+        // 1. Pre-configured list options
         const commonPaths = type === 'included' ? [
             { path: '/*', badge: 'All Paths', badgeClass: 'preset' },
-            { path: '/login', badge: 'Auth Page', badgeClass: 'page' },
-            { path: '/api/v1', badge: 'API Route', badgeClass: 'api' },
-            { path: '/api/v2', badge: 'API Route', badgeClass: 'api' },
-            { path: '/dashboard', badge: 'App View', badgeClass: 'page' },
-            { path: '/products', badge: 'Catalog', badgeClass: 'page' },
-            { path: '/checkout', badge: 'Checkout', badgeClass: 'page' },
-            { path: '/account', badge: 'Settings', badgeClass: 'page' },
-            { path: '/search', badge: 'Search', badgeClass: 'page' },
-            { path: '/graphql', badge: 'GraphQL', badgeClass: 'api' }
+            { path: '/login', badge: 'Page', badgeClass: 'page' },
+            { path: '/api/v1', badge: 'API', badgeClass: 'api' },
+            { path: '/api/v2', badge: 'API', badgeClass: 'api' },
+            { path: '/dashboard', badge: 'Page', badgeClass: 'page' },
+            { path: '/products', badge: 'Page', badgeClass: 'page' },
+            { path: '/checkout', badge: 'Page', badgeClass: 'page' },
+            { path: '/account', badge: 'Page', badgeClass: 'page' },
+            { path: '/search', badge: 'Page', badgeClass: 'page' },
+            { path: '/graphql', badge: 'API', badgeClass: 'api' }
         ] : [
-            { path: '/logout', badge: 'Session Terminate', badgeClass: 'sensitive' },
-            { path: '/payments', badge: 'Financial Gateway', badgeClass: 'sensitive' },
-            { path: '/checkout/pay', badge: 'Payment Processing', badgeClass: 'sensitive' },
-            { path: '/api/delete-account', badge: 'Destructive Op', badgeClass: 'sensitive' },
-            { path: '/admin/critical-operation', badge: 'Super Admin', badgeClass: 'sensitive' },
-            { path: '/api/reset-password', badge: 'Password Reset', badgeClass: 'sensitive' },
-            { path: '/billing', badge: 'Billing Hub', badgeClass: 'sensitive' },
+            { path: 'None', badge: 'Default', badgeClass: 'preset' },
+            { path: '/logout', badge: 'Sensitive', badgeClass: 'sensitive' },
+            { path: '/payments', badge: 'Sensitive', badgeClass: 'sensitive' },
+            { path: '/checkout/pay', badge: 'Sensitive', badgeClass: 'sensitive' },
+            { path: '/api/delete-account', badge: 'Sensitive', badgeClass: 'sensitive' },
+            { path: '/admin/critical-operation', badge: 'Sensitive', badgeClass: 'sensitive' },
+            { path: '/api/reset-password', badge: 'Sensitive', badgeClass: 'sensitive' },
+            { path: '/billing', badge: 'Sensitive', badgeClass: 'sensitive' },
             { path: '/webhook', badge: 'Integration', badgeClass: 'preset' }
         ];
 
@@ -2972,19 +3003,30 @@ const App = {
             addCandidate(item.path, item.badge, item.badgeClass);
         }
 
-        const filtered = query ? candidates.filter(c => c.path.toLowerCase().includes(query)) : candidates.slice(0, 7);
-
-        if (filtered.length === 0 && !query) {
-            dropdown.style.display = 'none';
-            return;
+        // 2. Discovered endpoints from Step 2 Discovery
+        if (this.scanState.discoverySummary && Array.isArray(this.scanState.discoverySummary.resources)) {
+            for (const r of this.scanState.discoverySummary.resources) {
+                try {
+                    const u = new URL(r.url);
+                    const p = u.pathname;
+                    if (p && p !== '/' && !seen.has(p.toLowerCase())) {
+                        addCandidate(p, r.type === 'API_ENDPOINT' ? 'API' : 'Page', r.type === 'API_ENDPOINT' ? 'api' : 'page');
+                    }
+                } catch {}
+            }
         }
 
+        // Letter matching filter
+        const filtered = query
+            ? candidates.filter(c => c.path.toLowerCase().includes(query))
+            : candidates;
+
         let itemsHtml = '';
-        if (query && !seen.has(query.toLowerCase()) && !seen.has(('/' + query).toLowerCase())) {
+        if (query && !seen.has(query.toLowerCase()) && !seen.has(('/' + query).toLowerCase()) && query !== 'none') {
             const customNorm = query.startsWith('/') ? query : '/' + query;
             itemsHtml += `
                 <div class="scope-autocomplete-item" onclick="App.addScopeTag('${type}', '${escapeHtml(customNorm)}')">
-                    <span class="match-text">Add custom: <span class="match-hl">${escapeHtml(customNorm)}</span></span>
+                    <span class="match-text">+ Add custom: <span class="match-hl">${escapeHtml(customNorm)}</span></span>
                     <span class="scope-autocomplete-badge preset">Custom</span>
                 </div>
             `;
@@ -2992,14 +3034,12 @@ const App = {
 
         for (const item of filtered) {
             let displayPath = escapeHtml(item.path);
-            if (query) {
+            if (query && item.path.toLowerCase().includes(query)) {
                 const idx = item.path.toLowerCase().indexOf(query);
-                if (idx !== -1) {
-                    const before = item.path.slice(0, idx);
-                    const match = item.path.slice(idx, idx + query.length);
-                    const after = item.path.slice(idx + query.length);
-                    displayPath = `${escapeHtml(before)}<span class="match-hl">${escapeHtml(match)}</span>${escapeHtml(after)}`;
-                }
+                const before = item.path.slice(0, idx);
+                const match = item.path.slice(idx, idx + query.length);
+                const after = item.path.slice(idx + query.length);
+                displayPath = `${escapeHtml(before)}<span class="match-hl">${escapeHtml(match)}</span>${escapeHtml(after)}`;
             }
 
             itemsHtml += `
@@ -3393,13 +3433,6 @@ const App = {
                             <div class="boundary-list-row">
                                 <div class="boundary-row-head">
                                     <span class="boundary-row-label">Included paths</span>
-                                    <div class="boundary-inline-presets">
-                                        <span class="scope-preset-pill ${(this.scanState.scope.includedPaths || []).includes('/*') ? 'active' : ''}" onclick="App.setScopePreset('included', 'all')">All Paths (/*)</span>
-                                        <span class="scope-preset-pill" onclick="App.setScopePreset('included', '/login')">+ /login</span>
-                                        <span class="scope-preset-pill" onclick="App.setScopePreset('included', '/api/v1')">+ /api/v1</span>
-                                        <span class="scope-preset-pill" onclick="App.setScopePreset('included', '/dashboard')">+ /dashboard</span>
-                                        <span class="scope-preset-pill" onclick="App.setScopePreset('included', '/products')">+ /products</span>
-                                    </div>
                                 </div>
                                 <div id="scope-field-wrap-included">
                                     ${this.renderScopeTagsHtml('included')}
@@ -3410,13 +3443,6 @@ const App = {
                             <div class="boundary-list-row">
                                 <div class="boundary-row-head">
                                     <span class="boundary-row-label">Excluded paths</span>
-                                    <div class="boundary-inline-presets">
-                                        <span class="scope-preset-pill danger-preset" onclick="App.setScopePreset('excluded', '/logout')">+ /logout</span>
-                                        <span class="scope-preset-pill danger-preset" onclick="App.setScopePreset('excluded', '/payments')">+ /payments</span>
-                                        <span class="scope-preset-pill danger-preset" onclick="App.setScopePreset('excluded', '/api/delete-account')">+ /api/delete-account</span>
-                                        <span class="scope-preset-pill danger-preset" onclick="App.setScopePreset('excluded', '/admin/critical-operation')">+ /admin/critical</span>
-                                        <span class="scope-preset-pill" onclick="App.setScopePreset('excluded', 'none')">None</span>
-                                    </div>
                                 </div>
                                 <div id="scope-field-wrap-excluded">
                                     ${this.renderScopeTagsHtml('excluded')}
@@ -3512,7 +3538,11 @@ const App = {
                 optionalFilePath: !isDev ? (this.scanState.optionalCodeFile?.path || '') : '',
                 optionalFileName: !isDev ? (this.scanState.optionalCodeFile?.name || '') : '',
                 gitRepoUrl: !isDev ? (this.scanState.gitRepoUrl || '') : '',
-                scope: JSON.stringify(this.scanState.scope),
+                scope: JSON.stringify({
+                    includedPaths: (this.scanState.scope.includedPaths || []).filter(x => x && x !== 'None'),
+                    excludedPaths: (this.scanState.scope.excludedPaths || []).filter(x => x && x.toLowerCase() !== 'none'),
+                    rateLimit: '10 req/sec'
+                }),
                 confirmed_authorization: true
             };
 
