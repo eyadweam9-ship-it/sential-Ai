@@ -667,23 +667,35 @@ export async function getAdminAuthorizationRequests(statusFilter?: string) {
     include: { target: true },
   });
 
-  return requests.map((r) => ({
-    id: r.id,
-    targetId: r.targetId,
-    targetUrl: r.target.url,
-    targetName: r.target.name,
-    environment: r.target.environment,
-    method: r.method,
-    status: r.status,
-    ownerName: r.ownerName || 'System Owner',
-    ownerTitle: r.ownerTitle || 'Authorized Representative',
-    letterFileUrl: r.letterFileUrl,
-    scopeJson: r.scopeJson ? JSON.parse(r.scopeJson) : null,
-    submittedAt: r.createdAt,
-    verifiedAt: r.verifiedAt,
-    reviewedBy: r.reviewedBy,
-    reviewNotes: r.reviewNotes,
-  }));
+  const userIds = requests.map((r) => r.userId).filter(Boolean) as number[];
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, name: true, email: true },
+  });
+  const userMap = new Map(users.map((u) => [u.id, u]));
+
+  return requests.map((r) => {
+    const user = r.userId ? userMap.get(r.userId) : null;
+    return {
+      id: r.id,
+      targetId: r.targetId,
+      targetUrl: r.target.url,
+      targetName: r.target.name,
+      environment: r.target.environment,
+      method: r.method,
+      status: r.status,
+      submitterName: user?.name || 'Registered Assessor',
+      submitterEmail: user?.email || 'user@scanner.local',
+      ownerName: r.ownerName || 'System Owner',
+      ownerTitle: r.ownerTitle || 'Authorized Representative',
+      letterFileUrl: r.letterFileUrl,
+      scopeJson: r.scopeJson ? JSON.parse(r.scopeJson) : null,
+      submittedAt: r.createdAt,
+      verifiedAt: r.verifiedAt,
+      reviewedBy: r.reviewedBy,
+      reviewNotes: r.reviewNotes,
+    };
+  });
 }
 
 /**

@@ -2794,69 +2794,6 @@ const App = {
         this.render();
     },
 
-    async toggleAdminReviewModal(show = true) {
-        this.scanState.authData.showAdminModal = show;
-        if (show) {
-            await this.loadAdminAuthorizations();
-        } else {
-            this.render();
-        }
-    },
-
-    async loadAdminAuthorizations(statusFilter = 'ALL') {
-        this.scanState.authData.adminFilter = statusFilter;
-        this.scanState.authData.isLoadingAdmin = true;
-        this.render();
-
-        try {
-            const res = await API.getAdminAuthorizations(statusFilter);
-            this.scanState.authData.adminRequests = res.requests || [];
-        } catch (err) {
-            console.warn('loadAdminAuthorizations error:', err);
-            this.scanState.authData.adminRequests = [];
-        }
-
-        this.scanState.authData.isLoadingAdmin = false;
-        this.render();
-    },
-
-    async handleAdminDecision(requestId, decision) {
-        let reason = '';
-        if (decision !== 'APPROVED') {
-            reason = prompt(`Please enter mandatory reason/feedback for ${decision}:`, decision === 'NEEDS_CHANGES' ? 'Please provide clear stamp and signature on Page 2.' : 'Domain does not match company credentials.');
-            if (reason === null) return; // user cancelled
-            if (!reason.trim()) {
-                showToast('A reason is mandatory when rejecting or requesting changes.', 'error');
-                return;
-            }
-        }
-
-        try {
-            const res = await API.reviewAuthorization(requestId, decision, reason, this.currentUser?.name || 'Security Administrator');
-            showToast(res.message || `Request #${requestId} marked as ${decision}.`, 'success');
-
-            // If approved, update active target gate
-            if (decision === 'APPROVED') {
-                this.scanState.authData.status = 'APPROVED';
-                this.scanState.authData.gateAllowed = true;
-                this.scanState.authData.method = 'WRITTEN';
-                this.scanState.authData.gateMessage = `Written authorization approved by administrator! Scans are unlocked.`;
-            } else if (decision === 'NEEDS_CHANGES') {
-                this.scanState.authData.status = 'NEEDS_CHANGES';
-                this.scanState.authData.gateAllowed = false;
-                this.scanState.authData.gateMessage = `Administrator requested changes: "${reason}"`;
-            } else {
-                this.scanState.authData.status = 'REJECTED';
-                this.scanState.authData.gateAllowed = false;
-                this.scanState.authData.gateMessage = `Administrator rejected request: "${reason}"`;
-            }
-
-            await this.loadAdminAuthorizations(this.scanState.authData.adminFilter || 'ALL');
-        } catch (err) {
-            showToast(err.message || 'Failed to update authorization review.', 'error');
-        }
-    },
-
     renderScopeStep() {
         const env = (this.scanState.environment || 'development').toLowerCase();
         const isDev = env === 'development';
@@ -2888,9 +2825,9 @@ const App = {
                 copy: 'Confirm target control and define safe assessment boundaries.'
             })}
 
-            <div class="scope-layout">
+            <div class="scope-layout-spacious">
                 <!-- Left: Verification Method or SAST Rules -->
-                <div class="form-card">
+                <div class="form-card" style="padding: 1.85rem 2rem;">
                     <div class="form-card-head">
                         <div class="icon-tile blue">${Icons.get('lock', 'size-5')}</div>
                         <div>
@@ -2924,234 +2861,253 @@ const App = {
                             </div>
                         </div>
                     ` : `
-                        <!-- Sleek Segmented Control Nav -->
-                        <div class="auth-segmented-nav">
-                            <div class="auth-segmented-tab ${verifyMethod === 0 ? 'active' : ''}" onclick="App.selectVerifyMethod(0)">
-                                ${Icons.get('globe', 'size-4')}
-                                <span>DNS Record</span>
-                                <span class="auth-badge-pill auto">Auto</span>
-                            </div>
-
-                            <div class="auth-segmented-tab ${verifyMethod === 1 ? 'active' : ''}" onclick="App.selectVerifyMethod(1)">
-                                ${Icons.get('file', 'size-4')}
-                                <span>Verify File</span>
-                                <span class="auth-badge-pill auto">Auto</span>
-                            </div>
-
-                            <div class="auth-segmented-tab ${verifyMethod === 2 ? 'active' : ''}" onclick="App.selectVerifyMethod(2)">
-                                ${Icons.get('shield', 'size-4')}
-                                <span>Written Letter</span>
-                                <span class="auth-badge-pill admin">Admin</span>
-                            </div>
-                        </div>
-
-                        <!-- METHOD 0: DNS Verification -->
-                        ${verifyMethod === 0 ? `
-                            <div class="auth-method-container">
-                                <p class="text-xs text-slate-500 mb-3 leading-relaxed">
-                                    Add this <b>TXT record</b> to your DNS settings. SentinelAI queries your nameservers to automatically confirm ownership of <b>${escapeHtml(hostname)}</b>.
-                                </p>
-
-                                <div class="auth-snippet-card">
-                                    <div class="auth-snippet-row">
-                                        <span class="auth-snippet-label">Type</span>
-                                        <span class="auth-snippet-value font-bold" style="color: #2563eb;">TXT</span>
-                                    </div>
-                                    <div class="auth-snippet-row">
-                                        <span class="auth-snippet-label">Host</span>
-                                        <span class="auth-snippet-value">${escapeHtml(dnsChal.recordName)}</span>
-                                        <button type="button" class="btn-copy-pill" onclick="App.copyText('${escapeHtml(dnsChal.recordName)}', this, 'Record host')">
-                                            ${Icons.get('copy', 'size-3')} Copy
-                                        </button>
-                                    </div>
-                                    <div class="auth-snippet-row">
-                                        <span class="auth-snippet-label">Value</span>
-                                        <span class="auth-snippet-value">${escapeHtml(dnsChal.recordValue)}</span>
-                                        <button type="button" class="btn-copy-pill" onclick="App.copyText('${escapeHtml(dnsChal.recordValue)}', this, 'Record value')">
-                                            ${Icons.get('copy', 'size-3')} Copy
-                                        </button>
+                        <!-- Dynamic Expandable Method Cards (Selected expands, rest stay compact) -->
+                        <div class="auth-accordion-list">
+                            
+                            <!-- CARD 0: DNS Verification -->
+                            <div class="auth-expand-card ${verifyMethod === 0 ? 'active' : ''}">
+                                <div class="auth-expand-header" onclick="App.selectVerifyMethod(0)">
+                                    <span class="auth-radio-ring"><i class="auth-radio-dot"></i></span>
+                                    <div class="auth-expand-icon blue">${Icons.get('globe', 'size-4')}</div>
+                                    <div class="auth-expand-title-block">
+                                        <h3>
+                                            DNS Verification
+                                            <span class="auth-badge-auto">Instant Automatic</span>
+                                        </h3>
+                                        <p>Publish a DNS TXT record to prove domain management.</p>
                                     </div>
                                 </div>
 
-                                <div class="auth-action-bar">
-                                    <button type="button" class="button button-primary" ${auth.isCheckingDns ? 'disabled' : ''} onclick="App.runDnsVerification()">
-                                        ${auth.isCheckingDns ? '<span class="spinner"></span> Querying DNS...' : `${Icons.get('check', 'size-4')} Verify DNS Record`}
-                                    </button>
-                                    <span class="text-xs text-slate-400">Propagation takes ~1–5 mins</span>
-                                </div>
+                                ${verifyMethod === 0 ? `
+                                    <div class="auth-expand-body">
+                                        <p class="text-xs text-slate-500 mb-2 leading-relaxed">
+                                            Add this unique TXT record at your DNS provider (Cloudflare, Route 53, GoDaddy). SentinelAI queries your nameservers to automatically confirm ownership of <b>${escapeHtml(hostname)}</b>.
+                                        </p>
 
-                                ${isVerified && auth.method === 'DNS' ? `
-                                    <div class="auth-alert-card verified">
-                                        ${Icons.get('check', 'size-4 text-emerald-600 mt-0.5')}
-                                        <div>
-                                            <b>Domain Ownership Confirmed!</b><br>
-                                            <span>TXT record validated successfully. Authorization Gate is cleared.</span>
+                                        <div class="auth-snippet-box">
+                                            <div class="auth-snippet-item">
+                                                <span class="auth-snippet-key">Type</span>
+                                                <span class="auth-snippet-code font-bold" style="color: #2563eb;">TXT</span>
+                                            </div>
+                                            <div class="auth-snippet-item">
+                                                <span class="auth-snippet-key">Host</span>
+                                                <span class="auth-snippet-code">${escapeHtml(dnsChal.recordName)}</span>
+                                                <button type="button" class="btn-copy-tactile" onclick="App.copyText('${escapeHtml(dnsChal.recordName)}', this, 'Record host')">
+                                                    ${Icons.get('copy', 'size-3')} Copy Host
+                                                </button>
+                                            </div>
+                                            <div class="auth-snippet-item">
+                                                <span class="auth-snippet-key">Value</span>
+                                                <span class="auth-snippet-code">${escapeHtml(dnsChal.recordValue)}</span>
+                                                <button type="button" class="btn-copy-tactile" onclick="App.copyText('${escapeHtml(dnsChal.recordValue)}', this, 'Record value')">
+                                                    ${Icons.get('copy', 'size-3')} Copy Value
+                                                </button>
+                                            </div>
                                         </div>
-                                    </div>
-                                ` : isPending ? `
-                                    <div class="auth-alert-card pending">
-                                        ${Icons.get('clock', 'size-4 text-amber-600 mt-0.5')}
-                                        <div>
-                                            <b>Waiting for DNS Record Propagation</b><br>
-                                            <span>${escapeHtml(auth.gateMessage || 'Record not detected yet. Click "Verify DNS Record" once your DNS provider publishes the record.')}</span>
+
+                                        <div class="flex items-center justify-between gap-3 mt-3">
+                                            <button type="button" class="button button-primary" ${auth.isCheckingDns ? 'disabled' : ''} onclick="App.runDnsVerification()">
+                                                ${auth.isCheckingDns ? '<span class="spinner"></span> Querying DNS...' : `${Icons.get('check', 'size-4')} Verify DNS Record`}
+                                            </button>
+                                            <span class="text-xs text-slate-400">Propagation takes ~1–5 mins</span>
                                         </div>
-                                    </div>
-                                ` : isFailed ? `
-                                    <div class="auth-alert-card failed">
-                                        ${Icons.get('alert', 'size-4 text-rose-600 mt-0.5')}
-                                        <div>
-                                            <b>Verification Notice:</b><br>
-                                            <span>${escapeHtml(auth.gateMessage || 'Could not verify DNS record.')}</span>
-                                        </div>
+
+                                        ${isVerified && auth.method === 'DNS' ? `
+                                            <div class="auth-notice-banner verified">
+                                                ${Icons.get('check', 'size-4 text-emerald-600 mt-0.5')}
+                                                <div>
+                                                    <b>Domain Ownership Confirmed!</b><br>
+                                                    <span>TXT record validated successfully. Authorization Gate is cleared.</span>
+                                                </div>
+                                            </div>
+                                        ` : isPending ? `
+                                            <div class="auth-notice-banner pending">
+                                                ${Icons.get('clock', 'size-4 text-amber-600 mt-0.5')}
+                                                <div>
+                                                    <b>Waiting for DNS Record Propagation</b><br>
+                                                    <span>${escapeHtml(auth.gateMessage || 'Record not detected yet. Click "Verify DNS Record" once your DNS provider publishes the record.')}</span>
+                                                </div>
+                                            </div>
+                                        ` : isFailed ? `
+                                            <div class="auth-notice-banner failed">
+                                                ${Icons.get('alert', 'size-4 text-rose-600 mt-0.5')}
+                                                <div>
+                                                    <b>Verification Notice:</b><br>
+                                                    <span>${escapeHtml(auth.gateMessage || 'Could not verify DNS record.')}</span>
+                                                </div>
+                                            </div>
+                                        ` : ''}
                                     </div>
                                 ` : ''}
                             </div>
-                        ` : ''}
 
-                        <!-- METHOD 1: Upload Verification File -->
-                        ${verifyMethod === 1 ? `
-                            <div class="auth-method-container">
-                                <p class="text-xs text-slate-500 mb-3 leading-relaxed">
-                                    Download the verification token and place it on your web server. Our engine probes the exact path with SSRF safeguards to confirm origin control.
-                                </p>
-
-                                <div class="auth-snippet-card">
-                                    <div class="auth-snippet-row">
-                                        <span class="auth-snippet-label">Step 1</span>
-                                        <span class="auth-snippet-value font-mono text-slate-800">${escapeHtml(fileChal.fileName)}</span>
-                                        <button type="button" class="btn-copy-pill" onclick="App.downloadVerificationFile()">
-                                            ${Icons.get('download', 'size-3')} Download
-                                        </button>
-                                    </div>
-                                    <div class="auth-snippet-row">
-                                        <span class="auth-snippet-label">Step 2</span>
-                                        <span class="auth-snippet-value">${escapeHtml(fileChal.filePath)}</span>
-                                        <button type="button" class="btn-copy-pill" onclick="App.copyText('${escapeHtml(fileChal.filePath)}', this, 'File path')">
-                                            ${Icons.get('copy', 'size-3')} Copy Path
-                                        </button>
+                            <!-- CARD 1: Upload Verification File -->
+                            <div class="auth-expand-card ${verifyMethod === 1 ? 'active' : ''}">
+                                <div class="auth-expand-header" onclick="App.selectVerifyMethod(1)">
+                                    <span class="auth-radio-ring"><i class="auth-radio-dot"></i></span>
+                                    <div class="auth-expand-icon cyan">${Icons.get('file', 'size-4')}</div>
+                                    <div class="auth-expand-title-block">
+                                        <h3>
+                                            Upload Verification File
+                                            <span class="auth-badge-auto">Instant Automatic</span>
+                                        </h3>
+                                        <p>Place a small token file on your web server to confirm origin access.</p>
                                     </div>
                                 </div>
 
-                                <div class="auth-action-bar">
-                                    <button type="button" class="button button-primary" ${auth.isCheckingFile ? 'disabled' : ''} onclick="App.runFileVerification()">
-                                        ${auth.isCheckingFile ? '<span class="spinner"></span> Probing origin...' : `${Icons.get('check', 'size-4')} Verify File on Server`}
-                                    </button>
-                                    <span class="text-xs text-slate-400">Direct HTTPS probe · Safe</span>
-                                </div>
+                                ${verifyMethod === 1 ? `
+                                    <div class="auth-expand-body">
+                                        <p class="text-xs text-slate-500 mb-2 leading-relaxed">
+                                            Download our lightweight verification token file and place it on your web server. Our engine probes the exact path over secure HTTPS with strict SSRF filtering.
+                                        </p>
 
-                                ${isVerified && auth.method === 'FILE' ? `
-                                    <div class="auth-alert-card verified">
-                                        ${Icons.get('check', 'size-4 text-emerald-600 mt-0.5')}
-                                        <div>
-                                            <b>Target Ownership Confirmed!</b><br>
-                                            <span>Token validated on server. Authorization Gate is cleared.</span>
+                                        <div class="auth-snippet-box">
+                                            <div class="auth-snippet-item">
+                                                <span class="auth-snippet-key">File</span>
+                                                <span class="auth-snippet-code font-mono text-slate-800">${escapeHtml(fileChal.fileName)}</span>
+                                                <button type="button" class="btn-copy-tactile" onclick="App.downloadVerificationFile()">
+                                                    ${Icons.get('download', 'size-3')} Download File
+                                                </button>
+                                            </div>
+                                            <div class="auth-snippet-item">
+                                                <span class="auth-snippet-key">Path</span>
+                                                <span class="auth-snippet-code">${escapeHtml(fileChal.filePath)}</span>
+                                                <button type="button" class="btn-copy-tactile" onclick="App.copyText('${escapeHtml(fileChal.filePath)}', this, 'File path')">
+                                                    ${Icons.get('copy', 'size-3')} Copy Path
+                                                </button>
+                                            </div>
                                         </div>
-                                    </div>
-                                ` : isFailed ? `
-                                    <div class="auth-alert-card failed">
-                                        ${Icons.get('alert', 'size-4 text-rose-600 mt-0.5')}
-                                        <div>
-                                            <b>File Verification Notice:</b><br>
-                                            <span>${escapeHtml(auth.gateMessage || 'File not found at expected path. Ensure it is accessible over HTTPS.')}</span>
+
+                                        <div class="flex items-center justify-between gap-3 mt-3">
+                                            <button type="button" class="button button-primary" ${auth.isCheckingFile ? 'disabled' : ''} onclick="App.runFileVerification()">
+                                                ${auth.isCheckingFile ? '<span class="spinner"></span> Probing origin...' : `${Icons.get('check', 'size-4')} Verify File on Server`}
+                                            </button>
+                                            <span class="text-xs text-slate-400">Direct HTTPS probe · Safe</span>
                                         </div>
+
+                                        ${isVerified && auth.method === 'FILE' ? `
+                                            <div class="auth-notice-banner verified">
+                                                ${Icons.get('check', 'size-4 text-emerald-600 mt-0.5')}
+                                                <div>
+                                                    <b>Target Ownership Confirmed!</b><br>
+                                                    <span>Token validated on server. Authorization Gate is cleared.</span>
+                                                </div>
+                                            </div>
+                                        ` : isFailed ? `
+                                            <div class="auth-notice-banner failed">
+                                                ${Icons.get('alert', 'size-4 text-rose-600 mt-0.5')}
+                                                <div>
+                                                    <b>File Verification Notice:</b><br>
+                                                    <span>${escapeHtml(auth.gateMessage || 'File not found at expected path. Ensure it is accessible over HTTPS.')}</span>
+                                                </div>
+                                            </div>
+                                        ` : ''}
                                     </div>
                                 ` : ''}
                             </div>
-                        ` : ''}
 
-                        <!-- METHOD 2: Written Authorization -->
-                        ${verifyMethod === 2 ? `
-                            <div class="auth-method-container">
-                                <div class="flex items-center justify-between mb-3">
-                                    <p class="text-xs text-slate-500 leading-relaxed mb-0">
-                                        Download official 2-page template, obtain signatures, and submit for Administrator Review.
-                                    </p>
-                                    <button type="button" class="btn-copy-pill ml-2" onclick="App.toggleAdminReviewModal(true)">
-                                        ${Icons.get('shield', 'size-3 text-blue-600')} Admin Queue
-                                    </button>
+                            <!-- CARD 2: Written Authorization Letter -->
+                            <div class="auth-expand-card ${verifyMethod === 2 ? 'active' : ''}">
+                                <div class="auth-expand-header" onclick="App.selectVerifyMethod(2)">
+                                    <span class="auth-radio-ring"><i class="auth-radio-dot"></i></span>
+                                    <div class="auth-expand-icon amber">${Icons.get('shield', 'size-4')}</div>
+                                    <div class="auth-expand-title-block">
+                                        <h3>
+                                            Written Authorization Letter
+                                            <span class="auth-badge-admin">Admin Review</span>
+                                        </h3>
+                                        <p>Submit signed authorization letter from the property owner.</p>
+                                    </div>
                                 </div>
 
-                                <div class="auth-snippet-card">
-                                    <div class="auth-snippet-row">
-                                        <span class="auth-snippet-label">Template</span>
-                                        <span class="auth-snippet-value font-medium text-slate-800">Official Written Authorization (2 Pages)</span>
-                                        <button type="button" class="btn-copy-pill" onclick="App.openOfficialLetterTemplate()">
-                                            ${Icons.get('download', 'size-3')} Download
-                                        </button>
-                                    </div>
-                                    <div class="auth-snippet-row">
-                                        <span class="auth-snippet-label">Signed</span>
-                                        <div class="flex-1">
+                                ${verifyMethod === 2 ? `
+                                    <div class="auth-expand-body">
+                                        <p class="text-xs text-slate-500 mb-3 leading-relaxed">
+                                            Recommended for client assessments, staging environments, or internal platforms. Download our official 2-page template, obtain owner signatures, and upload for security administrator approval.
+                                        </p>
+
+                                        <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 mb-3">
+                                            <div>
+                                                <b class="text-xs text-slate-800">1. Official 2-Page Legal Template</b>
+                                                <p class="text-[11px] text-slate-500 mt-0.5">Pre-filled with scope, non-destructive clauses & assessment window.</p>
+                                            </div>
+                                            <button type="button" class="btn-copy-tactile" onclick="App.openOfficialLetterTemplate()">
+                                                ${Icons.get('download', 'size-3')} Download Template
+                                            </button>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <b class="block text-xs text-slate-700 mb-1.5 font-bold">2. Upload Signed Document:</b>
                                             ${auth.writtenLetter.fileName ? `
-                                                <div class="chatgpt-file-chip">
+                                                <div class="chatgpt-file-badge-active">
                                                     ${Icons.get('file', 'size-3.5')}
                                                     <span>${escapeHtml(auth.writtenLetter.fileName)}</span>
-                                                    <span class="remove-btn" onclick="App.removeWrittenLetterFile()">&times;</span>
+                                                    <span class="close-btn" onclick="App.removeWrittenLetterFile()">&times;</span>
                                                 </div>
                                             ` : `
-                                                <label class="chatgpt-upload-zone" style="padding: 0.6rem 0.85rem;">
-                                                    ${Icons.get('upload', 'size-3.5 text-blue-600')}
-                                                    <span class="text-xs font-semibold text-slate-700">Choose signed document (PDF / PNG)</span>
+                                                <label class="chatgpt-minimal-upload">
                                                     <input type="file" accept=".pdf,.png,.jpg,.jpeg" style="display: none;" onchange="App.handleWrittenLetterSelect(event)">
+                                                    ${Icons.get('upload', 'size-4 text-blue-600')}
+                                                    <span class="text-xs font-semibold text-slate-700">Click to choose signed authorization document (PDF / PNG)</span>
                                                 </label>
                                             `}
                                         </div>
-                                    </div>
-                                </div>
 
-                                <div class="grid grid-cols-2 gap-3 mb-3">
-                                    <div>
-                                        <span class="field-label" style="font-size: 0.72rem; margin-bottom: 0.25rem;">Signatory Full Name:</span>
-                                        <div class="input-wrap" style="height: 38px;">
-                                            <input type="text" id="letter-owner-name" placeholder="e.g. Sarah Jenkins" value="${escapeHtml(auth.writtenLetter.ownerName || '')}">
+                                        <div class="grid grid-cols-2 gap-3 mb-3">
+                                            <div>
+                                                <span class="field-label" style="font-size: 0.72rem; margin-bottom: 0.25rem;">Signatory Full Name:</span>
+                                                <div class="input-wrap" style="height: 38px;">
+                                                    <input type="text" id="letter-owner-name" placeholder="e.g. Sarah Jenkins" value="${escapeHtml(auth.writtenLetter.ownerName || '')}">
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <span class="field-label" style="font-size: 0.72rem; margin-bottom: 0.25rem;">Title / Authorized Role:</span>
+                                                <div class="input-wrap" style="height: 38px;">
+                                                    <input type="text" id="letter-owner-title" placeholder="e.g. Chief Information Security Officer" value="${escapeHtml(auth.writtenLetter.ownerTitle || '')}">
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div>
-                                        <span class="field-label" style="font-size: 0.72rem; margin-bottom: 0.25rem;">Title / Authorized Role:</span>
-                                        <div class="input-wrap" style="height: 38px;">
-                                            <input type="text" id="letter-owner-title" placeholder="e.g. Chief Information Security Officer" value="${escapeHtml(auth.writtenLetter.ownerTitle || '')}">
-                                        </div>
-                                    </div>
-                                </div>
 
-                                <div class="auth-action-bar">
-                                    <button type="button" class="button button-primary" ${auth.isSubmittingLetter ? 'disabled' : ''} onclick="App.submitWrittenLetterForReview()">
-                                        ${auth.isSubmittingLetter ? '<span class="spinner"></span> Submitting...' : `${Icons.get('upload', 'size-4')} Submit for Administrator Review`}
-                                    </button>
-                                </div>
+                                        <div class="flex items-center gap-3 mt-3">
+                                            <button type="button" class="button button-primary" ${auth.isSubmittingLetter ? 'disabled' : ''} onclick="App.submitWrittenLetterForReview()">
+                                                ${auth.isSubmittingLetter ? '<span class="spinner"></span> Submitting...' : `${Icons.get('upload', 'size-4')} Submit Authorization Letter`}
+                                            </button>
+                                        </div>
 
-                                ${isVerified && auth.method === 'WRITTEN' ? `
-                                    <div class="auth-alert-card verified">
-                                        ${Icons.get('check', 'size-4 text-emerald-600 mt-0.5')}
-                                        <div>
-                                            <b>Letter Approved by Administrator!</b><br>
-                                            <span>Authorization granted. Authorization Gate is cleared.</span>
-                                        </div>
-                                    </div>
-                                ` : isNeedsChanges ? `
-                                    <div class="auth-alert-card pending">
-                                        ${Icons.get('alert', 'size-4 text-amber-600 mt-0.5')}
-                                        <div>
-                                            <b>Changes Requested by Administrator:</b><br>
-                                            <span>${escapeHtml(auth.gateMessage || 'Please review notes and re-upload.')}</span>
-                                        </div>
-                                    </div>
-                                ` : isPending ? `
-                                    <div class="auth-alert-card pending">
-                                        ${Icons.get('clock', 'size-4 text-amber-600 mt-0.5')}
-                                        <div>
-                                            <b>Under Administrator Review</b><br>
-                                            <span>Request is queued. You can approve it directly in the Admin Queue above.</span>
-                                        </div>
+                                        ${isVerified && auth.method === 'WRITTEN' ? `
+                                            <div class="auth-notice-banner verified">
+                                                ${Icons.get('check', 'size-4 text-emerald-600 mt-0.5')}
+                                                <div>
+                                                    <b>Letter Approved by Administrator!</b><br>
+                                                    <span>Authorization granted. Authorization Gate is cleared.</span>
+                                                </div>
+                                            </div>
+                                        ` : isNeedsChanges ? `
+                                            <div class="auth-notice-banner pending">
+                                                ${Icons.get('alert', 'size-4 text-amber-600 mt-0.5')}
+                                                <div>
+                                                    <b>Changes Requested by Administrator:</b><br>
+                                                    <span>${escapeHtml(auth.gateMessage || 'Please review notes and re-upload.')}</span>
+                                                </div>
+                                            </div>
+                                        ` : isPending ? `
+                                            <div class="auth-notice-banner pending">
+                                                ${Icons.get('clock', 'size-4 text-amber-600 mt-0.5')}
+                                                <div>
+                                                    <b>Under Administrator Review</b><br>
+                                                    <span>Your authorization request has been submitted and is currently in the Administrator Review queue.</span>
+                                                </div>
+                                            </div>
+                                        ` : ''}
                                     </div>
                                 ` : ''}
                             </div>
-                        ` : ''}
+                        </div>
                     `}
                 </div>
 
                 <!-- Right: Assessment Boundaries & Gate Status -->
-                <div class="form-card">
+                <div class="form-card" style="padding: 1.85rem 2rem;">
                     <div class="form-card-head">
                         <div class="icon-tile violet">${Icons.get('settings', 'size-5')}</div>
                         <div>
@@ -3211,92 +3167,6 @@ const App = {
                 <button type="button" class="button button-primary" onclick="App.handleScopeContinue()">
                     Continue ${Icons.get('arrow', 'size-4')}
                 </button>
-            </div>
-
-            <!-- Admin Review Queue Modal -->
-            ${auth.showAdminModal ? this.renderAdminReviewModal() : ''}
-        `;
-    },
-
-    renderAdminReviewModal() {
-        const auth = this.scanState.authData;
-        const requests = auth.adminRequests || [];
-        const filter = auth.adminFilter || 'ALL';
-
-        return `
-            <div class="admin-modal-backdrop" onclick="App.toggleAdminReviewModal(false)">
-                <div class="admin-modal-card" onclick="event.stopPropagation()">
-                    <div class="admin-modal-header">
-                        <h3>${Icons.get('shield', 'size-5 text-blue-600')} Written Authorization — Administrator Review Queue</h3>
-                        <button type="button" class="button button-secondary text-xs" style="height: 28px; padding: 0 0.5rem;" onclick="App.toggleAdminReviewModal(false)">
-                            &times; Close
-                        </button>
-                    </div>
-
-                    <div style="padding: 0.75rem 1.4rem; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between;">
-                        <span class="text-xs text-slate-600 font-semibold">Filter Requests:</span>
-                        <div class="flex items-center gap-1.5">
-                            <button type="button" class="button button-secondary text-xs" style="height: 26px; ${filter === 'ALL' ? 'background: #2563eb; color: #fff;' : ''}" onclick="App.loadAdminAuthorizations('ALL')">All (${requests.length})</button>
-                            <button type="button" class="button button-secondary text-xs" style="height: 26px; ${filter === 'PENDING' ? 'background: #2563eb; color: #fff;' : ''}" onclick="App.loadAdminAuthorizations('PENDING')">Pending</button>
-                            <button type="button" class="button button-secondary text-xs" style="height: 26px; ${filter === 'APPROVED' ? 'background: #2563eb; color: #fff;' : ''}" onclick="App.loadAdminAuthorizations('APPROVED')">Approved</button>
-                        </div>
-                    </div>
-
-                    <div class="admin-modal-body">
-                        ${auth.isLoadingAdmin ? `
-                            <div class="flex items-center justify-center p-8 text-slate-500 text-xs">
-                                <span class="spinner"></span> <span class="ml-2">Loading authorization requests...</span>
-                            </div>
-                        ` : requests.length === 0 ? `
-                            <div class="text-center p-8 text-slate-500 text-xs">
-                                No authorization requests found for filter "${filter}".
-                            </div>
-                        ` : requests.map(req => `
-                            <div class="admin-request-card">
-                                <div class="admin-request-header">
-                                    <div class="flex items-center gap-2">
-                                        <b class="text-sm text-slate-900">${escapeHtml(req.targetUrl)}</b>
-                                        <span class="status ${req.status === 'APPROVED' ? 'status-safe' : (req.status === 'PENDING' ? 'status-low' : 'status-high')}" style="font-size: 0.65rem;">
-                                            ${escapeHtml(req.status)}
-                                        </span>
-                                    </div>
-                                    <span class="text-[11px] text-slate-400">${new Date(req.submittedAt).toLocaleString()}</span>
-                                </div>
-
-                                <div class="grid grid-cols-2 gap-2 text-xs text-slate-600 my-2">
-                                    <div><b>Signatory:</b> ${escapeHtml(req.ownerName)} (${escapeHtml(req.ownerTitle)})</div>
-                                    <div><b>Environment:</b> ${escapeHtml(req.environment)}</div>
-                                </div>
-
-                                ${req.reviewNotes ? `
-                                    <div class="text-[11px] bg-slate-50 border border-slate-200 rounded p-2 text-slate-600 my-2">
-                                        <b>Review Notes (${escapeHtml(req.reviewedBy || 'Admin')}):</b> ${escapeHtml(req.reviewNotes)}
-                                    </div>
-                                ` : ''}
-
-                                <div class="admin-decision-btn-row">
-                                    ${req.letterFileUrl ? `
-                                        <a href="${escapeHtml(req.letterFileUrl)}" target="_blank" class="button button-secondary text-xs" style="height: 28px;">
-                                            ${Icons.get('file', 'size-3')} View Uploaded Document
-                                        </a>
-                                    ` : ''}
-
-                                    <div class="flex items-center gap-2 ml-auto">
-                                        <button type="button" class="button button-primary text-xs" style="height: 28px; background: #059669;" onclick="App.handleAdminDecision(${req.id}, 'APPROVED')">
-                                            ✓ Approve
-                                        </button>
-                                        <button type="button" class="button button-secondary text-xs" style="height: 28px; color: #ea580c;" onclick="App.handleAdminDecision(${req.id}, 'NEEDS_CHANGES')">
-                                            ⚠️ Request Changes
-                                        </button>
-                                        <button type="button" class="button button-secondary text-xs" style="height: 28px; color: #dc2626;" onclick="App.handleAdminDecision(${req.id}, 'REJECTED')">
-                                            ✕ Reject
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
             </div>
         `;
     },

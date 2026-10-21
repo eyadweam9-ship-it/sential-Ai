@@ -151,6 +151,10 @@ const API = {
 
     async submitWrittenLetter(formData) {
         const token = this.getToken();
+        const user = this.getUser();
+        if (user && user.id && !formData.has('userId')) {
+            formData.append('userId', String(user.id));
+        }
         const headers = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
