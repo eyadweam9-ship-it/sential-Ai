@@ -1813,11 +1813,12 @@ const App = {
         const stylesCount = resources.filter(r => r.type === 'STYLESHEET').length || 0;
         const metadataCount = resources.filter(r => ['SITEMAP', 'ROBOTS'].includes(r.type)).length || 0;
         const target = this.scanState.url || disc?.targetUrl || 'Target Application';
+        const displayHost = target.replace(/^https?:\/\//i, '').replace(/\/$/, '');
 
         const activeFilter = this.scanState.discoveryFilter || 'ALL';
         const searchQuery = (this.scanState.discoverySearchQuery || '').trim().toLowerCase();
 
-        // Filter resources based on activeFilter and searchQuery
+        // Filter resources
         let filteredResources = resources;
         if (activeFilter === 'PAGE') {
             filteredResources = filteredResources.filter(r => r.type === 'PAGE');
@@ -1852,44 +1853,23 @@ const App = {
             }
         };
 
-        const formatBytes = (bytes) => {
-            if (!bytes || bytes <= 0) return '';
-            if (bytes < 1024) return `${bytes} B`;
-            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-            return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-        };
-
-        const renderItemCard = (item) => {
+        const renderItemRow = (item) => {
             const safeUrl = escapeHtml(item.url);
             const safeType = escapeHtml(item.type || 'PAGE');
             const displayPath = formatPath(item.url);
-            const typeLabel = safeType === 'SCRIPT' ? 'JS' : (safeType === 'STYLESHEET' ? 'CSS' : (safeType === 'API_ENDPOINT' ? 'API' : safeType));
-            const isOk = item.statusCode === 200 || !item.statusCode;
+            const typeLabel = safeType === 'SCRIPT' ? 'JS' : (safeType === 'STYLESHEET' ? 'CSS' : (safeType === 'API_ENDPOINT' ? 'API' : (safeType === 'PAGE' ? 'HTML' : safeType)));
 
             return `
-                <div class="discovery-card-item" onclick="App.openCodeViewer('${safeUrl}', '${safeType}')" title="Click to inspect code: ${safeUrl}">
-                    <div class="discovery-card-main">
-                        <div class="discovery-card-top">
-                            <span class="discovery-badge ${safeType}">${typeLabel}</span>
-                            <span class="discovery-file-url" title="${safeUrl}">${escapeHtml(displayPath)}</span>
-                        </div>
-                        <div class="discovery-card-meta">
-                            <span class="discovery-status-chip ${isOk ? 'ok' : 'warn'}">
-                                ${item.statusCode || 200} ${item.status || (isOk ? 'OK' : 'Notice')}
-                            </span>
-                            <span class="discovery-latency-chip">${item.responseTimeMs ? `${item.responseTimeMs}ms` : '<10ms'}</span>
-                            ${item.sizeBytes ? `<span class="discovery-size-chip">${formatBytes(item.sizeBytes)}</span>` : ''}
-                        </div>
+                <div class="discovery-compact-row" onclick="App.openCodeViewer('${safeUrl}', '${safeType}')" title="${safeUrl}">
+                    <div class="discovery-row-main">
+                        <span class="discovery-tag-mini ${safeType}">${typeLabel}</span>
+                        <span class="discovery-row-path" title="${safeUrl}">${escapeHtml(displayPath)}</span>
                     </div>
-                    <div class="discovery-card-actions" onclick="event.stopPropagation()">
-                        <button type="button" class="tree-view-code-btn" onclick="App.openCodeViewer('${safeUrl}', '${safeType}')" title="Inspect source code">
-                            ${Icons.get('code', 'size-3')}
-                            <span>Code</span>
+                    <div class="discovery-row-actions" onclick="event.stopPropagation()">
+                        <button type="button" class="discovery-mini-code-btn" onclick="App.openCodeViewer('${safeUrl}', '${safeType}')" title="Inspect source code">
+                            Code
                         </button>
-                        <button type="button" class="discovery-copy-btn" onclick="App.copyResourceUrl('${safeUrl}')" title="Copy URL">
-                            ${Icons.get('copy', 'size-3')}
-                        </button>
-                        <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="tree-ext-link-btn" title="Open in new window">
+                        <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="discovery-mini-link-btn" title="Open in new window">
                             ${Icons.get('external', 'size-3')}
                         </a>
                     </div>
@@ -1897,196 +1877,105 @@ const App = {
             `;
         };
 
-        // Render sections or flat list
         let contentHtml = '';
         if (this.scanState.isLoadingDiscovery) {
             contentHtml = `
-                <div class="p-8 text-center text-slate-400">
+                <div class="p-6 text-center text-slate-400">
                     <span class="spinner mb-2"></span>
-                    <p class="text-xs font-medium text-slate-600">Crawling target application and mapping reachable files...</p>
-                    <p class="text-[11px] text-slate-400 mt-1">Collecting HTML pages, scripts, styles, APIs and sitemaps</p>
+                    <p class="text-xs text-slate-500">Mapping target files...</p>
                 </div>
             `;
         } else if (filteredResources.length === 0) {
             contentHtml = `
-                <div class="p-8 text-center text-slate-500 bg-slate-50 rounded-lg border border-slate-200 mt-4">
-                    <div class="text-slate-400 mb-2">${Icons.get('search', 'size-6 mx-auto')}</div>
-                    <p class="text-xs font-semibold text-slate-700">No resources found</p>
-                    <p class="text-[11px] text-slate-400 mt-1">
-                        ${searchQuery ? `No files match search query "${escapeHtml(searchQuery)}".` : 'Verify target URL or start scan to crawl application.'}
-                    </p>
+                <div class="p-6 text-center text-slate-400">
+                    <p class="text-xs">${searchQuery ? `No matches for "${escapeHtml(searchQuery)}"` : 'No files discovered yet'}</p>
                     ${searchQuery ? `
-                        <button type="button" class="button button-secondary text-xs mt-3" onclick="App.setDiscoverySearch('')">Clear Search</button>
+                        <button type="button" class="button button-secondary text-xs mt-2" onclick="App.setDiscoverySearch('')">Clear</button>
                     ` : ''}
                 </div>
             `;
         } else if (searchQuery || activeFilter !== 'ALL') {
-            // Flat list when searching or filtering
             contentHtml = `
-                <div class="discovery-group-items">
-                    ${filteredResources.map(r => renderItemCard(r)).join('')}
+                <div class="flex flex-col gap-0.5">
+                    ${filteredResources.map(r => renderItemRow(r)).join('')}
                 </div>
             `;
         } else {
-            // Grouped view by category
             const pages = filteredResources.filter(r => r.type === 'PAGE');
             const scripts = filteredResources.filter(r => r.type === 'SCRIPT');
             const styles = filteredResources.filter(r => r.type === 'STYLESHEET');
             const apis = filteredResources.filter(r => r.type === 'API_ENDPOINT');
             const meta = filteredResources.filter(r => ['SITEMAP', 'ROBOTS'].includes(r.type));
 
-            const collapsed = this.scanState.discoveryCollapsedCategories || {};
-
-            const renderCategory = (catKey, title, iconHtml, items) => {
+            const renderSection = (title, items) => {
                 if (!items || items.length === 0) return '';
-                const isCollapsed = collapsed[catKey];
                 return `
-                    <div class="discovery-group-section">
-                        <div class="discovery-group-header" onclick="App.toggleDiscoveryCategory('${catKey}')">
-                            <div class="discovery-group-title">
-                                ${iconHtml}
-                                <span>${title}</span>
-                                <span class="discovery-group-count">${items.length}</span>
-                            </div>
-                            <span class="discovery-group-chevron ${isCollapsed ? 'collapsed' : ''}">${Icons.get('chevron', 'size-3.5')}</span>
-                        </div>
-                        ${!isCollapsed ? `
-                            <div class="discovery-group-items">
-                                ${items.map(item => renderItemCard(item)).join('')}
-                            </div>
-                        ` : ''}
+                    <div class="discovery-section-header">
+                        <span>${title}</span>
+                        <span>${items.length}</span>
+                    </div>
+                    <div class="flex flex-col gap-0.5">
+                        ${items.map(item => renderItemRow(item)).join('')}
                     </div>
                 `;
             };
 
             contentHtml = `
-                ${renderCategory('pages', 'Public Pages', Icons.get('globe', 'size-3.5 text-blue-500'), pages)}
-                ${renderCategory('scripts', 'JavaScript Files', Icons.get('code', 'size-3.5 text-indigo-500'), scripts)}
-                ${renderCategory('styles', 'Stylesheets', Icons.get('file', 'size-3.5 text-purple-500'), styles)}
-                ${renderCategory('apis', 'API Routes & Endpoints', Icons.get('shield', 'size-3.5 text-emerald-500'), apis)}
-                ${renderCategory('metadata', 'Sitemap & Robots', Icons.get('folder', 'size-3.5 text-slate-500'), meta)}
+                ${renderSection('Pages', pages)}
+                ${renderSection('Scripts', scripts)}
+                ${renderSection('Stylesheets', styles)}
+                ${renderSection('API Endpoints', apis)}
+                ${renderSection('Config & Sitemap', meta)}
             `;
         }
 
         return `
             <div class="discovery-drawer-overlay" onclick="App.toggleDiscoveryDrawer(false)">
                 <aside class="discovery-side-drawer" onclick="event.stopPropagation()">
-                    <!-- Drawer Header -->
+                    <!-- Compact Header -->
                     <div class="discovery-drawer-header">
                         <div class="discovery-drawer-title-wrap">
-                            <div class="discovery-drawer-icon-box">
-                                ${Icons.get('folder', 'size-5')}
-                            </div>
-                            <div class="discovery-drawer-title-group">
-                                <div class="flex items-center gap-2">
-                                    <h3 class="discovery-drawer-title">Discovered Files &amp; Assets</h3>
-                                    <span class="calm-subtle-badge text-emerald-700 bg-emerald-50 border-emerald-200">
-                                        ${resources.length} files
-                                    </span>
-                                </div>
-                                <div class="discovery-drawer-target-url">
-                                    <span title="${escapeHtml(target)}">${escapeHtml(target)}</span>
-                                    <a href="${escapeHtml(target)}" target="_blank" rel="noopener noreferrer" class="text-slate-400 hover:text-blue-600" title="Open target website">
-                                        ${Icons.get('external', 'size-2.5')}
-                                    </a>
-                                </div>
-                            </div>
+                            <span class="discovery-drawer-title">Discovered Files</span>
+                            <span class="discovery-drawer-count">${resources.length}</span>
                         </div>
 
-                        <div class="discovery-drawer-header-actions">
-                            <button type="button" class="discovery-drawer-btn" onclick="App.loadDiscovery('${escapeHtml(this.scanState.url)}')" title="Refresh target crawler">
-                                ${this.scanState.isLoadingDiscovery ? '<span class="spinner size-3.5"></span>' : Icons.get('refresh', 'size-3.5')}
-                            </button>
-                            <button type="button" class="discovery-drawer-btn close" onclick="App.toggleDiscoveryDrawer(false)" title="Close panel (Esc)">
-                                ${Icons.get('x', 'size-4')}
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] text-slate-400 font-mono truncate max-w-[150px]" title="${escapeHtml(target)}">${escapeHtml(displayHost)}</span>
+                            <button type="button" class="discovery-drawer-close-btn" onclick="App.toggleDiscoveryDrawer(false)" title="Close (Esc)">
+                                ${Icons.get('x', 'size-3.5')}
                             </button>
                         </div>
                     </div>
 
-                    <!-- Mini Stats Row -->
-                    <div class="discovery-drawer-quickstats">
-                        <div class="quickstat-card">
-                            <span class="num text-blue-600">${pagesCount}</span>
-                            <span class="lbl">Pages</span>
-                        </div>
-                        <div class="quickstat-card">
-                            <span class="num text-indigo-600">${scriptsCount}</span>
-                            <span class="lbl">Scripts</span>
-                        </div>
-                        <div class="quickstat-card">
-                            <span class="num text-purple-600">${stylesCount}</span>
-                            <span class="lbl">Styles</span>
-                        </div>
-                        <div class="quickstat-card">
-                            <span class="num text-emerald-600">${apiCount}</span>
-                            <span class="lbl">APIs</span>
-                        </div>
-                        <div class="quickstat-card">
-                            <span class="num text-slate-600">${disc?.sitemapFound ? 'Sitemap' : (disc?.robotsFound ? 'Robots' : metadataCount)}</span>
-                            <span class="lbl">Config</span>
-                        </div>
-                    </div>
-
-                    <!-- Search & Filter Controls -->
+                    <!-- Compact Controls: Search & Tabs -->
                     <div class="discovery-drawer-controls">
                         <div class="discovery-drawer-search-wrap">
-                            ${Icons.get('search', 'size-3.5 text-slate-400')}
-                            <input type="text" id="discovery-drawer-search-input" class="discovery-drawer-search-input" placeholder="Search paths, filenames, extensions (.js, /api, login)..." value="${escapeHtml(this.scanState.discoverySearchQuery || '')}" oninput="App.setDiscoverySearch(this.value)">
+                            ${Icons.get('search', 'size-3 text-slate-400')}
+                            <input type="text" id="discovery-drawer-search-input" class="discovery-drawer-search-input" placeholder="Filter files (e.g. .js, /api)..." value="${escapeHtml(this.scanState.discoverySearchQuery || '')}" oninput="App.setDiscoverySearch(this.value)">
                             ${this.scanState.discoverySearchQuery ? `
-                                <button type="button" class="discovery-drawer-search-clear" onclick="App.setDiscoverySearch('')" title="Clear search">✕</button>
+                                <button type="button" class="discovery-drawer-search-clear" onclick="App.setDiscoverySearch('')">✕</button>
                             ` : ''}
                         </div>
 
-                        <!-- Filter Pills -->
-                        <div class="discovery-filter-pills-row">
-                            <button type="button" class="discovery-filter-pill ${activeFilter === 'ALL' ? 'active' : ''}" onclick="App.setDiscoveryFilter('ALL')">
-                                All (${resources.length})
-                            </button>
-                            <button type="button" class="discovery-filter-pill ${activeFilter === 'PAGE' ? 'active' : ''}" onclick="App.setDiscoveryFilter('PAGE')">
-                                Pages (${pagesCount})
-                            </button>
-                            <button type="button" class="discovery-filter-pill ${activeFilter === 'SCRIPT' ? 'active' : ''}" onclick="App.setDiscoveryFilter('SCRIPT')">
-                                Scripts (${scriptsCount})
-                            </button>
-                            <button type="button" class="discovery-filter-pill ${activeFilter === 'STYLESHEET' ? 'active' : ''}" onclick="App.setDiscoveryFilter('STYLESHEET')">
-                                Styles (${stylesCount})
-                            </button>
-                            <button type="button" class="discovery-filter-pill ${activeFilter === 'API_ENDPOINT' ? 'active' : ''}" onclick="App.setDiscoveryFilter('API_ENDPOINT')">
-                                APIs (${apiCount})
-                            </button>
-                            ${metadataCount > 0 ? `
-                                <button type="button" class="discovery-filter-pill ${activeFilter === 'METADATA' ? 'active' : ''}" onclick="App.setDiscoveryFilter('METADATA')">
-                                    Config (${metadataCount})
-                                </button>
-                            ` : ''}
+                        <div class="discovery-filter-tabs">
+                            <button type="button" class="discovery-filter-tab ${activeFilter === 'ALL' ? 'active' : ''}" onclick="App.setDiscoveryFilter('ALL')">All (${resources.length})</button>
+                            <button type="button" class="discovery-filter-tab ${activeFilter === 'PAGE' ? 'active' : ''}" onclick="App.setDiscoveryFilter('PAGE')">Pages (${pagesCount})</button>
+                            <button type="button" class="discovery-filter-tab ${activeFilter === 'SCRIPT' ? 'active' : ''}" onclick="App.setDiscoveryFilter('SCRIPT')">Scripts (${scriptsCount})</button>
+                            <button type="button" class="discovery-filter-tab ${activeFilter === 'STYLESHEET' ? 'active' : ''}" onclick="App.setDiscoveryFilter('STYLESHEET')">Styles (${stylesCount})</button>
+                            <button type="button" class="discovery-filter-tab ${activeFilter === 'API_ENDPOINT' ? 'active' : ''}" onclick="App.setDiscoveryFilter('API_ENDPOINT')">APIs (${apiCount})</button>
                         </div>
                     </div>
 
-                    <!-- Scrollable Body with End Marker (down to the very last file!) -->
+                    <!-- Scrollable Body (Clean and lightweight) -->
                     <div class="discovery-drawer-body" id="discovery-drawer-scrollable">
                         ${contentHtml}
 
                         ${filteredResources.length > 0 ? `
-                            <!-- End of List Indicator -->
-                            <div class="discovery-end-marker" id="discovery-drawer-end">
-                                <div class="discovery-end-badge">✓</div>
-                                <div class="discovery-end-text">
-                                    <b>All ${filteredResources.length} discovered items loaded</b>
-                                    <span>You have reached the very last file in this list</span>
-                                </div>
-                                <button type="button" class="discovery-end-top-btn" onclick="App.scrollDrawerToTop()">
-                                    ↑ Top
-                                </button>
+                            <div class="discovery-drawer-quiet-footer">
+                                ${filteredResources.length} files loaded · End of list
                             </div>
                         ` : ''}
                     </div>
-
-                    <!-- Floating Jump to Bottom Button -->
-                    ${filteredResources.length > 8 ? `
-                        <button type="button" class="discovery-floating-jump-btn" onclick="App.scrollDrawerToBottom()" title="Jump down to last file">
-                            ${Icons.get('arrow', 'size-3.5 rotate-90')} Jump to last file (${filteredResources.length})
-                        </button>
-                    ` : ''}
                 </aside>
             </div>
         `;

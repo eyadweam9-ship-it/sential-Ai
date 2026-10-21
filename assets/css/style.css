@@ -2669,15 +2669,15 @@
 }
 
 /* =========================================================
-   DISCOVERY SIDE DRAWER (SLIDE-OVER PANEL / شريطة في الجنب)
+   DISCOVERY SIDE DRAWER (COMPACT & MINIMALIST)
    ========================================================= */
 .discovery-drawer-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.45);
-    backdrop-filter: blur(3px);
+    background: rgba(15, 23, 42, 0.25);
+    backdrop-filter: blur(2px);
     z-index: 9500;
-    animation: drawerOverlayFadeIn 0.22s ease-out;
+    animation: drawerOverlayFadeIn 0.15s ease-out;
 }
 
 @keyframes drawerOverlayFadeIn {
@@ -2688,11 +2688,9 @@
 @keyframes drawerSlideInRight {
     from {
         transform: translateX(100%);
-        box-shadow: none;
     }
     to {
         transform: translateX(0);
-        box-shadow: -12px 0 40px rgba(15, 23, 42, 0.22);
     }
 }
 
@@ -2701,96 +2699,61 @@
     top: 0;
     right: 0;
     bottom: 0;
-    width: 560px;
-    max-width: 95vw;
+    width: 380px;
+    max-width: 92vw;
     height: 100vh;
     background: #ffffff;
     z-index: 9501;
     display: flex;
     flex-direction: column;
-    box-shadow: -12px 0 40px rgba(15, 23, 42, 0.22);
-    animation: drawerSlideInRight 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    border-left: 1px solid #e2e8f0;
+    box-shadow: -8px 0 25px rgba(0, 0, 0, 0.06);
+    animation: drawerSlideInRight 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     overflow: hidden;
 }
 
-/* Drawer Header */
+/* Minimal Header */
 .discovery-drawer-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1.1rem 1.25rem;
+    padding: 0.65rem 0.85rem;
+    border-bottom: 1px solid #f1f5f9;
     background: #ffffff;
-    border-bottom: 1px solid #e2e8f0;
     flex-shrink: 0;
-    gap: 0.75rem;
+    height: 46px;
 }
 
 .discovery-drawer-title-wrap {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.45rem;
     min-width: 0;
-    flex: 1;
-}
-
-.discovery-drawer-icon-box {
-    width: 38px;
-    height: 38px;
-    border-radius: 0.625rem;
-    background: #eff6ff;
-    color: #2563eb;
-    border: 1px solid #dbeafe;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.discovery-drawer-title-group {
-    min-width: 0;
-    flex: 1;
 }
 
 .discovery-drawer-title {
-    font-size: 0.95rem;
+    font-size: 0.8rem;
     font-weight: 700;
     color: #0f172a;
     margin: 0;
-    line-height: 1.25;
 }
 
-.discovery-drawer-target-url {
-    font-size: 0.72rem;
+.discovery-drawer-count {
+    font-size: 0.65rem;
     color: #64748b;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    margin-top: 0.2rem;
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    min-width: 0;
+    font-weight: 600;
+    background: #f1f5f9;
+    padding: 0.05rem 0.35rem;
+    border-radius: 9999px;
 }
 
-.discovery-drawer-target-url span {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 290px;
-}
-
-.discovery-drawer-header-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    flex-shrink: 0;
-}
-
-.discovery-drawer-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: 0.5rem;
-    border: 1px solid #e2e8f0;
-    background: #ffffff;
-    color: #64748b;
+.discovery-drawer-close-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 0.35rem;
+    border: none;
+    background: transparent;
+    color: #94a3b8;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -2798,88 +2761,36 @@
     transition: all 0.15s ease;
 }
 
-.discovery-drawer-btn:hover {
+.discovery-drawer-close-btn:hover {
     background: #f1f5f9;
     color: #0f172a;
-    border-color: #cbd5e1;
 }
 
-.discovery-drawer-btn.close:hover {
-    background: #fef2f2;
-    color: #dc2626;
-    border-color: #fecaca;
-}
-
-/* Quick Stats Bar */
-.discovery-drawer-quickstats {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 0.4rem;
-    padding: 0.75rem 1.25rem;
-    background: #f8fafc;
-    border-bottom: 1px solid #f1f5f9;
-    flex-shrink: 0;
-}
-
-.quickstat-card {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 0.45rem 0.25rem;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.5rem;
-    transition: border-color 0.15s ease;
-}
-
-.quickstat-card:hover {
-    border-color: #cbd5e1;
-}
-
-.quickstat-card .num {
-    font-size: 1.05rem;
-    font-weight: 800;
-    line-height: 1.2;
-}
-
-.quickstat-card .lbl {
-    font-size: 0.62rem;
-    font-weight: 700;
-    color: #64748b;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    margin-top: 0.15rem;
-}
-
-/* Controls Bar: Search & Category Pills */
+/* Minimal Controls: Search & Simple Tabs */
 .discovery-drawer-controls {
-    padding: 0.75rem 1.25rem;
-    background: #ffffff;
-    border-bottom: 1px solid #e2e8f0;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #f1f5f9;
+    background: #fafbfc;
     display: flex;
     flex-direction: column;
-    gap: 0.65rem;
+    gap: 0.4rem;
     flex-shrink: 0;
 }
 
 .discovery-drawer-search-wrap {
-    position: relative;
     display: flex;
     align-items: center;
-    background: #f8fafc;
+    background: #ffffff;
     border: 1px solid #e2e8f0;
-    border-radius: 0.5rem;
-    padding: 0 0.75rem;
-    height: 36px;
+    border-radius: 0.4rem;
+    padding: 0 0.5rem;
+    height: 28px;
     transition: all 0.15s ease;
 }
 
 .discovery-drawer-search-wrap:focus-within {
-    background: #ffffff;
     border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
 }
 
 .discovery-drawer-search-input {
@@ -2887,10 +2798,13 @@
     outline: none;
     background: transparent;
     width: 100%;
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     color: #0f172a;
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
+    padding: 0 0.35rem;
+}
+
+.discovery-drawer-search-input::placeholder {
+    color: #94a3b8;
 }
 
 .discovery-drawer-search-clear {
@@ -2898,58 +2812,51 @@
     background: transparent;
     color: #94a3b8;
     cursor: pointer;
-    font-size: 0.75rem;
-    padding: 0.2rem;
+    font-size: 0.7rem;
+    padding: 0.1rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
 }
 
 .discovery-drawer-search-clear:hover {
     color: #0f172a;
-    background: #e2e8f0;
 }
 
-.discovery-filter-pills-row {
+.discovery-filter-tabs {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.2rem;
     overflow-x: auto;
-    padding-bottom: 2px;
     scrollbar-width: none;
 }
 
-.discovery-filter-pills-row::-webkit-scrollbar {
+.discovery-filter-tabs::-webkit-scrollbar {
     display: none;
 }
 
-.discovery-filter-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.25rem 0.6rem;
-    border-radius: 9999px;
-    font-size: 0.68rem;
-    font-weight: 600;
-    border: 1px solid #e2e8f0;
-    background: #ffffff;
-    color: #475569;
+.discovery-filter-tab {
+    padding: 0.15rem 0.45rem;
+    border-radius: 0.25rem;
+    font-size: 0.66rem;
+    font-weight: 500;
+    color: #64748b;
+    background: transparent;
+    border: none;
     cursor: pointer;
     white-space: nowrap;
-    transition: all 0.15s ease;
+    transition: all 0.12s ease;
 }
 
-.discovery-filter-pill:hover {
-    background: #f1f5f9;
-    border-color: #cbd5e1;
+.discovery-filter-tab:hover {
     color: #0f172a;
+    background: #f1f5f9;
 }
 
-.discovery-filter-pill.active {
-    background: #0f172a;
-    color: #ffffff;
-    border-color: #0f172a;
+.discovery-filter-tab.active {
+    color: #2563eb;
+    background: #eff6ff;
+    font-weight: 600;
 }
 
 /* Scrollable Drawer Body */
@@ -2957,17 +2864,12 @@
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 1rem 1.25rem 5rem 1.25rem;
+    padding: 0.4rem 0.5rem 1.5rem 0.5rem;
     scroll-behavior: smooth;
-    position: relative;
 }
 
 .discovery-drawer-body::-webkit-scrollbar {
-    width: 6px;
-}
-
-.discovery-drawer-body::-webkit-scrollbar-track {
-    background: #f8fafc;
+    width: 4px;
 }
 
 .discovery-drawer-body::-webkit-scrollbar-thumb {
@@ -2975,260 +2877,126 @@
     border-radius: 9999px;
 }
 
-.discovery-drawer-body::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
-}
-
-/* Category Groups */
-.discovery-group-section {
-    margin-bottom: 1.15rem;
-}
-
-.discovery-group-header {
+/* Section Header */
+.discovery-section-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.45rem 0.65rem;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.5rem;
-    cursor: pointer;
-    user-select: none;
-    transition: all 0.15s ease;
-    margin-bottom: 0.5rem;
-}
-
-.discovery-group-header:hover {
-    background: #f1f5f9;
-    border-color: #cbd5e1;
-}
-
-.discovery-group-title {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    font-size: 0.76rem;
-    font-weight: 700;
-    color: #1e293b;
-}
-
-.discovery-group-count {
+    padding: 0.4rem 0.35rem 0.15rem 0.35rem;
     font-size: 0.65rem;
     font-weight: 700;
-    padding: 0.1rem 0.45rem;
-    border-radius: 9999px;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    color: #475569;
-}
-
-.discovery-group-chevron {
-    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
     color: #94a3b8;
-    transition: transform 0.2s ease;
+    margin-top: 0.35rem;
 }
 
-.discovery-group-chevron.collapsed {
-    transform: rotate(-90deg);
-}
-
-.discovery-group-items {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-}
-
-/* File / Asset Item Card */
-.discovery-card-item {
+/* Compact File Row */
+.discovery-compact-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.65rem;
-    padding: 0.55rem 0.75rem;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.5rem;
-    transition: all 0.15s ease;
+    gap: 0.4rem;
+    padding: 0.28rem 0.4rem;
+    border-radius: 0.35rem;
+    transition: background 0.12s ease;
     cursor: pointer;
 }
 
-.discovery-card-item:hover {
-    border-color: #93c5fd;
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
-    background: #f8fbff;
+.discovery-compact-row:hover {
+    background: #f8fafc;
 }
 
-.discovery-card-item:hover .discovery-file-url {
-    color: #2563eb;
-}
-
-.discovery-card-main {
+.discovery-row-main {
     display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
+    align-items: center;
+    gap: 0.4rem;
     min-width: 0;
     flex: 1;
 }
 
-.discovery-card-top {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    min-width: 0;
+.discovery-tag-mini {
+    font-size: 0.58rem;
+    font-weight: 700;
+    padding: 0.05rem 0.28rem;
+    border-radius: 0.25rem;
+    flex-shrink: 0;
+    font-family: ui-monospace, monospace;
 }
 
-.discovery-file-url {
-    font-size: 0.74rem;
+.discovery-tag-mini.PAGE { background: #eff6ff; color: #2563eb; }
+.discovery-tag-mini.SCRIPT { background: #fef3c7; color: #b45309; }
+.discovery-tag-mini.STYLESHEET { background: #f3e8ff; color: #7e22ce; }
+.discovery-tag-mini.API_ENDPOINT { background: #ecfdf5; color: #059669; }
+.discovery-tag-mini.SITEMAP,
+.discovery-tag-mini.ROBOTS { background: #f1f5f9; color: #475569; }
+
+.discovery-row-path {
+    font-size: 0.72rem;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    color: #0f172a;
+    color: #334155;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     min-width: 0;
-    flex: 1;
 }
 
-.discovery-card-meta {
+.discovery-compact-row:hover .discovery-row-path {
+    color: #0f172a;
+}
+
+.discovery-row-actions {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    flex-wrap: wrap;
-}
-
-.discovery-status-chip {
-    font-size: 0.64rem;
-    font-weight: 700;
-}
-
-.discovery-status-chip.ok { color: #16a34a; }
-.discovery-status-chip.warn { color: #d97706; }
-
-.discovery-latency-chip {
-    font-size: 0.64rem;
-    color: #94a3b8;
-    font-family: monospace;
-}
-
-.discovery-size-chip {
-    font-size: 0.64rem;
-    color: #64748b;
-    background: #f1f5f9;
-    padding: 0.05rem 0.35rem;
-    border-radius: 0.25rem;
-    font-family: monospace;
-}
-
-.discovery-card-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
+    gap: 0.25rem;
     flex-shrink: 0;
+    opacity: 0.8;
+    transition: opacity 0.12s ease;
 }
 
-.discovery-copy-btn {
+.discovery-compact-row:hover .discovery-row-actions {
+    opacity: 1;
+}
+
+.discovery-mini-code-btn {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    padding: 0.22rem;
-    color: #94a3b8;
-    border-radius: 0.3rem;
-    border: 1px solid transparent;
-    background: transparent;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-.discovery-copy-btn:hover {
-    color: #0f172a;
-    background: #e2e8f0;
-}
-
-/* End-of-List Marker */
-.discovery-end-marker {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.85rem 1rem;
-    background: #f8fafc;
-    border: 1.5px dashed #cbd5e1;
-    border-radius: 0.625rem;
-    margin-top: 1.5rem;
-    margin-bottom: 2rem;
-    gap: 0.75rem;
-}
-
-.discovery-end-badge {
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    background: #10b981;
-    color: #ffffff;
-    font-size: 0.8rem;
-    font-weight: 800;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.discovery-end-text {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-}
-
-.discovery-end-text b {
-    font-size: 0.75rem;
-    color: #1e293b;
-}
-
-.discovery-end-text span {
-    font-size: 0.68rem;
-    color: #64748b;
-}
-
-.discovery-end-top-btn {
-    padding: 0.35rem 0.75rem;
-    font-size: 0.7rem;
+    padding: 0.1rem 0.32rem;
+    font-size: 0.64rem;
     font-weight: 600;
     color: #2563eb;
     background: #eff6ff;
-    border: 1px solid #bfdbfe;
-    border-radius: 0.375rem;
+    border: 1px solid #dbeafe;
+    border-radius: 0.25rem;
     cursor: pointer;
-    white-space: nowrap;
-    transition: all 0.15s ease;
+    transition: all 0.12s ease;
 }
 
-.discovery-end-top-btn:hover {
+.discovery-mini-code-btn:hover {
     background: #2563eb;
     color: #ffffff;
     border-color: #2563eb;
 }
 
-/* Floating Quick Jump Button */
-.discovery-floating-jump-btn {
-    position: absolute;
-    bottom: 1.25rem;
-    right: 1.5rem;
-    padding: 0.5rem 0.95rem;
-    background: #0f172a;
-    color: #ffffff;
-    border: none;
-    border-radius: 9999px;
-    font-size: 0.72rem;
-    font-weight: 600;
+.discovery-mini-link-btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.28);
-    cursor: pointer;
-    z-index: 20;
-    transition: transform 0.15s ease, background 0.15s ease;
+    justify-content: center;
+    padding: 0.15rem;
+    color: #94a3b8;
+    border-radius: 0.25rem;
+    transition: color 0.12s ease;
 }
 
-.discovery-floating-jump-btn:hover {
-    background: #1e293b;
-    transform: translateY(-2px);
+.discovery-mini-link-btn:hover {
+    color: #0f172a;
+}
+
+.discovery-drawer-quiet-footer {
+    text-align: center;
+    padding: 1.25rem 0.5rem 0.5rem 0.5rem;
+    font-size: 0.65rem;
+    color: #94a3b8;
+    font-family: ui-monospace, monospace;
 }
 
