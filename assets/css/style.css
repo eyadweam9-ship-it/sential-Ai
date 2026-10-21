@@ -2947,275 +2947,293 @@
 }
 
 /* =========================================================
-   Target Authorization & Scope Gate (Methods: DNS, File, Letter)
-   Simple, clean, Figma-cohesive styling ("بسيط ولايق")
+   Ultra-Clean, Eye-Catching Step 3: Authorization & Scope Gate
+   Sleek Segmented Nav, Crisp Snippets, Refined ChatGPT Uploads
    ========================================================= */
 
-.auth-method-nav {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.65rem;
-    margin-bottom: 1.25rem;
-}
-
-.auth-method-tab {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 0.75rem 0.85rem;
-    border: 1.5px solid #e2e8f0;
-    border-radius: 0.65rem;
-    background: #ffffff;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    text-align: left;
-    position: relative;
-}
-
-.auth-method-tab:hover {
-    border-color: #cbd5e1;
-    background: #f8fafc;
-}
-
-.auth-method-tab.active {
-    border-color: #2563eb;
-    background: #f0f7ff;
-    box-shadow: 0 0 0 1px #2563eb;
-}
-
-.auth-method-tab-header {
+/* Segmented Control Method Tabs */
+.auth-segmented-nav {
     display: flex;
     align-items: center;
+    background: #f1f5f9;
+    padding: 0.35rem;
+    border-radius: 0.85rem;
+    border: 1px solid #e2e8f0;
+    gap: 0.35rem;
+    margin-bottom: 1.35rem;
+}
+
+.auth-segmented-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     gap: 0.5rem;
-    width: 100%;
-    margin-bottom: 0.25rem;
+    padding: 0.65rem 0.85rem;
+    border-radius: 0.65rem;
+    border: 1px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #475569;
+    user-select: none;
 }
 
-.auth-method-tab-header b {
-    font-size: 0.78rem;
-    font-weight: 700;
+.auth-segmented-tab:hover {
     color: #0f172a;
+    background: rgba(255, 255, 255, 0.6);
 }
 
-.auth-method-tab.active .auth-method-tab-header b {
+.auth-segmented-tab.active {
+    background: #ffffff;
     color: #1d4ed8;
+    border-color: rgba(226, 232, 240, 0.9);
+    box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.08);
 }
 
-.auth-method-tab p {
-    font-size: 0.68rem;
-    color: #64748b;
-    margin: 0;
-    line-height: 1.35;
-}
-
-.auth-badge-auto {
+.auth-badge-pill {
     font-size: 0.6rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    padding: 0.15rem 0.4rem;
+    padding: 0.15rem 0.45rem;
     border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+}
+
+.auth-badge-pill.auto {
     background: #ecfdf5;
     color: #059669;
     border: 1px solid #a7f3d0;
-    margin-left: auto;
 }
 
-.auth-badge-admin {
-    font-size: 0.6rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    padding: 0.15rem 0.4rem;
-    border-radius: 9999px;
+.auth-badge-pill.admin {
     background: #fff7ed;
     color: #c2410c;
     border: 1px solid #fed7aa;
-    margin-left: auto;
 }
 
-/* Method Detail Box */
-.auth-panel-box {
+/* Method Container */
+.auth-method-container {
+    animation: fadeIn 0.2s ease-out;
+}
+
+/* Record Details Card (Sleek snippet) */
+.auth-snippet-card {
+    background: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 0.75rem;
-    background: #ffffff;
-    padding: 1.15rem;
-    margin-bottom: 1.25rem;
+    overflow: hidden;
+    margin-bottom: 1.15rem;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
-.auth-panel-box h3 {
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: #0f172a;
+.auth-snippet-row {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.4rem;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #f1f5f9;
+    gap: 0.75rem;
+    transition: background 0.15s ease;
 }
 
-.auth-panel-box p.hint {
-    font-size: 0.75rem;
+.auth-snippet-row:last-child {
+    border-bottom: none;
+}
+
+.auth-snippet-row:hover {
+    background: #fafcff;
+}
+
+.auth-snippet-label {
+    font-size: 0.72rem;
+    font-weight: 700;
     color: #64748b;
-    margin-bottom: 1rem;
-    line-height: 1.45;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    min-width: 65px;
 }
 
-/* Challenge Code & Details Block */
-.auth-info-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-    margin-bottom: 1rem;
+.auth-snippet-value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.76rem;
+    color: #0f172a;
     background: #f8fafc;
     border: 1px solid #e2e8f0;
-    border-radius: 0.55rem;
-    padding: 0.85rem 1rem;
-}
-
-.auth-info-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    font-size: 0.75rem;
-}
-
-.auth-info-label {
-    font-weight: 600;
-    color: #475569;
-    min-width: 90px;
-    font-size: 0.72rem;
-}
-
-.auth-info-val {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 0.74rem;
-    color: #0f172a;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    padding: 0.25rem 0.55rem;
-    border-radius: 0.35rem;
-    word-break: break-all;
+    padding: 0.35rem 0.65rem;
+    border-radius: 0.45rem;
     flex: 1;
+    word-break: break-all;
 }
 
-.auth-action-btn-row {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-top: 0.9rem;
-}
-
-/* ChatGPT-Style Minimalist Upload Pill */
-.chatgpt-upload-pill {
+/* Sleek Copy Button */
+.btn-copy-pill {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.55rem 0.9rem;
-    border: 1.5px dashed #cbd5e1;
-    border-radius: 0.55rem;
+    gap: 0.35rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: 0.45rem;
+    border: 1px solid #cbd5e1;
     background: #ffffff;
-    cursor: pointer;
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     font-weight: 600;
     color: #334155;
-    transition: all 0.2s ease;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
 }
 
-.chatgpt-upload-pill:hover {
+.btn-copy-pill:hover {
     border-color: #2563eb;
-    background: #f0f7ff;
-    color: #1d4ed8;
-}
-
-.chatgpt-file-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.4rem 0.75rem;
-    border-radius: 0.5rem;
+    color: #2563eb;
     background: #eff6ff;
-    border: 1px solid #bfdbfe;
-    color: #1e40af;
-    font-size: 0.74rem;
-    font-weight: 600;
 }
 
-/* Status Cards & Banners */
-.auth-status-banner {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 0.95rem;
-    border-radius: 0.55rem;
-    font-size: 0.75rem;
-    margin-top: 0.85rem;
-}
-
-.auth-status-banner.verified {
-    background: #ecfdf5;
-    border: 1px solid #a7f3d0;
-    color: #065f46;
-}
-
-.auth-status-banner.pending {
-    background: #fffbeb;
-    border: 1px solid #fde68a;
-    color: #92400e;
-}
-
-.auth-status-banner.failed {
-    background: #fef2f2;
-    border: 1px solid #fecaca;
-    color: #991b1b;
-}
-
-/* Authorization & Scope Gate Box */
-.gate-card {
-    border-radius: 0.75rem;
-    padding: 1.1rem;
-    border: 1.5px solid #e2e8f0;
-    background: #ffffff;
-    margin-top: 1.25rem;
-    transition: all 0.2s ease;
-}
-
-.gate-card.cleared {
+.btn-copy-pill.copied {
     border-color: #10b981;
-    background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%);
+    color: #059669;
+    background: #ecfdf5;
 }
 
-.gate-card.locked {
-    border-color: #f59e0b;
-    background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%);
-}
-
-.gate-head {
+/* Step Action Bar */
+.auth-action-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 0.5rem;
+    gap: 0.85rem;
+    margin-top: 1.15rem;
 }
 
-.gate-head b {
-    font-size: 0.82rem;
+/* Status Alert Card */
+.auth-alert-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.85rem 1.1rem;
+    border-radius: 0.75rem;
+    font-size: 0.76rem;
+    line-height: 1.45;
+    margin-top: 1rem;
+    animation: fadeIn 0.25s ease-out;
+}
+
+.auth-alert-card.verified {
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    border: 1px solid #86efac;
+    color: #14532d;
+}
+
+.auth-alert-card.pending {
+    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+    border: 1px solid #fde68a;
+    color: #78350f;
+}
+
+.auth-alert-card.failed {
+    background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+    border: 1px solid #fecaca;
+    color: #7f1d1d;
+}
+
+/* Minimalist ChatGPT File Upload Pill */
+.chatgpt-upload-zone {
     display: flex;
     align-items: center;
-    gap: 0.45rem;
+    justify-content: center;
+    gap: 0.65rem;
+    padding: 1.1rem 1rem;
+    border: 1.5px dashed #cbd5e1;
+    border-radius: 0.75rem;
+    background: #fafcff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
 }
 
-.gate-head.cleared b {
+.chatgpt-upload-zone:hover {
+    border-color: #2563eb;
+    background: #eff6ff;
+}
+
+.chatgpt-file-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.55rem 0.95rem;
+    border-radius: 0.6rem;
+    background: #eff6ff;
+    border: 1.5px solid #bfdbfe;
+    color: #1d4ed8;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.chatgpt-file-chip .remove-btn {
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    opacity: 0.65;
+    transition: opacity 0.15s ease;
+}
+
+.chatgpt-file-chip .remove-btn:hover {
+    opacity: 1;
+    color: #dc2626;
+}
+
+/* Modern Authorization & Scope Gate Card */
+.hero-gate-card {
+    border-radius: 0.85rem;
+    padding: 1.25rem;
+    margin-top: 1.4rem;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.25s ease;
+}
+
+.hero-gate-card.cleared {
+    background: linear-gradient(145deg, #ffffff 0%, #f0fdf4 100%);
+    border: 1.5px solid #10b981;
+    box-shadow: 0 4px 18px -2px rgba(16, 185, 129, 0.12);
+}
+
+.hero-gate-card.locked {
+    background: linear-gradient(145deg, #ffffff 0%, #fffbeb 100%);
+    border: 1.5px solid #fde68a;
+    box-shadow: 0 4px 18px -2px rgba(245, 158, 11, 0.08);
+}
+
+.hero-gate-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.65rem;
+}
+
+.hero-gate-title {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-size: 0.85rem;
+    font-weight: 800;
+}
+
+.hero-gate-card.cleared .hero-gate-title {
     color: #065f46;
 }
 
-.gate-head.locked b {
+.hero-gate-card.locked .hero-gate-title {
     color: #92400e;
 }
 
-.gate-card p {
-    font-size: 0.72rem;
+.hero-gate-card p {
+    font-size: 0.74rem;
     color: #475569;
-    line-height: 1.45;
+    line-height: 1.5;
     margin: 0;
 }
 
