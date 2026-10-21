@@ -2179,9 +2179,67 @@ const App = {
     async handleFolderSelect(event) {
         const files = event.target.files;
         if (!files || files.length === 0) return;
+
         const first = files[0];
-        const folderName = first.webkitRelativePath ? first.webkitRelativePath.split('/')[0] : 'project_source_tree';
-        await this.uploadSelectedFile(first, `${folderName}.zip`);
+        const folderName = first.webkitRelativePath ? first.webkitRelativePath.split('/')[0] : 'project_source';
+        this.scanState.isUploading = true;
+        showToast(`Analyzing folder "${folderName}"...`, 'info');
+
+        try {
+            const formData = new FormData();
+            formData.append('folderName', folderName);
+
+            let addedCount = 0;
+            for (let i = 0; i < files.length; i++) {
+                const f = files[i];
+                const relPath = f.webkitRelativePath || f.name;
+                // Exclude massive binary/cache directories
+                if (relPath.includes('node_modules/') || relPath.includes('node_modules\\') ||
+                    relPath.includes('/.git/') || relPath.includes('\\.git\\') ||
+                    relPath.includes('/dist/') || relPath.includes('\\dist\\') ||
+                    relPath.includes('/.next/') || relPath.includes('\\.next\\') ||
+                    relPath.includes('/build/') || relPath.includes('\\build\\') ||
+                    relPath.includes('/coverage/') || relPath.includes('\\coverage\\')) {
+                    continue;
+                }
+                formData.append('files', f);
+                formData.append('paths', relPath);
+                addedCount++;
+                if (addedCount >= 600) break; // reasonable max source files
+            }
+
+            if (addedCount === 0) {
+                showToast('No source code files found in selected folder.', 'error');
+                this.scanState.isUploading = false;
+                return;
+            }
+
+            showToast(`Uploading ${addedCount} source files from "${folderName}" for line-by-line audit...`, 'info');
+            const res = await API.uploadFolder(formData);
+
+            if (res.file) {
+                this.scanState.uploadedFile = {
+                    name: folderName,
+                    size: res.file.size || 0,
+                    path: res.file.path,
+                    type: 'folder',
+                    filesCount: res.file.filesCount || addedCount,
+                    totalLines: res.file.totalLines || 0
+                };
+                showToast(`Project folder "${folderName}" uploaded: ${this.scanState.uploadedFile.filesCount} files (${(this.scanState.uploadedFile.totalLines || 0).toLocaleString()} lines) indexed for deep SAST!`, 'success');
+            }
+        } catch (err) {
+            console.error('Folder upload error:', err);
+            showToast(err.message || 'Failed to upload project folder', 'error');
+        } finally {
+            this.scanState.isUploading = false;
+            try {
+                if (this.scanState.uploadedFile) {
+                    localStorage.setItem('sential_staged_file', JSON.stringify(this.scanState.uploadedFile));
+                }
+            } catch (e) {}
+            this.render();
+        }
     },
 
     handleDragOver(e) {
@@ -2215,16 +2273,21 @@ const App = {
                     name: customName || res.file.originalName || file.name,
                     size: res.file.size || file.size,
                     path: res.file.path,
-                    type: res.file.fileType || file.type
+                    type: res.file.fileType || file.type,
+                    filesCount: res.file.filesCount || 1,
+                    totalLines: res.file.totalLines || 0
                 };
-                showToast(`Project archive "${this.scanState.uploadedFile.name}" staged successfully!`, 'success');
+                const lineMsg = res.file.totalLines ? ` (${res.file.filesCount} files · ${res.file.totalLines.toLocaleString()} lines)` : '';
+                showToast(`Project archive "${this.scanState.uploadedFile.name}" staged successfully${lineMsg}!`, 'success');
             }
         } catch (err) {
             this.scanState.uploadedFile = {
                 name: customName || file.name,
                 size: file.size,
                 path: 'uploads/' + file.name,
-                type: file.type || '.zip'
+                type: file.type || '.zip',
+                filesCount: 1,
+                totalLines: 0
             };
             showToast(`File "${file.name}" staged for Static Analysis.`, 'info');
         } finally {

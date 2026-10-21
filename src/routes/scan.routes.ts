@@ -2,12 +2,14 @@ import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
+import AdmZip from 'adm-zip';
 import { prisma } from '../config/db';
 import { validateTargetUrl, isInternalHostname } from '../services/validator.service';
 import { crawlWebsite, safeFetchText } from '../services/crawler.service';
 import { checkAuthorizationGate, extractHostname } from '../services/authorization.service';
 import { evaluateScope, normalizeScopePath, ScopeRule } from '../services/scope.service';
 import { orchestrateScan } from '../services/scan-orchestrator.service';
+import { countFilesAndLines } from '../utils/file-counter';
 
 export const scanRouter = Router();
 
@@ -31,10 +33,10 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max file size
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB max file size
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    const allowed = ['.zip', '.tar', '.gz', '.tgz', '.js', '.ts', '.py', '.php', '.html', '.json', '.txt'];
+    const allowed = ['.zip', '.tar', '.gz', '.tgz', '.js', '.jsx', '.ts', '.tsx', '.py', '.php', '.html', '.json', '.txt', '.vue', '.sql', '.env', '.yaml', '.yml'];
     if (allowed.includes(ext) || file.mimetype.includes('zip') || file.mimetype.includes('octet-stream')) {
       cb(null, true);
     } else {
@@ -43,9 +45,15 @@ const upload = multer({
   },
 });
 
+const folderUpload = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024, files: 1000 },
+});
+
 /**
  * POST /api/scans/upload
- * Development Environment: Upload project code archive (ZIP) for SAST static scan
+ * Development Environment: Upload project code archive (ZIP or source file) for SAST static scan
+ * Automatically unzips archives so tools can scan individual files and lines.
  */
 scanRouter.post('/upload', upload.single('file'), (req: Request, res: Response): void => {
   try {
@@ -55,20 +63,120 @@ scanRouter.post('/upload', upload.single('file'), (req: Request, res: Response):
     }
 
     const { originalname, filename, size, path: filePath } = req.file;
+    const ext = path.extname(originalname).toLowerCase();
+
+    let finalStagedPath = filePath;
+    let filesCount = 1;
+    let totalLines = 0;
+
+    // Automatically unpack ZIP archives into target extraction directory
+    if (ext === '.zip' || req.file.mimetype.includes('zip') || req.file.mimetype.includes('octet-stream')) {
+      try {
+        const zip = new AdmZip(filePath);
+        const extractDir = path.join(uploadDir, 'extracted', `${Date.now()}-${originalname.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/\.zip$/i, '')}`);
+        fs.mkdirSync(extractDir, { recursive: true });
+        zip.extractAllTo(extractDir, true);
+        finalStagedPath = extractDir;
+
+        const stats = countFilesAndLines(extractDir);
+        filesCount = stats.files;
+        totalLines = stats.lines;
+      } catch (zipErr) {
+        console.warn('ZIP extraction notice:', (zipErr as Error).message);
+      }
+    } else {
+      // Single code file
+      try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        totalLines = content.split('\n').length;
+      } catch {}
+    }
 
     res.status(200).json({
       success: true,
-      message: 'Project file uploaded successfully and staged for static security analysis (SAST).',
+      message: `Project file uploaded and staged successfully (${filesCount} file(s), ${totalLines.toLocaleString()} lines of code indexed).`,
       file: {
         originalName: originalname,
         storedName: filename,
         size,
-        path: filePath,
-        fileType: path.extname(originalname).toLowerCase(),
+        path: finalStagedPath,
+        fileType: ext,
+        filesCount,
+        totalLines,
       },
     });
   } catch (error) {
     console.error('File upload error:', error);
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/scans/upload-folder
+ * Upload entire folder with relative directory paths preserved
+ */
+scanRouter.post('/upload-folder', folderUpload.array('files', 1000), (req: Request, res: Response): void => {
+  try {
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      res.status(400).json({ success: false, error: 'No files were uploaded.' });
+      return;
+    }
+
+    const folderName = (req.body.folderName || 'project_source').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const extractDir = path.join(uploadDir, 'extracted', `${Date.now()}-${folderName}`);
+    fs.mkdirSync(extractDir, { recursive: true });
+
+    let pathsList: string[] = [];
+    if (req.body.paths) {
+      pathsList = Array.isArray(req.body.paths) ? req.body.paths : [req.body.paths];
+    }
+
+    let savedCount = 0;
+    let totalLines = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      let relPath = pathsList[i] || f.originalname;
+
+      // Strip leading folderName/ if present
+      if (relPath.startsWith(`${folderName}/`) || relPath.startsWith(`${folderName}\\`)) {
+        relPath = relPath.slice(folderName.length + 1);
+      }
+
+      // Security: Prevent directory traversal outside extractDir
+      const safeRelPath = path.normalize(relPath).replace(/^(\.\.[\/\\])+/, '');
+      const targetPath = path.join(extractDir, safeRelPath);
+      const targetParent = path.dirname(targetPath);
+      if (!fs.existsSync(targetParent)) {
+        fs.mkdirSync(targetParent, { recursive: true });
+      }
+
+      fs.copyFileSync(f.path, targetPath);
+      try { fs.unlinkSync(f.path); } catch {} // remove temp multer file
+
+      savedCount++;
+      try {
+        const content = fs.readFileSync(targetPath, 'utf8');
+        totalLines += content.split('\n').length;
+      } catch {}
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Folder "${folderName}" uploaded successfully (${savedCount} files, ${totalLines.toLocaleString()} lines of code indexed).`,
+      file: {
+        originalName: folderName,
+        storedName: path.basename(extractDir),
+        size: files.reduce((acc, f) => acc + f.size, 0),
+        path: extractDir,
+        fileType: 'folder',
+        filesCount: savedCount,
+        totalLines,
+      },
+    });
+  } catch (error) {
+    console.error('Folder upload error:', error);
     res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
@@ -707,15 +815,13 @@ scanRouter.post(['/create', '/start'], async (req: Request, res: Response): Prom
       });
     }
 
-    // 10. Seed findings into database if database is currently empty
+    // 10. For URL DAST modes only, seed baseline if database is empty; in Development SAST, findings are 100% discovered live from uploaded files
     const existingCount = await prisma.vulnerability.count({ where: { scanId: scan.id } });
-    if (existingCount === 0) {
+    if (existingCount === 0 && !isDevelopment) {
       let templateFindings: any[] = [];
-      if (isDevelopment) {
-        templateFindings = SAST_FINDINGS;
-      } else if (scanProfile === 'HYBRID_DAST_SAST') {
-        // Hybrid combines DAST web findings with SAST code findings
-        templateFindings = [...WEB_FINDINGS.slice(0, 3), ...SAST_FINDINGS.slice(0, 2)];
+      if (scanProfile === 'HYBRID_DAST_SAST') {
+        // Hybrid combines DAST web findings with real SAST
+        templateFindings = [...WEB_FINDINGS.slice(0, 3)];
       } else {
         templateFindings = WEB_FINDINGS;
       }
@@ -960,11 +1066,23 @@ scanRouter.get('/progress', async (req: Request, res: Response): Promise<void> =
     const lowCount = findings.filter(f => f.severity === 'LOW').length;
 
     const activeRunningTask = tasks.find(t => t.status === 'RUNNING');
-    let activeMessage = 'All security tools and assessment checks completed.';
+    let dynamicActiveTool: string | undefined;
+    let dynamicActiveMessage: string | undefined;
+    if (scan?.summaryJson) {
+      try {
+        const sObj = JSON.parse(scan.summaryJson);
+        if (sObj.activeTool) dynamicActiveTool = sObj.activeTool;
+        if (sObj.activeMessage) dynamicActiveMessage = sObj.activeMessage;
+      } catch {}
+    }
+
+    let activeMessage = dynamicActiveMessage || 'All security tools and assessment checks completed.';
     if (scan?.status === 'CANCELLED') {
       activeMessage = 'Assessment cancelled by user request. Partial findings preserved.';
     } else if (scan?.status === 'ANALYZING') {
-      activeMessage = 'Findings pipeline: Normalizing evidence & synthesizing AI Threat Intelligence...';
+      activeMessage = dynamicActiveMessage || 'Findings pipeline: Normalizing evidence & synthesizing AI Threat Intelligence...';
+    } else if (dynamicActiveMessage) {
+      activeMessage = dynamicActiveMessage;
     } else if (activeRunningTask) {
       if (activeRunningTask.toolName === 'OWASP_ZAP') activeMessage = `OWASP ZAP: Dynamic DAST inspection on ${targetLabel} (${rateLimit} req/s)`;
       else if (activeRunningTask.toolName === 'SEMGREP') activeMessage = `Semgrep: Static AST taint and code vulnerability analysis`;
@@ -1001,7 +1119,7 @@ scanRouter.get('/progress', async (req: Request, res: Response): Promise<void> =
           medium: mediumCount,
           low: lowCount,
         },
-        activeTool: activeRunningTask?.toolName || (realStatus === 'completed' ? 'All Tools' : 'Engine'),
+        activeTool: dynamicActiveTool || activeRunningTask?.toolName || (realStatus === 'completed' ? 'All Tools' : 'Engine'),
         activeMessage,
         stages,
         logs,

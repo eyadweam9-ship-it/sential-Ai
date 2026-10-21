@@ -120,6 +120,23 @@ const API = {
         return data;
     },
 
+    async uploadFolder(formData) {
+        const token = this.getToken();
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch(`${this.BASE_URL}/scans/upload-folder`, {
+            method: 'POST',
+            headers,
+            body: formData
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            throw new Error(data.error || data.message || 'Folder upload failed');
+        }
+        return data;
+    },
+
     // Target Authorization & Scope Gate
     async getDnsChallenge(targetUrl) {
         return await this.request('authorization/dns/challenge', {

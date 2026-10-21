@@ -67,6 +67,33 @@ const BACKEND_RULES: SastRule[] = [
     regex: /(?:res\.send|res\.write)\s*\(\s*['"]<.*?['"]\s*\+\s*(?:req\.query|req\.params|req\.body)/i,
     remediation: 'HTML-encode all user input before rendering in responses, or use template engines with automatic contextual escaping.',
   },
+  {
+    id: 'javascript.jwt.hardcoded-secret',
+    title: 'Hardcoded or Weak JWT Signing Secret',
+    severity: 'CRITICAL',
+    category: 'AUTHENTICATION',
+    cwe: 'CWE-798',
+    regex: /jwt\.sign\s*\(\s*[^,]+,\s*['"][a-zA-Z0-9_\-\.!@#$%^&*]{1,24}['"]/i,
+    remediation: 'Store JWT signing keys in secure environment variables or vault with at least 256 bits of entropy.',
+  },
+  {
+    id: 'javascript.cors.wildcard-credentials',
+    title: 'Overly Permissive CORS with Wildcard Origin',
+    severity: 'MEDIUM',
+    category: 'CONFIGURATION_ERROR',
+    cwe: 'CWE-942',
+    regex: /cors\s*\(\s*\{[^}]*origin\s*:\s*['"]\*['"]/i,
+    remediation: 'Explicitly specify trusted allowed origins instead of wildcard *.',
+  },
+  {
+    id: 'javascript.cookie.insecure-flags',
+    title: 'Session Cookie Configured without HttpOnly or Secure Flag',
+    severity: 'MEDIUM',
+    category: 'SESSION_MANAGEMENT',
+    cwe: 'CWE-614',
+    regex: /(?:httpOnly\s*:\s*false|secure\s*:\s*false)/i,
+    remediation: 'Set httpOnly: true, secure: true, and sameSite: "lax" or "strict" for all session cookies.',
+  },
 ];
 
 const DOM_SAST_RULES: SastRule[] = [
@@ -275,34 +302,36 @@ export class SemgrepAdapter implements SecurityToolAdapter {
     }
   }
 
-  private scanDirectory(dirPath: string, findings: RawToolFinding[], depth = 0): void {
-    if (depth > 6 || !fs.existsSync(dirPath)) return;
+  private scanDirectory(dirPath: string, findings: RawToolFinding[], depth = 0, baseDir?: string): void {
+    if (depth > 12 || !fs.existsSync(dirPath)) return;
+    const root = baseDir || dirPath;
 
     const entries = fs.readdirSync(dirPath, { withFileTypes: true });
     for (const entry of entries) {
       const fullPath = path.join(dirPath, entry.name);
       if (entry.isDirectory()) {
-        if (['node_modules', '.git', 'dist', 'build', 'coverage', '.system_generated'].includes(entry.name)) {
+        if (['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.system_generated'].includes(entry.name)) {
           continue;
         }
-        this.scanDirectory(fullPath, findings, depth + 1);
+        this.scanDirectory(fullPath, findings, depth + 1, root);
       } else if (entry.isFile()) {
         const ext = path.extname(entry.name).toLowerCase();
-        if (['.js', '.ts', '.py', '.php', '.java', '.go'].includes(ext)) {
-          this.scanFile(fullPath, findings);
+        if (['.js', '.jsx', '.ts', '.tsx', '.py', '.php', '.java', '.go', '.html', '.htm', '.vue', '.sql', '.env', '.json', '.rb', '.cs', '.c', '.cpp', '.sh'].includes(ext)) {
+          this.scanFile(fullPath, findings, root);
         }
       }
     }
   }
 
-  private scanFile(filePath: string, findings: RawToolFinding[]): void {
+  private scanFile(filePath: string, findings: RawToolFinding[], baseDir?: string): void {
     try {
       const stats = fs.statSync(filePath);
-      if (stats.size > 2 * 1024 * 1024) return;
+      if (stats.size > 3 * 1024 * 1024) return; // skip files > 3MB
 
       const content = fs.readFileSync(filePath, 'utf8');
-      const relPath = path.relative(process.cwd(), filePath).replace(/\\/g, '/');
+      const relPath = baseDir ? path.relative(baseDir, filePath).replace(/\\/g, '/') : path.basename(filePath);
       this.scanCodeSnippet(content, relPath, BACKEND_RULES, findings);
+      this.scanCodeSnippet(content, relPath, DOM_SAST_RULES, findings);
     } catch {}
   }
 }

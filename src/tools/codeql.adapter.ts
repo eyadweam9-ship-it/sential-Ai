@@ -100,17 +100,12 @@ export class CodeqlAdapter implements SecurityToolAdapter {
     try {
       const filesToAudit: { path: string; content: string }[] = [];
 
-      // 1. Audit local source repository if available
-      const searchDirs = [
-        input.sourcePath,
-        path.join(process.cwd(), 'src'),
-        path.join(process.cwd(), 'assets', 'js'),
-      ].filter(Boolean) as string[];
-
-      for (const dir of searchDirs) {
-        if (fs.existsSync(dir)) {
-          this.collectSourceFiles(dir, filesToAudit, 40);
-        }
+      // 1. Audit uploaded project source repository if available
+      if (input.sourcePath && fs.existsSync(input.sourcePath)) {
+        this.collectSourceFiles(input.sourcePath, filesToAudit, 300);
+      } else if (!input.targetUrl) {
+        // Fallback to local workspace only if neither sourcePath nor URL was provided
+        this.collectSourceFiles(path.join(process.cwd(), 'src'), filesToAudit, 40);
       }
 
       // 2. Fallback to client-side scripts if URL provided
@@ -151,7 +146,7 @@ export class CodeqlAdapter implements SecurityToolAdapter {
                     confidence: 'CONFIRMED',
                     category: rule.category,
                     sourceRuleId: rule.id,
-                    filePath: file.path,
+                    filePath: input.sourcePath ? path.relative(input.sourcePath, file.path).replace(/\\/g, '/') : path.basename(file.path),
                     lineStart: i + 1,
                     lineEnd: i + 1,
                     evidenceSummary: `${rule.description} (Source: "${sourceMatch}" -> Sink: Line ${i + 1})`,
