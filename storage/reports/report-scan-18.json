@@ -1,0 +1,235 @@
+{
+  "reportId": 0,
+  "scanId": 18,
+  "targetUrl": "https://aymanaboelela.com/",
+  "environment": "STAGING",
+  "scanStatus": "ANALYZING",
+  "generatedAt": "2026-10-21T15:14:20.260Z",
+  "executiveSummary": {
+    "riskScore": 100,
+    "overallPosture": "SECURE",
+    "keyRiskDrivers": [],
+    "remediationPriorities": [
+      "Prioritize immediate rotation of exposed secrets and API tokens.",
+      "Refactor dynamic SQL/Command execution routines to use prepared parameterized queries.",
+      "Configure enterprise defense headers (CSP, HSTS, X-Frame-Options) on origin web servers.",
+      "Upgrade third-party dependencies with published CVE advisories."
+    ],
+    "assessmentLimitations": "Analysis based on outputs from OWASP_ZAP. Tools skipped due to input scope: SEMGREP, GITLEAKS, TRIVY, NPM_AUDIT. No automated code changes or destructive tests were performed."
+  },
+  "toolsExecution": [
+    {
+      "toolName": "OWASP_ZAP",
+      "status": "COMPLETED",
+      "startedAt": "2026-10-21T15:14:19.237Z",
+      "finishedAt": "2026-10-21T15:14:20.172Z",
+      "errorMessage": null,
+      "executions": [
+        {
+          "id": 1,
+          "scanTaskId": 1,
+          "toolName": "OWASP_ZAP",
+          "toolVersion": "2.14.0",
+          "exitCode": 0,
+          "resultPath": "D:\\Sential AI\\storage\\tool-results\\zap\\scan-18-zap.json",
+          "rawOutputJson": null,
+          "errorSummary": null,
+          "durationMs": 930,
+          "createdAt": "2026-10-21T15:14:20.173Z"
+        }
+      ]
+    },
+    {
+      "toolName": "SEMGREP",
+      "status": "SKIPPED",
+      "startedAt": null,
+      "finishedAt": null,
+      "errorMessage": "SAST requires repository source code or uploaded archive.",
+      "executions": []
+    },
+    {
+      "toolName": "GITLEAKS",
+      "status": "SKIPPED",
+      "startedAt": null,
+      "finishedAt": null,
+      "errorMessage": "Secret detection requires source code files or git repository history.",
+      "executions": []
+    },
+    {
+      "toolName": "TRIVY",
+      "status": "SKIPPED",
+      "startedAt": null,
+      "finishedAt": null,
+      "errorMessage": "Trivy requires project dependency manifests (package.json, requirements.txt) or container files.",
+      "executions": []
+    },
+    {
+      "toolName": "NPM_AUDIT",
+      "status": "SKIPPED",
+      "startedAt": null,
+      "finishedAt": null,
+      "errorMessage": "npm audit requires package.json and lockfile within the project.",
+      "executions": []
+    }
+  ],
+  "findingsCount": {
+    "total": 2,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 2,
+    "info": 0
+  },
+  "findings": [
+    {
+      "id": 1,
+      "scanId": 18,
+      "toolName": "OWASP_ZAP",
+      "sourceRuleId": "10036-1",
+      "title": "Server or Technology Version Banner Disclosed",
+      "description": "Server discloses internal stack: Server: cloudflare.",
+      "severity": "LOW",
+      "confidence": "CONFIRMED",
+      "category": "INFORMATION_DISCLOSURE",
+      "fingerprint": "6cb3dfb840e0560915cb75c1e9215c8d89fb9cd092327cd0e4b283c2bbe7cc95",
+      "status": "OPEN",
+      "remediation": "Disable server version tokens in web server configurations (e.g. server_tokens off in Nginx, ServerSignature Off in Apache).",
+      "cwe": "CWE-200",
+      "cve": null,
+      "createdAt": "2026-10-21T15:14:20.179Z",
+      "updatedAt": "2026-10-21T15:14:20.179Z",
+      "evidences": [
+        {
+          "id": 1,
+          "findingId": 1,
+          "url": "https://aymanaboelela.com/",
+          "filePath": null,
+          "lineStart": null,
+          "lineEnd": null,
+          "evidenceSummary": "Server discloses internal stack: Server: cloudflare.",
+          "rawSnippet": null,
+          "httpMethod": null,
+          "paramName": null,
+          "createdAt": "2026-10-21T15:14:20.185Z"
+        }
+      ],
+      "aiAnalyses": [
+        {
+          "id": 1,
+          "scanId": 18,
+          "findingId": 1,
+          "model": "SentinelAI-SecAudit-Pro",
+          "summary": "SentinelAI verified a low severity issue (Server or Technology Version Banner Disclosed) reported by OWASP_ZAP affecting https://aymanaboelela.com/.",
+          "technicalDetails": "The tool identified rule match \"10036-1\" within https://aymanaboelela.com/. Server discloses internal stack: Server: cloudflare.",
+          "impact": "If exploited by an attacker with access to this endpoint, this vulnerability could compromise application security baseline. Assumes default configuration without external Web Application Firewall (WAF) mitigation.",
+          "evidenceExplanation": "Original scanner verification: \"Server discloses internal stack: Server: cloudflare.\". ",
+          "severityRationale": "Classified as LOW because it provides informational or minor environmental reconnaissance value.",
+          "recommendedRemediation": "Disable server version tokens in web server configurations (e.g. server_tokens off in Nginx, ServerSignature Off in Apache). (Note: Text-based recommendation only; automated file modification is strictly out of scope).",
+          "references": "[\"https://cwe.mitre.org/data/definitions/200.html\",\"https://cheatsheetseries.owasp.org/\"]",
+          "confidenceAndLimitations": "Confidence: CONFIRMED. Assessment conducted dynamically/statically according to authorized boundaries. Testing does not prove absence of other undiscovered defects.",
+          "analysisJson": "{\"summary\":\"SentinelAI verified a low severity issue (Server or Technology Version Banner Disclosed) reported by OWASP_ZAP affecting https://aymanaboelela.com/.\",\"technicalDetails\":\"The tool identified rule match \\\"10036-1\\\" within https://aymanaboelela.com/. Server discloses internal stack: Server: cloudflare.\",\"impact\":\"If exploited by an attacker with access to this endpoint, this vulnerability could compromise application security baseline. Assumes default configuration without external Web Application Firewall (WAF) mitigation.\",\"evidenceExplanation\":\"Original scanner verification: \\\"Server discloses internal stack: Server: cloudflare.\\\". \",\"severityRationale\":\"Classified as LOW because it provides informational or minor environmental reconnaissance value.\",\"recommendedRemediation\":\"Disable server version tokens in web server configurations (e.g. server_tokens off in Nginx, ServerSignature Off in Apache). (Note: Text-based recommendation only; automated file modification is strictly out of scope).\",\"references\":[\"https://cwe.mitre.org/data/definitions/200.html\",\"https://cheatsheetseries.owasp.org/\"],\"confidenceAndLimitations\":\"Confidence: CONFIRMED. Assessment conducted dynamically/statically according to authorized boundaries. Testing does not prove absence of other undiscovered defects.\"}",
+          "createdAt": "2026-10-21T15:14:20.235Z"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "scanId": 18,
+      "toolName": "OWASP_ZAP",
+      "sourceRuleId": "10010-1",
+      "title": "Cookie Missing HttpOnly Attribute",
+      "description": "Cookie is accessible via client-side JavaScript, increasing risk in case of Cross-Site Scripting (XSS).",
+      "severity": "LOW",
+      "confidence": "HIGH",
+      "category": "SESSION_MANAGEMENT",
+      "fingerprint": "21f04585815990a15b4b1a1706b62dcee3af929a0facdbd718bf3cfa53c3a85f",
+      "status": "OPEN",
+      "remediation": "Append \"; HttpOnly\" to all session and authentication cookies.",
+      "cwe": "CWE-1004",
+      "cve": null,
+      "createdAt": "2026-10-21T15:14:20.195Z",
+      "updatedAt": "2026-10-21T15:14:20.195Z",
+      "evidences": [
+        {
+          "id": 2,
+          "findingId": 2,
+          "url": "https://aymanaboelela.com/",
+          "filePath": null,
+          "lineStart": null,
+          "lineEnd": null,
+          "evidenceSummary": "Cookie is accessible via client-side JavaScript, increasing risk in case of Cross-Site Scripting (XSS).",
+          "rawSnippet": null,
+          "httpMethod": null,
+          "paramName": null,
+          "createdAt": "2026-10-21T15:14:20.200Z"
+        }
+      ],
+      "aiAnalyses": [
+        {
+          "id": 2,
+          "scanId": 18,
+          "findingId": 2,
+          "model": "SentinelAI-SecAudit-Pro",
+          "summary": "SentinelAI verified a low severity issue (Cookie Missing HttpOnly Attribute) reported by OWASP_ZAP affecting https://aymanaboelela.com/.",
+          "technicalDetails": "The tool identified rule match \"10010-1\" within https://aymanaboelela.com/. Cookie is accessible via client-side JavaScript, increasing risk in case of Cross-Site Scripting (XSS).",
+          "impact": "If exploited by an attacker with access to this endpoint, this vulnerability could compromise application security baseline. Assumes default configuration without external Web Application Firewall (WAF) mitigation.",
+          "evidenceExplanation": "Original scanner verification: \"Cookie is accessible via client-side JavaScript, increasing risk in case of Cross-Site Scripting (XSS).\". ",
+          "severityRationale": "Classified as LOW because it provides informational or minor environmental reconnaissance value.",
+          "recommendedRemediation": "Append \"; HttpOnly\" to all session and authentication cookies. (Note: Text-based recommendation only; automated file modification is strictly out of scope).",
+          "references": "[\"https://cwe.mitre.org/data/definitions/1004.html\",\"https://cheatsheetseries.owasp.org/\"]",
+          "confidenceAndLimitations": "Confidence: HIGH. Assessment conducted dynamically/statically according to authorized boundaries. Testing does not prove absence of other undiscovered defects.",
+          "analysisJson": "{\"summary\":\"SentinelAI verified a low severity issue (Cookie Missing HttpOnly Attribute) reported by OWASP_ZAP affecting https://aymanaboelela.com/.\",\"technicalDetails\":\"The tool identified rule match \\\"10010-1\\\" within https://aymanaboelela.com/. Cookie is accessible via client-side JavaScript, increasing risk in case of Cross-Site Scripting (XSS).\",\"impact\":\"If exploited by an attacker with access to this endpoint, this vulnerability could compromise application security baseline. Assumes default configuration without external Web Application Firewall (WAF) mitigation.\",\"evidenceExplanation\":\"Original scanner verification: \\\"Cookie is accessible via client-side JavaScript, increasing risk in case of Cross-Site Scripting (XSS).\\\". \",\"severityRationale\":\"Classified as LOW because it provides informational or minor environmental reconnaissance value.\",\"recommendedRemediation\":\"Append \\\"; HttpOnly\\\" to all session and authentication cookies. (Note: Text-based recommendation only; automated file modification is strictly out of scope).\",\"references\":[\"https://cwe.mitre.org/data/definitions/1004.html\",\"https://cheatsheetseries.owasp.org/\"],\"confidenceAndLimitations\":\"Confidence: HIGH. Assessment conducted dynamically/statically according to authorized boundaries. Testing does not prove absence of other undiscovered defects.\"}",
+          "createdAt": "2026-10-21T15:14:20.245Z"
+        }
+      ]
+    }
+  ],
+  "comparison": {
+    "targetId": 10,
+    "currentScanId": 18,
+    "previousScanId": null,
+    "newFindingsCount": 2,
+    "recurrentFindingsCount": 0,
+    "fixedFindingsCount": 0,
+    "newFindings": [
+      {
+        "id": 1,
+        "scanId": 18,
+        "toolName": "OWASP_ZAP",
+        "sourceRuleId": "10036-1",
+        "title": "Server or Technology Version Banner Disclosed",
+        "description": "Server discloses internal stack: Server: cloudflare.",
+        "severity": "LOW",
+        "confidence": "CONFIRMED",
+        "category": "INFORMATION_DISCLOSURE",
+        "fingerprint": "6cb3dfb840e0560915cb75c1e9215c8d89fb9cd092327cd0e4b283c2bbe7cc95",
+        "status": "OPEN",
+        "remediation": "Disable server version tokens in web server configurations (e.g. server_tokens off in Nginx, ServerSignature Off in Apache).",
+        "cwe": "CWE-200",
+        "cve": null,
+        "createdAt": "2026-10-21T15:14:20.179Z",
+        "updatedAt": "2026-10-21T15:14:20.179Z"
+      },
+      {
+        "id": 2,
+        "scanId": 18,
+        "toolName": "OWASP_ZAP",
+        "sourceRuleId": "10010-1",
+        "title": "Cookie Missing HttpOnly Attribute",
+        "description": "Cookie is accessible via client-side JavaScript, increasing risk in case of Cross-Site Scripting (XSS).",
+        "severity": "LOW",
+        "confidence": "HIGH",
+        "category": "SESSION_MANAGEMENT",
+        "fingerprint": "21f04585815990a15b4b1a1706b62dcee3af929a0facdbd718bf3cfa53c3a85f",
+        "status": "OPEN",
+        "remediation": "Append \"; HttpOnly\" to all session and authentication cookies.",
+        "cwe": "CWE-1004",
+        "cve": null,
+        "createdAt": "2026-10-21T15:14:20.195Z",
+        "updatedAt": "2026-10-21T15:14:20.195Z"
+      }
+    ],
+    "fixedFindings": [],
+    "recurrentFindings": []
+  }
+}

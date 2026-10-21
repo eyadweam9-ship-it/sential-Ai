@@ -3903,11 +3903,14 @@ const App = {
                 copy: `${escapeHtml(targetDesc)} · ${isScanOnly ? 'Scan Only Assessment' : 'Full Lifecycle Assessment'}`,
                 action: `
                     <div class="flex gap-2">
-                        <button type="button" class="button button-secondary" onclick="App.navigate('type')">
-                            ${Icons.get('refresh', 'size-4')} Rescan
+                        <button type="button" class="button button-secondary" onclick="App.triggerRescan()">
+                            ${Icons.get('refresh', 'size-4')} Retest (Rescan)
+                        </button>
+                        <button type="button" class="button button-secondary" onclick="App.exportAndDownloadReport()">
+                            ${Icons.get('file', 'size-4')} Export Report
                         </button>
                         <button type="button" class="button button-primary" onclick="App.proceedToReport()">
-                            ${Icons.get('file', 'size-4')} View report
+                            View Report
                         </button>
                     </div>
                 `
@@ -3923,6 +3926,74 @@ const App = {
                     </div>
                 </div>
             ` : ''}
+
+            <!-- Multi-Tool Execution & Engine Matrix Card -->
+            <div class="card mb-6" style="padding: 1.25rem 1.5rem; border-radius: 12px; background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom: 1rem;">
+                    <div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <h2 style="font-size:15px; font-weight:800; color:#0f172a; margin:0;">Multi-Tool Security Assessment Engine</h2>
+                            <span id="scan-status-badge" class="badge" style="font-size:10px; padding:2px 8px; border-radius:9999px; background:#eff6ff; color:#2563eb; font-weight:700;">READY</span>
+                        </div>
+                        <p style="font-size:11px; color:#64748b; margin:3px 0 0 0;">
+                            Unified DAST, SAST, Secret Scanning, Configuration &amp; Dependency Analysis
+                        </p>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:16px;">
+                        <div style="text-align:right;">
+                            <span style="font-size:10px; color:#64748b; font-weight:600; text-transform:uppercase;">Tools Completed</span>
+                            <div id="tools-completed-ratio" style="font-size:15px; font-weight:800; color:#0f172a;">— / 5</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <span style="font-size:10px; color:#64748b; font-weight:600; text-transform:uppercase;">Engine Mode</span>
+                            <div style="font-size:13px; font-weight:700; color:#2563eb;">${isDev ? 'PURE SAST' : (isHybrid ? 'HYBRID DAST+SAST' : 'URL DAST')}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5 Tool Matrix Grid -->
+                <div id="tool-execution-matrix-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px;">
+                    <div class="tool-matrix-tile" id="tile-tool-OWASP_ZAP" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-size:12px; font-weight:700; color:#1e293b;">OWASP ZAP</div>
+                            <small style="color:#64748b; font-size:10px;">DAST Engine</small>
+                        </div>
+                        <span class="tool-status-pill badge" id="pill-OWASP_ZAP" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
+                    </div>
+
+                    <div class="tool-matrix-tile" id="tile-tool-SEMGREP" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-size:12px; font-weight:700; color:#1e293b;">Semgrep</div>
+                            <small style="color:#64748b; font-size:10px;">SAST Code</small>
+                        </div>
+                        <span class="tool-status-pill badge" id="pill-SEMGREP" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
+                    </div>
+
+                    <div class="tool-matrix-tile" id="tile-tool-GITLEAKS" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-size:12px; font-weight:700; color:#1e293b;">Gitleaks</div>
+                            <small style="color:#64748b; font-size:10px;">Secret Detection</small>
+                        </div>
+                        <span class="tool-status-pill badge" id="pill-GITLEAKS" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
+                    </div>
+
+                    <div class="tool-matrix-tile" id="tile-tool-TRIVY" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-size:12px; font-weight:700; color:#1e293b;">Trivy</div>
+                            <small style="color:#64748b; font-size:10px;">Config &amp; CVEs</small>
+                        </div>
+                        <span class="tool-status-pill badge" id="pill-TRIVY" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
+                    </div>
+
+                    <div class="tool-matrix-tile" id="tile-tool-NPM_AUDIT" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-size:12px; font-weight:700; color:#1e293b;">npm audit</div>
+                            <small style="color:#64748b; font-size:10px;">Dependencies</small>
+                        </div>
+                        <span class="tool-status-pill badge" id="pill-NPM_AUDIT" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
+                    </div>
+                </div>
+            </div>
 
             <!-- Dashboard Metric Grid (Score + 3 KPIs) -->
             <div class="dashboard-grid">
@@ -4127,28 +4198,109 @@ const App = {
             this.renderStandardRows(this.findingsData);
         }
 
-        if (API.getToken()) {
-            try {
-                const res = await API.getFindings();
-                if (res && res.findings && res.findings.length > 0) {
-                    this.findingsData = res.findings;
-                    if (res.summary) {
-                        const cEl = document.getElementById('kpi-critical');
-                        const hEl = document.getElementById('kpi-high');
-                        const tEl = document.getElementById('kpi-total');
-                        if (cEl) cEl.textContent = res.summary.critical || 2;
-                        if (hEl) hEl.textContent = res.summary.high || 5;
-                        if (tEl) tEl.textContent = res.summary.total || 18;
+        const scanId = this.scanState.currentScanId;
+
+        // 1. Fetch Multi-Tool Task Matrix
+        try {
+            const taskRes = await API.getScanTasks(scanId);
+            if (taskRes && taskRes.tasks) {
+                let completedCount = 0;
+                taskRes.tasks.forEach(t => {
+                    const pillEl = document.getElementById(`pill-${t.toolName}`);
+                    if (pillEl) {
+                        pillEl.textContent = t.status.charAt(0).toUpperCase() + t.status.slice(1).toLowerCase();
+                        if (t.status === 'COMPLETED') {
+                            pillEl.style.background = '#ecfdf5';
+                            pillEl.style.color = '#047857';
+                            completedCount++;
+                        } else if (t.status === 'SKIPPED') {
+                            pillEl.style.background = '#f1f5f9';
+                            pillEl.style.color = '#64748b';
+                            completedCount++;
+                        } else if (t.status === 'FAILED') {
+                            pillEl.style.background = '#fef2f2';
+                            pillEl.style.color = '#b91c1c';
+                        } else if (t.status === 'RUNNING') {
+                            pillEl.style.background = '#eff6ff';
+                            pillEl.style.color = '#1d4ed8';
+                        }
                     }
-                    if (this.dashboardViewMode === 'sheet') {
-                        GoogleSheetView.init(this.findingsData);
-                    } else {
-                        this.renderStandardRows(this.findingsData);
-                    }
+                });
+
+                const ratioEl = document.getElementById('tools-completed-ratio');
+                if (ratioEl) ratioEl.textContent = `${completedCount} / ${taskRes.tasks.length || 5}`;
+
+                const badgeEl = document.getElementById('scan-status-badge');
+                if (badgeEl) {
+                    const allDone = taskRes.tasks.every(t => t.status === 'COMPLETED' || t.status === 'SKIPPED');
+                    const hasFail = taskRes.tasks.some(t => t.status === 'FAILED');
+                    const statusStr = allDone ? (hasFail ? 'PARTIAL' : 'COMPLETED') : 'RUNNING';
+                    badgeEl.textContent = statusStr;
+                    badgeEl.className = `badge ${statusStr === 'COMPLETED' ? 'badge-low' : (statusStr === 'PARTIAL' ? 'badge-high' : 'badge-info')}`;
                 }
-            } catch (e) {
-                console.warn('API findings load error or offline, keeping Figma preview data:', e);
             }
+        } catch (e) {
+            console.warn('Scan tasks load notice:', e);
+        }
+
+        // 2. Fetch Findings from database
+        try {
+            const findingsRes = scanId ? await API.getScanFindings(scanId).catch(() => null) : null;
+            const res = (findingsRes && findingsRes.findings && findingsRes.findings.length > 0) 
+                ? findingsRes 
+                : await API.getFindings().catch(() => null);
+
+            if (res && res.findings && res.findings.length > 0) {
+                this.findingsData = res.findings;
+                const criticalCount = this.findingsData.filter(f => (f.severity || '').toUpperCase() === 'CRITICAL').length;
+                const highCount = this.findingsData.filter(f => (f.severity || '').toUpperCase() === 'HIGH').length;
+                const totalCount = this.findingsData.length;
+
+                const cEl = document.getElementById('kpi-critical');
+                const hEl = document.getElementById('kpi-high');
+                const tEl = document.getElementById('kpi-total');
+                if (cEl) cEl.textContent = criticalCount;
+                if (hEl) hEl.textContent = highCount;
+                if (tEl) tEl.textContent = totalCount;
+
+                if (this.dashboardViewMode === 'sheet') {
+                    GoogleSheetView.init(this.findingsData);
+                } else {
+                    this.renderStandardRows(this.findingsData);
+                }
+            }
+        } catch (e) {
+            console.warn('API findings load error:', e);
+        }
+    },
+
+    async triggerRescan() {
+        const targetId = this.scanState.authData?.targetId || 10;
+        showToast('Initiating automated security retest & cross-scan delta comparison...', 'info');
+        try {
+            const res = await API.rescanTarget(targetId);
+            if (res.scan && res.scan.id) {
+                this.scanState.currentScanId = res.scan.id;
+                this.scanState.progress = 15;
+                showToast(`Retest launched (Scan #${res.scan.id}). Comparing against previous baseline...`, 'success');
+                this.navigate('progress');
+            }
+        } catch (err) {
+            showToast(err.message || 'Failed to trigger retest.', 'error');
+        }
+    },
+
+    async exportAndDownloadReport() {
+        const scanId = this.scanState.currentScanId || 18;
+        showToast('Generating comprehensive printable executive security report...', 'info');
+        try {
+            const res = await API.exportScanReport(scanId);
+            if (res.htmlReportUrl) {
+                window.open(res.htmlReportUrl, '_blank');
+                showToast('Report opened in new tab! You can print or save as PDF.', 'success');
+            }
+        } catch (err) {
+            showToast(err.message || 'Failed to export report.', 'error');
         }
     },
 

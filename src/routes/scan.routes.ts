@@ -7,6 +7,7 @@ import { validateTargetUrl, isInternalHostname } from '../services/validator.ser
 import { crawlWebsite, safeFetchText } from '../services/crawler.service';
 import { checkAuthorizationGate } from '../services/authorization.service';
 import { evaluateScope, normalizeScopePath, ScopeRule } from '../services/scope.service';
+import { orchestrateScan } from '../services/scan-orchestrator.service';
 
 export const scanRouter = Router();
 
@@ -729,6 +730,11 @@ scanRouter.post(['/create', '/start'], async (req: Request, res: Response): Prom
       }
     }
 
+    // Trigger multi-tool background orchestration
+    orchestrateScan(scan.id).catch((err) => {
+      console.error(`[Scan #${scan.id}] Background orchestration error:`, err);
+    });
+
     res.status(201).json({
       success: true,
       message: `Assessment started successfully in ${mode === 'scan_only' ? 'Scan Only' : 'Scan, Fix & Test'} mode.`,
@@ -1233,5 +1239,183 @@ scanRouter.get('/reports/assessment', async (req: Request, res: Response): Promi
   } catch (error) {
     console.error('Report error:', error);
     res.status(500).json({ success: false, error: 'Failed to generate report.' });
+  }
+});
+
+/**
+ * GET /api/scans/:id/tasks or GET /api/scans/tasks?scanId=...
+ * Multi-Tool Task execution status matrix (OWASP_ZAP, SEMGREP, GITLEAKS, TRIVY, NPM_AUDIT)
+ */
+scanRouter.get('/tasks', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const scanId = Number(req.query.scan_id || req.query.scanId);
+    let targetScanId = scanId;
+    if (!targetScanId) {
+      const latest = await prisma.scan.findFirst({ orderBy: { id: 'desc' } });
+      targetScanId = latest ? latest.id : 0;
+    }
+
+    const tasks = await prisma.scanTask.findMany({
+      where: { scanId: targetScanId },
+      include: { executions: true },
+      orderBy: { id: 'asc' },
+    });
+
+    res.status(200).json({
+      success: true,
+      scanId: targetScanId,
+      tasks,
+    });
+  } catch (error) {
+    console.error('Get scan tasks error:', error);
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+scanRouter.get('/:id/tasks', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const scanId = Number(req.params.id);
+    const tasks = await prisma.scanTask.findMany({
+      where: { scanId },
+      include: { executions: true },
+      orderBy: { id: 'asc' },
+    });
+
+    res.status(200).json({
+      success: true,
+      scanId,
+      tasks,
+    });
+  } catch (error) {
+    console.error('Get scan tasks error:', error);
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/scans/:id/findings
+ * Unified findings for a scan
+ */
+scanRouter.get('/:id/findings', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const scanId = Number(req.params.id);
+    const findings = await prisma.finding.findMany({
+      where: { scanId },
+      include: { evidences: true, aiAnalyses: true },
+      orderBy: { id: 'desc' },
+    });
+
+    res.status(200).json({
+      success: true,
+      scanId,
+      count: findings.length,
+      findings,
+    });
+  } catch (error) {
+    console.error('Get scan findings error:', error);
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/scans/:id/start
+ * Manually trigger or re-run orchestration for a scan
+ */
+scanRouter.post('/:id/start', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const scanId = Number(req.params.id);
+    const scan = await prisma.scan.findUnique({ where: { id: scanId } });
+    if (!scan) {
+      res.status(404).json({ success: false, error: 'Scan not found.' });
+      return;
+    }
+
+    orchestrateScan(scanId).catch((err) => {
+      console.error(`[Manual Start] Orchestration error for scan #${scanId}:`, err);
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Orchestration started for Scan #${scanId}.`,
+    });
+  } catch (error) {
+    console.error('Start scan error:', error);
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/scans/:id/cancel
+ * Cancel an active scan
+ */
+scanRouter.post('/:id/cancel', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const scanId = Number(req.params.id);
+    const updated = await prisma.scan.update({
+      where: { id: scanId },
+      data: {
+        status: 'CANCELLED',
+        endedAt: new Date(),
+      },
+    });
+
+    await prisma.scanTask.updateMany({
+      where: { scanId, status: { in: ['PENDING', 'QUEUED', 'RUNNING'] } },
+      data: { status: 'CANCELLED', errorMessage: 'Cancelled by user request.' },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Scan #${scanId} has been cancelled.`,
+      scan: updated,
+    });
+  } catch (error) {
+    console.error('Cancel scan error:', error);
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/targets/:id/rescan or POST /api/scans/rescan/:id
+ * Re-scan an authorized target and compare against previous findings
+ */
+scanRouter.post('/rescan/:targetId', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const targetId = Number(req.params.targetId);
+    const target = await prisma.target.findUnique({ where: { id: targetId } });
+    if (!target) {
+      res.status(404).json({ success: false, error: 'Target not found.' });
+      return;
+    }
+
+    if (!target.isAuthorized) {
+      res.status(403).json({ success: false, error: 'Target is not authorized for scanning.' });
+      return;
+    }
+
+    // Create new scan linked to target
+    const newScan = await prisma.scan.create({
+      data: {
+        targetId: target.id,
+        scanMode: 'scan_only',
+        environment: target.environment,
+        status: 'QUEUED',
+        progress: 0,
+      },
+    });
+
+    // Start orchestration in background
+    orchestrateScan(newScan.id).catch((err) => {
+      console.error(`[Rescan #${newScan.id}] Orchestration error:`, err);
+    });
+
+    res.status(201).json({
+      success: true,
+      message: `Rescan initiated for target "${target.url}". Scan #${newScan.id} queued.`,
+      scan: newScan,
+    });
+  } catch (error) {
+    console.error('Rescan target error:', error);
+    res.status(500).json({ success: false, error: (error as Error).message });
   }
 });

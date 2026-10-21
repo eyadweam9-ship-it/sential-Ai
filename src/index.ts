@@ -14,6 +14,8 @@ import { adminRouter } from './routes/admin.routes';
 import { authRouter } from './routes/auth.routes';
 import { scanRouter } from './routes/scan.routes';
 import { authorizationRouter } from './routes/authorization.routes';
+import { findingsRouter } from './routes/findings.routes';
+import { reportsRouter } from './routes/reports.routes';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -84,6 +86,8 @@ app.use('/api/admin', adminRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/authorization', authorizationRouter);
 app.use('/api/scans', scanRouter);
+app.use('/api/findings', findingsRouter);
+app.use('/api/reports', reportsRouter);
 app.use('/api', scanRouter);
 
 app.get('/api/health', async (req: Request, res: Response) => {

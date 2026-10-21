@@ -1,0 +1,57 @@
+export type SeverityLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
+export type ConfidenceLevel = 'CONFIRMED' | 'HIGH' | 'MEDIUM' | 'LOW';
+
+export interface ScopeRuleSet {
+  includedPaths: string[];
+  excludedPaths: string[];
+}
+
+export interface ToolInput {
+  scanId: number;
+  targetId: number;
+  targetUrl: string;
+  targetType: 'URL' | 'FILE_ZIP' | 'HYBRID';
+  environment: 'DEVELOPMENT' | 'STAGING' | 'PRODUCTION';
+  sourcePath?: string;
+  scope?: ScopeRuleSet;
+  rateLimitRps?: number;
+  timeoutMs?: number;
+}
+
+export interface RawToolFinding {
+  title: string;
+  severity: SeverityLevel;
+  confidence: ConfidenceLevel;
+  category: string;
+  sourceRuleId?: string;
+  targetUrl?: string;
+  filePath?: string;
+  lineStart?: number;
+  lineEnd?: number;
+  evidenceSummary: string;
+  rawSnippet?: string;
+  remediation?: string;
+  cwe?: string;
+  cve?: string;
+}
+
+export interface ToolExecutionResult {
+  toolName: string;
+  toolVersion: string;
+  success: boolean;
+  exitCode: number;
+  durationMs: number;
+  findings: RawToolFinding[];
+  errorSummary?: string;
+  resultPath?: string;
+  skippedReason?: string;
+}
+
+export interface SecurityToolAdapter {
+  readonly name: string;
+  readonly version: string;
+  readonly supportedTargetTypes: Array<'URL' | 'FILE_ZIP' | 'HYBRID'>;
+
+  isAvailable(): Promise<boolean>;
+  run(input: ToolInput): Promise<ToolExecutionResult>;
+}

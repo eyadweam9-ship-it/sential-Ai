@@ -1,0 +1,23 @@
+{
+  "tool": "GITLEAKS",
+  "version": "8.18.2",
+  "sourceDir": "src",
+  "scannedAt": "2026-10-21T15:14:43.753Z",
+  "findingsCount": 1,
+  "findings": [
+    {
+      "title": "Exposed Cryptographic Private Key",
+      "severity": "CRITICAL",
+      "confidence": "CONFIRMED",
+      "category": "HARDCODED_SECRET",
+      "sourceRuleId": "gitleaks.private-key",
+      "filePath": "src/tools/gitleaks.adapter.ts",
+      "lineStart": 45,
+      "lineEnd": 45,
+      "evidenceSummary": "Detected secret in gitleaks.adapter.ts line 45: -----BEGIN PRIVATE KEY----- [REDACTED SECRET BYTES] -----END PRIVATE KEY-----",
+      "rawSnippet": "mask: () => '-----BEGIN PRIVATE KEY----- [REDACTED SECRET BYTES] -----END PRIVATE KEY----- [REDACTED SECRET BYTES] -----END PRIVATE KEY-----',",
+      "remediation": "Immediately revoke and rotate the exposed credential. Store secrets strictly in environment variables or a secrets manager (e.g. AWS Secrets Manager, HashiCorp Vault).",
+      "cwe": "CWE-798"
+    }
+  ]
+}

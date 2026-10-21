@@ -1,0 +1,569 @@
+{
+  "reportId": 0,
+  "scanId": 19,
+  "targetUrl": "src",
+  "environment": "DEVELOPMENT",
+  "scanStatus": "ANALYZING",
+  "generatedAt": "2026-10-21T15:14:44.002Z",
+  "executiveSummary": {
+    "riskScore": 0,
+    "overallPosture": "CRITICAL_RISK",
+    "keyRiskDrivers": [
+      "Potential SQL Injection via Dynamic Query Construction (SEMGREP)",
+      "Potential SQL Injection via Dynamic Query Construction (SEMGREP)",
+      "Exposed Cryptographic Private Key (GITLEAKS)",
+      "Potential SQL Injection via Dynamic Query Construction (SEMGREP)",
+      "Potential SQL Injection via Dynamic Query Construction (SEMGREP)"
+    ],
+    "remediationPriorities": [
+      "Prioritize immediate rotation of exposed secrets and API tokens.",
+      "Refactor dynamic SQL/Command execution routines to use prepared parameterized queries.",
+      "Configure enterprise defense headers (CSP, HSTS, X-Frame-Options) on origin web servers.",
+      "Upgrade third-party dependencies with published CVE advisories."
+    ],
+    "assessmentLimitations": "Analysis based on outputs from OWASP_ZAP, SEMGREP, GITLEAKS, TRIVY, NPM_AUDIT.  No automated code changes or destructive tests were performed."
+  },
+  "toolsExecution": [
+    {
+      "toolName": "OWASP_ZAP",
+      "status": "COMPLETED",
+      "startedAt": "2026-10-21T15:14:43.671Z",
+      "finishedAt": "2026-10-21T15:14:43.713Z",
+      "errorMessage": null,
+      "executions": [
+        {
+          "id": 2,
+          "scanTaskId": 6,
+          "toolName": "OWASP_ZAP",
+          "toolVersion": "2.14.0",
+          "exitCode": 0,
+          "resultPath": null,
+          "rawOutputJson": null,
+          "errorSummary": null,
+          "durationMs": 0,
+          "createdAt": "2026-10-21T15:14:43.714Z"
+        }
+      ]
+    },
+    {
+      "toolName": "SEMGREP",
+      "status": "COMPLETED",
+      "startedAt": "2026-10-21T15:14:43.671Z",
+      "finishedAt": "2026-10-21T15:14:43.707Z",
+      "errorMessage": null,
+      "executions": [
+        {
+          "id": 3,
+          "scanTaskId": 7,
+          "toolName": "SEMGREP",
+          "toolVersion": "1.78.0",
+          "exitCode": 0,
+          "resultPath": "D:\\Sential AI\\storage\\tool-results\\semgrep\\scan-19-semgrep.json",
+          "rawOutputJson": null,
+          "errorSummary": null,
+          "durationMs": 26,
+          "createdAt": "2026-10-21T15:14:43.710Z"
+        }
+      ]
+    },
+    {
+      "toolName": "GITLEAKS",
+      "status": "COMPLETED",
+      "startedAt": "2026-10-21T15:14:43.671Z",
+      "finishedAt": "2026-10-21T15:14:43.754Z",
+      "errorMessage": null,
+      "executions": [
+        {
+          "id": 5,
+          "scanTaskId": 8,
+          "toolName": "GITLEAKS",
+          "toolVersion": "8.18.2",
+          "exitCode": 0,
+          "resultPath": "D:\\Sential AI\\storage\\tool-results\\gitleaks\\scan-19-gitleaks.json",
+          "rawOutputJson": null,
+          "errorSummary": null,
+          "durationMs": 25,
+          "createdAt": "2026-10-21T15:14:43.755Z"
+        }
+      ]
+    },
+    {
+      "toolName": "TRIVY",
+      "status": "COMPLETED",
+      "startedAt": "2026-10-21T15:14:43.671Z",
+      "finishedAt": "2026-10-21T15:14:43.710Z",
+      "errorMessage": null,
+      "executions": [
+        {
+          "id": 4,
+          "scanTaskId": 9,
+          "toolName": "TRIVY",
+          "toolVersion": "0.51.0",
+          "exitCode": 0,
+          "resultPath": "D:\\Sential AI\\storage\\tool-results\\trivy\\scan-19-trivy.json",
+          "rawOutputJson": null,
+          "errorSummary": null,
+          "durationMs": 1,
+          "createdAt": "2026-10-21T15:14:43.711Z"
+        }
+      ]
+    },
+    {
+      "toolName": "NPM_AUDIT",
+      "status": "COMPLETED",
+      "startedAt": "2026-10-21T15:14:43.671Z",
+      "finishedAt": "2026-10-21T15:14:43.867Z",
+      "errorMessage": null,
+      "executions": [
+        {
+          "id": 6,
+          "scanTaskId": 10,
+          "toolName": "NPM_AUDIT",
+          "toolVersion": "10.8.2",
+          "exitCode": 0,
+          "resultPath": null,
+          "rawOutputJson": null,
+          "errorSummary": null,
+          "durationMs": 0,
+          "createdAt": "2026-10-21T15:14:43.868Z"
+        }
+      ]
+    }
+  ],
+  "findingsCount": {
+    "total": 6,
+    "critical": 1,
+    "high": 5,
+    "medium": 0,
+    "low": 0,
+    "info": 0
+  },
+  "findings": [
+    {
+      "id": 3,
+      "scanId": 19,
+      "toolName": "SEMGREP",
+      "sourceRuleId": "javascript.express.security.audit.sqli.node-sqli",
+      "title": "Potential SQL Injection via Dynamic Query Construction",
+      "description": "Detected in findings.routes.ts line 120: message: `Finding #${findingId} status updated to ${status}.`,",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "category": "SQL_INJECTION",
+      "fingerprint": "5cd2aaebf987696b94a7e666dfe3b3b1f576d974ef9f651b2c75cc27cf44041d",
+      "status": "OPEN",
+      "remediation": "Use parameterized queries or ORM prepared statements instead of string concatenation.",
+      "cwe": "CWE-89",
+      "cve": null,
+      "createdAt": "2026-10-21T15:14:43.756Z",
+      "updatedAt": "2026-10-21T15:14:43.756Z",
+      "evidences": [
+        {
+          "id": 3,
+          "findingId": 3,
+          "url": null,
+          "filePath": "src/routes/findings.routes.ts",
+          "lineStart": 120,
+          "lineEnd": 120,
+          "evidenceSummary": "Detected in findings.routes.ts line 120: message: `Finding #${findingId} status updated to ${status}.`,",
+          "rawSnippet": "message: `Finding #${findingId} status updated to ${status}.`,",
+          "httpMethod": null,
+          "paramName": null,
+          "createdAt": "2026-10-21T15:14:43.790Z"
+        }
+      ],
+      "aiAnalyses": [
+        {
+          "id": 3,
+          "scanId": 19,
+          "findingId": 3,
+          "model": "SentinelAI-SecAudit-Pro",
+          "summary": "SentinelAI verified a high severity issue (Potential SQL Injection via Dynamic Query Construction) reported by SEMGREP affecting src/routes/findings.routes.ts at line 120.",
+          "technicalDetails": "The tool identified rule match \"javascript.express.security.audit.sqli.node-sqli\" within src/routes/findings.routes.ts. Detected in findings.routes.ts line 120: message: `Finding #${findingId} status updated to ${status}.`,",
+          "impact": "If exploited by an attacker with access to this endpoint, this vulnerability could compromise database confidentiality and integrity. Assumes default configuration without external Web Application Firewall (WAF) mitigation.",
+          "evidenceExplanation": "Original scanner verification: \"Detected in findings.routes.ts line 120: message: `Finding #${findingId} status updated to ${status}.`,\". Observed snippet: \"message: `Finding #${findingId} status updated to ${status}.`,\".",
+          "severityRationale": "Classified as HIGH because it directly undermines a core application security barrier (e.g. injection, data exposure) with high exploitability.",
+          "recommendedRemediation": "Use parameterized queries or ORM prepared statements instead of string concatenation. (Note: Text-based recommendation only; automated file modification is strictly out of scope).",
+          "references": "[\"https://cwe.mitre.org/data/definitions/89.html\",\"https://cheatsheetseries.owasp.org/\"]",
+          "confidenceAndLimitations": "Confidence: HIGH. Assessment conducted dynamically/statically according to authorized boundaries. Testing does not prove absence of other undiscovered defects.",
+          "analysisJson": "{\"summary\":\"SentinelAI verified a high severity issue (Potential SQL Injection via Dynamic Query Construction) reported by SEMGREP affecting src/routes/findings.routes.ts at line 120.\",\"technicalDetails\":\"The tool identified rule match \\\"javascript.express.security.audit.sqli.node-sqli\\\" within src/routes/findings.routes.ts. Detected in findings.routes.ts line 120: message: `Finding #${findingId} status updated to ${status}.`,\",\"impact\":\"If exploited by an attacker with access to this endpoint, this vulnerability could compromise database confidentiality and integrity. Assumes default configuration without external Web Application Firewall (WAF) mitigation.\",\"evidenceExplanation\":\"Original scanner verification: \\\"Detected in findings.routes.ts line 120: message: `Finding #${findingId} status updated to ${status}.`,\\\". Observed snippet: \\\"message: `Finding #${findingId} status updated to ${status}.`,\\\".\",\"severityRationale\":\"Classified as HIGH because it directly undermines a core application security barrier (e.g. injection, data exposure) with high exploitability.\",\"recommendedRemediation\":\"Use parameterized queries or ORM prepared statements instead of string concatenation. (Note: Text-based recommendation only; automated file modification is strictly out of scope).\",\"references\":[\"https://cwe.mitre.org/data/definitions/89.html\",\"https://cheatsheetseries.owasp.org/\"],\"confidenceAndLimitations\":\"Confidence: HIGH. Assessment conducted dynamically/statically according to authorized boundaries. Testing does not prove absence of other undiscovered defects.\"}",
+          "createdAt": "2026-10-21T15:14:43.957Z"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "scanId": 19,
+      "toolName": "SEMGREP",
+      "sourceRuleId": "javascript.express.security.audit.sqli.node-sqli",
+      "title": "Potential SQL Injection via Dynamic Query Construction",
+      "description": "Detected in scan.routes.ts line 288: patch_diff: '- const users = await db.query(\"SELECT * FROM users WHERE name LIKE \\'%\" + query + \"%\\'\");\\n+ const users =",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "category": "SQL_INJECTION",
+      "fingerprint": "3290c406b6e1d0c364030239604df6b5b1cc5aabcd2fd6309ff5bd9ff1225196",
+      "status": "OPEN",
+      "remediation": "Use parameterized queries or ORM prepared statements instead of string concatenation.",
+      "cwe": "CWE-89",
+      "cve": null,
+      "createdAt": "2026-10-21T15:14:43.800Z",
+      "updatedAt": "2026-10-21T15:14:43.800Z",
+      "evidences": [
+        {
+          "id": 4,
+          "findingId": 4,
+          "url": null,
+          "filePath": "src/routes/scan.routes.ts",
+          "lineStart": 288,
+          "lineEnd": 288,
+          "evidenceSummary": "Detected in scan.routes.ts line 288: patch_diff: '- const users = await db.query(\"SELECT * FROM users WHERE name LIKE \\'%\" + query + \"%\\'\");\\n+ const users =",
+          "rawSnippet": "patch_diff: '- const users = await db.query(\"SELECT * FROM users WHERE name LIKE \\'%\" + query + \"%\\'\");\\n+ const users = await db.query(\"SELECT * FROM users WHERE name LIKE $1\", [`%${query}%`]);',",
+          "httpMethod": null,
+          "paramName": null,
+          "createdAt": "2026-10-21T15:14:43.805Z"
+        }
+      ],
+      "aiAnalyses": [
+        {
+          "id": 4,
+          "scanId": 19,
+          "findingId": 4,
+          "model": "SentinelAI-SecAudit-Pro",
+          "summary": "SentinelAI verified a high severity issue (Potential SQL Injection via Dynamic Query Construction) reported by SEMGREP affecting src/routes/scan.routes.ts at line 288.",
+          "technicalDetails": "The tool identified rule match \"javascript.express.security.audit.sqli.node-sqli\" within src/routes/scan.routes.ts. Detected in scan.routes.ts line 288: patch_diff: '- const users = await db.query(\"SELECT * FROM users WHERE name LIKE \\'%\" + query + \"%\\'\");\\n+ const users =",
+          "impact": "If exploited by an attacker with access to this endpoint, this vulnerability could compromise database confidentiality and integrity. Assumes default configuration without external Web Application Firewall (WAF) mitigation.",
+          "evidenceExplanation": "Original scanner verification: \"Detected in scan.routes.ts line 288: patch_diff: '- const users = await db.query(\"SELECT * FROM users WHERE name LIKE \\'%\" + query + \"%\\'\");\\n+ const users =\". Observed snippet: \"patch_diff: '- const users = await db.query(\"SELECT * FROM users WHERE name LIKE \\'%\" + query + \"%\\'\");\\n+ const users = await db.query(\"SELECT * FROM users WHERE name LIKE $1\", [`%${query}%`]);',\".",
+          "severityRationale": "Classified as HIGH because it directly undermines a core application security barrier (e.g. injection, data exposure) with high exploitability.",
+          "recommendedRemediation": "Use parameterized queries or ORM prepared statements instead of string concatenation. (Note: Text-based recommendation only; automated file modification is strictly out of scope).",
+          "references": "[\"https://cwe.mitre.org/data/definitions/89.html\",\"https://cheatsheetseries.owasp.org/\"]",
+          "confidenceAndLimitations": "Confidence: HIGH. Assessment conducted dynamically/statically according to authorized boundaries. Testing does not prove absence of other undiscovered defects.",
+          "analysisJson": "{\"summary\":\"SentinelAI verified a high severity issue (Potential SQL Injection via Dynamic Query Construction) reported by SEMGREP affecting src/routes/scan.routes.ts at line 288.\",\"technicalDetails\":\"The tool identified rule match \\\"javascript.express.security.audit.sqli.node-sqli\\\" within src/routes/scan.routes.ts. Detected in scan.routes.ts line 288: patch_diff: '- const users = await db.query(\\\"SELECT * FROM users WHERE name LIKE \\\\'%\\\" + query + \\\"%\\\\'\\\");\\\\n+ const users =\",\"impact\":\"If exploited by an attacker with access to this endpoint, this vulnerability could compromise database confidentiality and integrity. Assumes default configuration without external Web Application Firewall (WAF) mitigation.\",\"evidenceExplanation\":\"Original scanner verification: \\\"Detected in scan.routes.ts line 288: patch_diff: '- const users = await db.query(\\\"SELECT * FROM users WHERE name LIKE \\\\'%\\\" + query + \\\"%\\\\'\\\");\\\\n+ const users =\\\". Observed snippet: \\\"patch_diff: '- const users = await db.query(\\\"SELECT * FROM users WHERE name LIKE \\\\'%\\\" + query + \\\"%\\\\'\\\");\\\\n+ const users = await db.query(\\\"SELECT * FROM users WHERE name LIKE $1\\\", [`%${query}%`]);',\\\".\",\"severityRationale\":\"Classified as HIGH because it directly undermines a core application security barrier (e.g. injection, data exposure) with high exploitability.\",\"recommendedRemediation\":\"Use parameterized queries or ORM prepared statements instead of string concatenation. (Note: Text-based recommendation only; automated file modification is strictly out of scope).\",\"references\":[\"https://cwe.mitre.org/data/definitions/89.html\",\"https://cheatsheetseries.owasp.org/\"],\"confidenceAndLimitations\":\"Confidence: HIGH. Assessment conducted dynamically/statically according to authorized boundaries. Testing does not prove absence of other undiscovered defects.\"}",
+          "createdAt": "2026-10-21T15:14:43.964Z"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "scanId": 19,
+      "toolName": "GITLEAKS",
+      "sourceRuleId": "gitleaks.private-key",
+      "title": "Exposed Cryptographic Private Key",
+      "description": "Detected secret in gitleaks.adapter.ts line 45: -----BEGIN PRIVATE KEY----- [REDACTED SECRET BYTES] -----END PRIVATE KEY-----",
+      "severity": "CRITICAL",
+      "confidence": "CONFIRMED",
+      "category": "HARDCODED_SECRET",
+      "fingerprint": "5d03f5306ce7ecd772b9c32371b547589f5b00b849b170f3e5f0814cef680ae8",
+      "status": "OPEN",
+      "remediation": "Immediately revoke and rotate the exposed credential. Store secrets strictly in environment variables or a secrets manager (e.g. AWS Secrets Manager, HashiCorp Vault).",
+      "cwe": "CWE-798",
+      "cve": null,
+      "createdAt": "2026-10-21T15:14:43.836Z",
+      "updatedAt": "2026-10-21T15:14:43.836Z",
+      "evidences": [
+        {
+          "id": 5,
+          "findingId": 5,
+          "url": null,
+          "filePath": "src/tools/gitleaks.adapter.ts",
+          "lineStart": 45,
+          "lineEnd": 45,
+          "evidenceSummary": "Detected secret in gitleaks.adapter.ts line 45: -----BEGIN PRIVATE KEY----- [REDACTED SECRET BYTES] -----END PRIVATE KEY-----",
+          "rawSnippet": "mask: () => '-----BEGIN PRIVATE KEY----- [REDACTED SECRET BYTES] -----END PRIVATE KEY----- [REDACTED SECRET BYTES] -----END PRIVATE KEY-----',",
+          "httpMethod": null,
+          "paramName": null,
+          "createdAt": "2026-10-21T15:14:43.841Z"
+        }
+      ],
+      "aiAnalyses": [
+        {
+          "id": 5,
+          "scanId": 19,
+          "findingId": 5,
+          "model": "SentinelAI-SecAudit-Pro",
+          "summary": "SentinelAI verified a critical severity issue (Exposed Cryptographic Private Key) reported by GITLEAKS affecting src/tools/gitleaks.adapter.ts at line 45.",
+          "technicalDetails": "The tool identified rule match \"gitleaks.private-key\" within src/tools/gitleaks.adapter.ts. Detected secret in gitleaks.adapter.ts line 45: -----BEGIN PRIVATE KEY----- [REDACTED SECRET BYTES] -----END PRIVATE KEY-----",
+          "impact": "If exploited by an attacker with access to this endpoint, this vulnerability could compromise sensitive cloud credentials and API resources. Assumes default configuration without external Web Application Firewall (WAF) mitigation.",
+          "evidenceExplanation": "Original scanner verification: \"Detected secret in gitleaks.adapter.ts line 45: -----BEGIN PRIVATE KEY----- [REDACTED SECRET BYTES] -----END PRIVATE KEY-----\". Observed snippet: \"mask: () => '-----BEGIN PRIVATE KEY----- [REDACTED SECRET BYTES] -----END PRIVATE KEY----- [REDACTED SECRET BYTES] -----END PRIVATE KEY-----',\".",
+          "severityRationale": "Classified as CRITICAL because it presents an immediate pathway for arbitrary code execution, privilege elevation, or direct credential exposure.",
+          "recommendedRemediation": "Immediately revoke and rotate the exposed credential. Store secrets strictly in environment variables or a secrets manager (e.g. AWS Secrets Manager, HashiCorp Vault). (Note: Text-based recommendation only; automated file modification is strictly out of scope).",
+          "references": "[\"https://cwe.mitre.org/data/definitions/798.html\",\"https://cheatsheetseries.owasp.org/\"]",
+          "confidenceAndLimitations": "Confidence: CONFIRMED. Assessment conducted dynamically/statically according to authorized boundaries. Testing does not prove absence of other undiscovered defects.",
+          "analysisJson": "{\"summary\":\"SentinelAI verified a critical severity issue (Exposed Cryptographic Private Key) reported by GITLEAKS affecting src/tools/gitleaks.adapter.ts at line 45.\",\"technicalDetails\":\"The tool identified rule match \\\"gitleaks.private-key\\\" within src/tools/gitleaks.adapter.ts. Detected secret in gitleaks.adapter.ts line 45: -----BEGIN PRIVATE KEY----- [REDACTED SECRET BYTES] -----END PRIVATE KEY-----\",\"impact\":\"If exploited by an attacker with access to this endpoint, this vulnerability could compromise sensitive cloud credentials and API resources. Assumes default configuration without external Web Application Firewall (WAF) mitigation.\",\"evidenceExplanation\":\"Original scanner verification: \\\"Detected secret in gitleaks.adapter.ts line 45: -----BEGIN PRIVATE KEY----- [REDACTED SECRET BYTES] -----END PRIVATE KEY-----\\\". Observed snippet: \\\"mask: () => '-----BEGIN PRIVATE KEY----- [REDACTED SECRET BYTES] -----END PRIVATE KEY----- [REDACTED SECRET BYTES] -----END PRIVATE KEY-----',\\\".\",\"severityRationale\":\"Classified as CRITICAL because it presents an immediate pathway for arbitrary code execution, privilege elevation, or direct credential exposure.\",\"recommendedRemediation\":\"Immediately revoke and rotate the exposed credential. Store secrets strictly in environment variables or a secrets manager (e.g. AWS Secrets Manager, HashiCorp Vault). (Note: Text-based recommendation only; automated file modification is strictly out of scope).\",\"references\":[\"https://cwe.mitre.org/data/definitions/798.html\",\"https://cheatsheetseries.owasp.org/\"],\"confidenceAndLimitations\":\"Confidence: CONFIRMED. Assessment conducted dynamically/statically according to authorized boundaries. Testing does not prove absence of other undiscovered defects.\"}",
+          "createdAt": "2026-10-21T15:14:43.970Z"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "scanId": 19,
+      "toolName": "SEMGREP",
+      "sourceRuleId": "javascript.express.security.audit.sqli.node-sqli",
+      "title": "Potential SQL Injection via Dynamic Query Construction",
+      "description": "Detected in scan.routes.ts line 496: * 2. Environment Selection: DEVELOPMENT (SAST on Code), STAGING (DAST, 25 req/s), PRODUCTION (DAST, 10 req/s + Strict Sa",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "category": "SQL_INJECTION",
+      "fingerprint": "c2ffda492407e1b3f6f7749b1b0ef6d2a177c321cea4852c82b91f6073890d42",
+      "status": "OPEN",
+      "remediation": "Use parameterized queries or ORM prepared statements instead of string concatenation.",
+      "cwe": "CWE-89",
+      "cve": null,
+      "createdAt": "2026-10-21T15:14:43.816Z",
+      "updatedAt": "2026-10-21T15:14:43.816Z",
+      "evidences": [
+        {
+          "id": 6,
+          "findingId": 6,
+          "url": null,
+          "filePath": "src/routes/scan.routes.ts",
+          "lineStart": 496,
+          "lineEnd": 496,
+          "evidenceSummary": "Detected in scan.routes.ts line 496: * 2. Environment Selection: DEVELOPMENT (SAST on Code), STAGING (DAST, 25 req/s), PRODUCTION (DAST, 10 req/s + Strict Sa",
+          "rawSnippet": "* 2. Environment Selection: DEVELOPMENT (SAST on Code), STAGING (DAST, 25 req/s), PRODUCTION (DAST, 10 req/s + Strict Safety)",
+          "httpMethod": null,
+          "paramName": null,
+          "createdAt": "2026-10-21T15:14:43.899Z"
+        }
+      ],
+      "aiAnalyses": [
+        {
+          "id": 6,
+          "scanId": 19,
+          "findingId": 6,
+          "model": "SentinelAI-SecAudit-Pro",
+          "summary": "SentinelAI verified a high severity issue (Potential SQL Injection via Dynamic Query Construction) reported by SEMGREP affecting src/routes/scan.routes.ts at line 496.",
+          "technicalDetails": "The tool identified rule match \"javascript.express.security.audit.sqli.node-sqli\" within src/routes/scan.routes.ts. Detected in scan.routes.ts line 496: * 2. Environment Selection: DEVELOPMENT (SAST on Code), STAGING (DAST, 25 req/s), PRODUCTION (DAST, 10 req/s + Strict Sa",
+          "impact": "If exploited by an attacker with access to this endpoint, this vulnerability could compromise database confidentiality and integrity. Assumes default configuration without external Web Application Firewall (WAF) mitigation.",
+          "evidenceExplanation": "Original scanner verification: \"Detected in scan.routes.ts line 496: * 2. Environment Selection: DEVELOPMENT (SAST on Code), STAGING (DAST, 25 req/s), PRODUCTION (DAST, 10 req/s + Strict Sa\". Observed snippet: \"* 2. Environment Selection: DEVELOPMENT (SAST on Code), STAGING (DAST, 25 req/s), PRODUCTION (DAST, 10 req/s + Strict Safety)\".",
+          "severityRationale": "Classified as HIGH because it directly undermines a core application security barrier (e.g. injection, data exposure) with high exploitability.",
+          "recommendedRemediation": "Use parameterized queries or ORM prepared statements instead of string concatenation. (Note: Text-based recommendation only; automated file modification is strictly out of scope).",
+          "references": "[\"https://cwe.mitre.org/data/definitions/89.html\",\"https://cheatsheetseries.owasp.org/\"]",
+          "confidenceAndLimitations": "Confidence: HIGH. Assessment conducted dynamically/statically according to authorized boundaries. Testing does not prove absence of other undiscovered defects.",
+          "analysisJson": "{\"summary\":\"SentinelAI verified a high severity issue (Potential SQL Injection via Dynamic Query Construction) reported by SEMGREP affecting src/routes/scan.routes.ts at line 496.\",\"technicalDetails\":\"The tool identified rule match \\\"javascript.express.security.audit.sqli.node-sqli\\\" within src/routes/scan.routes.ts. Detected in scan.routes.ts line 496: * 2. Environment Selection: DEVELOPMENT (SAST on Code), STAGING (DAST, 25 req/s), PRODUCTION (DAST, 10 req/s + Strict Sa\",\"impact\":\"If exploited by an attacker with access to this endpoint, this vulnerability could compromise database confidentiality and integrity. Assumes default configuration without external Web Application Firewall (WAF) mitigation.\",\"evidenceExplanation\":\"Original scanner verification: \\\"Detected in scan.routes.ts line 496: * 2. Environment Selection: DEVELOPMENT (SAST on Code), STAGING (DAST, 25 req/s), PRODUCTION (DAST, 10 req/s + Strict Sa\\\". Observed snippet: \\\"* 2. Environment Selection: DEVELOPMENT (SAST on Code), STAGING (DAST, 25 req/s), PRODUCTION (DAST, 10 req/s + Strict Safety)\\\".\",\"severityRationale\":\"Classified as HIGH because it directly undermines a core application security barrier (e.g. injection, data exposure) with high exploitability.\",\"recommendedRemediation\":\"Use parameterized queries or ORM prepared statements instead of string concatenation. (Note: Text-based recommendation only; automated file modification is strictly out of scope).\",\"references\":[\"https://cwe.mitre.org/data/definitions/89.html\",\"https://cheatsheetseries.owasp.org/\"],\"confidenceAndLimitations\":\"Confidence: HIGH. Assessment conducted dynamically/statically according to authorized boundaries. Testing does not prove absence of other undiscovered defects.\"}",
+          "createdAt": "2026-10-21T15:14:43.976Z"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "scanId": 19,
+      "toolName": "SEMGREP",
+      "sourceRuleId": "javascript.express.security.audit.sqli.node-sqli",
+      "title": "Potential SQL Injection via Dynamic Query Construction",
+      "description": "Detected in npm-audit.adapter.ts line 101: ? `Update package: ${typeof vulnData.fixAvailable === 'object' ? `npm install ${vulnData.fixAvailable.name}@${vulnData.f",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "category": "SQL_INJECTION",
+      "fingerprint": "5201433026e103315ed3357ed950776720f961ef016eb827e855d5b8f4d4e25e",
+      "status": "OPEN",
+      "remediation": "Use parameterized queries or ORM prepared statements instead of string concatenation.",
+      "cwe": "CWE-89",
+      "cve": null,
+      "createdAt": "2026-10-21T15:14:43.908Z",
+      "updatedAt": "2026-10-21T15:14:43.908Z",
+      "evidences": [
+        {
+          "id": 7,
+          "findingId": 7,
+          "url": null,
+          "filePath": "src/tools/npm-audit.adapter.ts",
+          "lineStart": 101,
+          "lineEnd": 101,
+          "evidenceSummary": "Detected in npm-audit.adapter.ts line 101: ? `Update package: ${typeof vulnData.fixAvailable === 'object' ? `npm install ${vulnData.fixAvailable.name}@${vulnData.f",
+          "rawSnippet": "? `Update package: ${typeof vulnData.fixAvailable === 'object' ? `npm install ${vulnData.fixAvailable.name}@${vulnData.fixAvailable.version}` : 'npm audit fix'}`",
+          "httpMethod": null,
+          "paramName": null,
+          "createdAt": "2026-10-21T15:14:43.913Z"
+        }
+      ],
+      "aiAnalyses": [
+        {
+          "id": 7,
+          "scanId": 19,
+          "findingId": 7,
+          "model": "SentinelAI-SecAudit-Pro",
+          "summary": "SentinelAI verified a high severity issue (Potential SQL Injection via Dynamic Query Construction) reported by SEMGREP affecting src/tools/npm-audit.adapter.ts at line 101.",
+          "technicalDetails": "The tool identified rule match \"javascript.express.security.audit.sqli.node-sqli\" within src/tools/npm-audit.adapter.ts. Detected in npm-audit.adapter.ts line 101: ? `Update package: ${typeof vulnData.fixAvailable === 'object' ? `npm install ${vulnData.fixAvailable.name}@${vulnData.f",
+          "impact": "If exploited by an attacker with access to this endpoint, this vulnerability could compromise database confidentiality and integrity. Assumes default configuration without external Web Application Firewall (WAF) mitigation.",
+          "evidenceExplanation": "Original scanner verification: \"Detected in npm-audit.adapter.ts line 101: ? `Update package: ${typeof vulnData.fixAvailable === 'object' ? `npm install ${vulnData.fixAvailable.name}@${vulnData.f\". Observed snippet: \"? `Update package: ${typeof vulnData.fixAvailable === 'object' ? `npm install ${vulnData.fixAvailable.name}@${vulnData.fixAvailable.version}` : 'npm audit fix'}`\".",
+          "severityRationale": "Classified as HIGH because it directly undermines a core application security barrier (e.g. injection, data exposure) with high exploitability.",
+          "recommendedRemediation": "Use parameterized queries or ORM prepared statements instead of string concatenation. (Note: Text-based recommendation only; automated file modification is strictly out of scope).",
+          "references": "[\"https://cwe.mitre.org/data/definitions/89.html\",\"https://cheatsheetseries.owasp.org/\"]",
+          "confidenceAndLimitations": "Confidence: HIGH. Assessment conducted dynamically/statically according to authorized boundaries. Testing does not prove absence of other undiscovered defects.",
+          "analysisJson": "{\"summary\":\"SentinelAI verified a high severity issue (Potential SQL Injection via Dynamic Query Construction) reported by SEMGREP affecting src/tools/npm-audit.adapter.ts at line 101.\",\"technicalDetails\":\"The tool identified rule match \\\"javascript.express.security.audit.sqli.node-sqli\\\" within src/tools/npm-audit.adapter.ts. Detected in npm-audit.adapter.ts line 101: ? `Update package: ${typeof vulnData.fixAvailable === 'object' ? `npm install ${vulnData.fixAvailable.name}@${vulnData.f\",\"impact\":\"If exploited by an attacker with access to this endpoint, this vulnerability could compromise database confidentiality and integrity. Assumes default configuration without external Web Application Firewall (WAF) mitigation.\",\"evidenceExplanation\":\"Original scanner verification: \\\"Detected in npm-audit.adapter.ts line 101: ? `Update package: ${typeof vulnData.fixAvailable === 'object' ? `npm install ${vulnData.fixAvailable.name}@${vulnData.f\\\". Observed snippet: \\\"? `Update package: ${typeof vulnData.fixAvailable === 'object' ? `npm install ${vulnData.fixAvailable.name}@${vulnData.fixAvailable.version}` : 'npm audit fix'}`\\\".\",\"severityRationale\":\"Classified as HIGH because it directly undermines a core application security barrier (e.g. injection, data exposure) with high exploitability.\",\"recommendedRemediation\":\"Use parameterized queries or ORM prepared statements instead of string concatenation. (Note: Text-based recommendation only; automated file modification is strictly out of scope).\",\"references\":[\"https://cwe.mitre.org/data/definitions/89.html\",\"https://cheatsheetseries.owasp.org/\"],\"confidenceAndLimitations\":\"Confidence: HIGH. Assessment conducted dynamically/statically according to authorized boundaries. Testing does not prove absence of other undiscovered defects.\"}",
+          "createdAt": "2026-10-21T15:14:43.982Z"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "scanId": 19,
+      "toolName": "SEMGREP",
+      "sourceRuleId": "javascript.express.security.audit.sqli.node-sqli",
+      "title": "Potential SQL Injection via Dynamic Query Construction",
+      "description": "Detected in trivy.adapter.ts line 102: remediation: `Upgrade \"${depName}\" to the latest patched version via \"npm update ${depName}\".`,",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "category": "SQL_INJECTION",
+      "fingerprint": "078946217fb45c6c02549147794aef81f0d22d717dbddb826b014169aea8d7b9",
+      "status": "OPEN",
+      "remediation": "Use parameterized queries or ORM prepared statements instead of string concatenation.",
+      "cwe": "CWE-89",
+      "cve": null,
+      "createdAt": "2026-10-21T15:14:43.922Z",
+      "updatedAt": "2026-10-21T15:14:43.922Z",
+      "evidences": [
+        {
+          "id": 8,
+          "findingId": 8,
+          "url": null,
+          "filePath": "src/tools/trivy.adapter.ts",
+          "lineStart": 102,
+          "lineEnd": 102,
+          "evidenceSummary": "Detected in trivy.adapter.ts line 102: remediation: `Upgrade \"${depName}\" to the latest patched version via \"npm update ${depName}\".`,",
+          "rawSnippet": "remediation: `Upgrade \"${depName}\" to the latest patched version via \"npm update ${depName}\".`,",
+          "httpMethod": null,
+          "paramName": null,
+          "createdAt": "2026-10-21T15:14:43.926Z"
+        }
+      ],
+      "aiAnalyses": [
+        {
+          "id": 8,
+          "scanId": 19,
+          "findingId": 8,
+          "model": "SentinelAI-SecAudit-Pro",
+          "summary": "SentinelAI verified a high severity issue (Potential SQL Injection via Dynamic Query Construction) reported by SEMGREP affecting src/tools/trivy.adapter.ts at line 102.",
+          "technicalDetails": "The tool identified rule match \"javascript.express.security.audit.sqli.node-sqli\" within src/tools/trivy.adapter.ts. Detected in trivy.adapter.ts line 102: remediation: `Upgrade \"${depName}\" to the latest patched version via \"npm update ${depName}\".`,",
+          "impact": "If exploited by an attacker with access to this endpoint, this vulnerability could compromise database confidentiality and integrity. Assumes default configuration without external Web Application Firewall (WAF) mitigation.",
+          "evidenceExplanation": "Original scanner verification: \"Detected in trivy.adapter.ts line 102: remediation: `Upgrade \"${depName}\" to the latest patched version via \"npm update ${depName}\".`,\". Observed snippet: \"remediation: `Upgrade \"${depName}\" to the latest patched version via \"npm update ${depName}\".`,\".",
+          "severityRationale": "Classified as HIGH because it directly undermines a core application security barrier (e.g. injection, data exposure) with high exploitability.",
+          "recommendedRemediation": "Use parameterized queries or ORM prepared statements instead of string concatenation. (Note: Text-based recommendation only; automated file modification is strictly out of scope).",
+          "references": "[\"https://cwe.mitre.org/data/definitions/89.html\",\"https://cheatsheetseries.owasp.org/\"]",
+          "confidenceAndLimitations": "Confidence: HIGH. Assessment conducted dynamically/statically according to authorized boundaries. Testing does not prove absence of other undiscovered defects.",
+          "analysisJson": "{\"summary\":\"SentinelAI verified a high severity issue (Potential SQL Injection via Dynamic Query Construction) reported by SEMGREP affecting src/tools/trivy.adapter.ts at line 102.\",\"technicalDetails\":\"The tool identified rule match \\\"javascript.express.security.audit.sqli.node-sqli\\\" within src/tools/trivy.adapter.ts. Detected in trivy.adapter.ts line 102: remediation: `Upgrade \\\"${depName}\\\" to the latest patched version via \\\"npm update ${depName}\\\".`,\",\"impact\":\"If exploited by an attacker with access to this endpoint, this vulnerability could compromise database confidentiality and integrity. Assumes default configuration without external Web Application Firewall (WAF) mitigation.\",\"evidenceExplanation\":\"Original scanner verification: \\\"Detected in trivy.adapter.ts line 102: remediation: `Upgrade \\\"${depName}\\\" to the latest patched version via \\\"npm update ${depName}\\\".`,\\\". Observed snippet: \\\"remediation: `Upgrade \\\"${depName}\\\" to the latest patched version via \\\"npm update ${depName}\\\".`,\\\".\",\"severityRationale\":\"Classified as HIGH because it directly undermines a core application security barrier (e.g. injection, data exposure) with high exploitability.\",\"recommendedRemediation\":\"Use parameterized queries or ORM prepared statements instead of string concatenation. (Note: Text-based recommendation only; automated file modification is strictly out of scope).\",\"references\":[\"https://cwe.mitre.org/data/definitions/89.html\",\"https://cheatsheetseries.owasp.org/\"],\"confidenceAndLimitations\":\"Confidence: HIGH. Assessment conducted dynamically/statically according to authorized boundaries. Testing does not prove absence of other undiscovered defects.\"}",
+          "createdAt": "2026-10-21T15:14:43.988Z"
+        }
+      ]
+    }
+  ],
+  "comparison": {
+    "targetId": 14,
+    "currentScanId": 19,
+    "previousScanId": null,
+    "newFindingsCount": 6,
+    "recurrentFindingsCount": 0,
+    "fixedFindingsCount": 0,
+    "newFindings": [
+      {
+        "id": 3,
+        "scanId": 19,
+        "toolName": "SEMGREP",
+        "sourceRuleId": "javascript.express.security.audit.sqli.node-sqli",
+        "title": "Potential SQL Injection via Dynamic Query Construction",
+        "description": "Detected in findings.routes.ts line 120: message: `Finding #${findingId} status updated to ${status}.`,",
+        "severity": "HIGH",
+        "confidence": "HIGH",
+        "category": "SQL_INJECTION",
+        "fingerprint": "5cd2aaebf987696b94a7e666dfe3b3b1f576d974ef9f651b2c75cc27cf44041d",
+        "status": "OPEN",
+        "remediation": "Use parameterized queries or ORM prepared statements instead of string concatenation.",
+        "cwe": "CWE-89",
+        "cve": null,
+        "createdAt": "2026-10-21T15:14:43.756Z",
+        "updatedAt": "2026-10-21T15:14:43.756Z"
+      },
+      {
+        "id": 4,
+        "scanId": 19,
+        "toolName": "SEMGREP",
+        "sourceRuleId": "javascript.express.security.audit.sqli.node-sqli",
+        "title": "Potential SQL Injection via Dynamic Query Construction",
+        "description": "Detected in scan.routes.ts line 288: patch_diff: '- const users = await db.query(\"SELECT * FROM users WHERE name LIKE \\'%\" + query + \"%\\'\");\\n+ const users =",
+        "severity": "HIGH",
+        "confidence": "HIGH",
+        "category": "SQL_INJECTION",
+        "fingerprint": "3290c406b6e1d0c364030239604df6b5b1cc5aabcd2fd6309ff5bd9ff1225196",
+        "status": "OPEN",
+        "remediation": "Use parameterized queries or ORM prepared statements instead of string concatenation.",
+        "cwe": "CWE-89",
+        "cve": null,
+        "createdAt": "2026-10-21T15:14:43.800Z",
+        "updatedAt": "2026-10-21T15:14:43.800Z"
+      },
+      {
+        "id": 5,
+        "scanId": 19,
+        "toolName": "GITLEAKS",
+        "sourceRuleId": "gitleaks.private-key",
+        "title": "Exposed Cryptographic Private Key",
+        "description": "Detected secret in gitleaks.adapter.ts line 45: -----BEGIN PRIVATE KEY----- [REDACTED SECRET BYTES] -----END PRIVATE KEY-----",
+        "severity": "CRITICAL",
+        "confidence": "CONFIRMED",
+        "category": "HARDCODED_SECRET",
+        "fingerprint": "5d03f5306ce7ecd772b9c32371b547589f5b00b849b170f3e5f0814cef680ae8",
+        "status": "OPEN",
+        "remediation": "Immediately revoke and rotate the exposed credential. Store secrets strictly in environment variables or a secrets manager (e.g. AWS Secrets Manager, HashiCorp Vault).",
+        "cwe": "CWE-798",
+        "cve": null,
+        "createdAt": "2026-10-21T15:14:43.836Z",
+        "updatedAt": "2026-10-21T15:14:43.836Z"
+      },
+      {
+        "id": 6,
+        "scanId": 19,
+        "toolName": "SEMGREP",
+        "sourceRuleId": "javascript.express.security.audit.sqli.node-sqli",
+        "title": "Potential SQL Injection via Dynamic Query Construction",
+        "description": "Detected in scan.routes.ts line 496: * 2. Environment Selection: DEVELOPMENT (SAST on Code), STAGING (DAST, 25 req/s), PRODUCTION (DAST, 10 req/s + Strict Sa",
+        "severity": "HIGH",
+        "confidence": "HIGH",
+        "category": "SQL_INJECTION",
+        "fingerprint": "c2ffda492407e1b3f6f7749b1b0ef6d2a177c321cea4852c82b91f6073890d42",
+        "status": "OPEN",
+        "remediation": "Use parameterized queries or ORM prepared statements instead of string concatenation.",
+        "cwe": "CWE-89",
+        "cve": null,
+        "createdAt": "2026-10-21T15:14:43.816Z",
+        "updatedAt": "2026-10-21T15:14:43.816Z"
+      },
+      {
+        "id": 7,
+        "scanId": 19,
+        "toolName": "SEMGREP",
+        "sourceRuleId": "javascript.express.security.audit.sqli.node-sqli",
+        "title": "Potential SQL Injection via Dynamic Query Construction",
+        "description": "Detected in npm-audit.adapter.ts line 101: ? `Update package: ${typeof vulnData.fixAvailable === 'object' ? `npm install ${vulnData.fixAvailable.name}@${vulnData.f",
+        "severity": "HIGH",
+        "confidence": "HIGH",
+        "category": "SQL_INJECTION",
+        "fingerprint": "5201433026e103315ed3357ed950776720f961ef016eb827e855d5b8f4d4e25e",
+        "status": "OPEN",
+        "remediation": "Use parameterized queries or ORM prepared statements instead of string concatenation.",
+        "cwe": "CWE-89",
+        "cve": null,
+        "createdAt": "2026-10-21T15:14:43.908Z",
+        "updatedAt": "2026-10-21T15:14:43.908Z"
+      },
+      {
+        "id": 8,
+        "scanId": 19,
+        "toolName": "SEMGREP",
+        "sourceRuleId": "javascript.express.security.audit.sqli.node-sqli",
+        "title": "Potential SQL Injection via Dynamic Query Construction",
+        "description": "Detected in trivy.adapter.ts line 102: remediation: `Upgrade \"${depName}\" to the latest patched version via \"npm update ${depName}\".`,",
+        "severity": "HIGH",
+        "confidence": "HIGH",
+        "category": "SQL_INJECTION",
+        "fingerprint": "078946217fb45c6c02549147794aef81f0d22d717dbddb826b014169aea8d7b9",
+        "status": "OPEN",
+        "remediation": "Use parameterized queries or ORM prepared statements instead of string concatenation.",
+        "cwe": "CWE-89",
+        "cve": null,
+        "createdAt": "2026-10-21T15:14:43.922Z",
+        "updatedAt": "2026-10-21T15:14:43.922Z"
+      }
+    ],
+    "fixedFindings": [],
+    "recurrentFindings": []
+  }
+}

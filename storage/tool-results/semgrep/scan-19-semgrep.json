@@ -1,0 +1,79 @@
+{
+  "tool": "SEMGREP",
+  "version": "1.78.0",
+  "sourceDir": "src",
+  "scannedAt": "2026-10-21T15:14:43.706Z",
+  "findingsCount": 5,
+  "findings": [
+    {
+      "title": "Potential SQL Injection via Dynamic Query Construction",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "category": "SQL_INJECTION",
+      "sourceRuleId": "javascript.express.security.audit.sqli.node-sqli",
+      "filePath": "src/routes/findings.routes.ts",
+      "lineStart": 120,
+      "lineEnd": 120,
+      "evidenceSummary": "Detected in findings.routes.ts line 120: message: `Finding #${findingId} status updated to ${status}.`,",
+      "rawSnippet": "message: `Finding #${findingId} status updated to ${status}.`,",
+      "remediation": "Use parameterized queries or ORM prepared statements instead of string concatenation.",
+      "cwe": "CWE-89"
+    },
+    {
+      "title": "Potential SQL Injection via Dynamic Query Construction",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "category": "SQL_INJECTION",
+      "sourceRuleId": "javascript.express.security.audit.sqli.node-sqli",
+      "filePath": "src/routes/scan.routes.ts",
+      "lineStart": 288,
+      "lineEnd": 288,
+      "evidenceSummary": "Detected in scan.routes.ts line 288: patch_diff: '- const users = await db.query(\"SELECT * FROM users WHERE name LIKE \\'%\" + query + \"%\\'\");\\n+ const users =",
+      "rawSnippet": "patch_diff: '- const users = await db.query(\"SELECT * FROM users WHERE name LIKE \\'%\" + query + \"%\\'\");\\n+ const users = await db.query(\"SELECT * FROM users WHERE name LIKE $1\", [`%${query}%`]);',",
+      "remediation": "Use parameterized queries or ORM prepared statements instead of string concatenation.",
+      "cwe": "CWE-89"
+    },
+    {
+      "title": "Potential SQL Injection via Dynamic Query Construction",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "category": "SQL_INJECTION",
+      "sourceRuleId": "javascript.express.security.audit.sqli.node-sqli",
+      "filePath": "src/routes/scan.routes.ts",
+      "lineStart": 496,
+      "lineEnd": 496,
+      "evidenceSummary": "Detected in scan.routes.ts line 496: * 2. Environment Selection: DEVELOPMENT (SAST on Code), STAGING (DAST, 25 req/s), PRODUCTION (DAST, 10 req/s + Strict Sa",
+      "rawSnippet": "* 2. Environment Selection: DEVELOPMENT (SAST on Code), STAGING (DAST, 25 req/s), PRODUCTION (DAST, 10 req/s + Strict Safety)",
+      "remediation": "Use parameterized queries or ORM prepared statements instead of string concatenation.",
+      "cwe": "CWE-89"
+    },
+    {
+      "title": "Potential SQL Injection via Dynamic Query Construction",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "category": "SQL_INJECTION",
+      "sourceRuleId": "javascript.express.security.audit.sqli.node-sqli",
+      "filePath": "src/tools/npm-audit.adapter.ts",
+      "lineStart": 101,
+      "lineEnd": 101,
+      "evidenceSummary": "Detected in npm-audit.adapter.ts line 101: ? `Update package: ${typeof vulnData.fixAvailable === 'object' ? `npm install ${vulnData.fixAvailable.name}@${vulnData.f",
+      "rawSnippet": "? `Update package: ${typeof vulnData.fixAvailable === 'object' ? `npm install ${vulnData.fixAvailable.name}@${vulnData.fixAvailable.version}` : 'npm audit fix'}`",
+      "remediation": "Use parameterized queries or ORM prepared statements instead of string concatenation.",
+      "cwe": "CWE-89"
+    },
+    {
+      "title": "Potential SQL Injection via Dynamic Query Construction",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "category": "SQL_INJECTION",
+      "sourceRuleId": "javascript.express.security.audit.sqli.node-sqli",
+      "filePath": "src/tools/trivy.adapter.ts",
+      "lineStart": 102,
+      "lineEnd": 102,
+      "evidenceSummary": "Detected in trivy.adapter.ts line 102: remediation: `Upgrade \"${depName}\" to the latest patched version via \"npm update ${depName}\".`,",
+      "rawSnippet": "remediation: `Upgrade \"${depName}\" to the latest patched version via \"npm update ${depName}\".`,",
+      "remediation": "Use parameterized queries or ORM prepared statements instead of string concatenation.",
+      "cwe": "CWE-89"
+    }
+  ]
+}

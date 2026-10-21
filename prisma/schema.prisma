@@ -86,15 +86,20 @@ model Scan {
   targetId        Int
   scanMode        String    @default("scan_only") // scan_only, scan_and_fix, scan_fix_test
   environment     String    @default("PRODUCTION")
-  status          String    @default("PENDING") // PENDING, RUNNING, COMPLETED, FAILED
+  status          String    @default("PENDING") // QUEUED, VALIDATING, RUNNING, ANALYZING, COMPLETED, PARTIAL, FAILED, CANCELLED
   progress        Int       @default(0)
   startedAt       DateTime?
   endedAt         DateTime?
+  finishedAt      DateTime?
+  summaryJson     String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   target          Target    @relation(fields: [targetId], references: [id], onDelete: Cascade)
   vulnerabilities Vulnerability[]
   reports         Report[]
+  tasks           ScanTask[]
+  findings        Finding[]
+  aiAnalyses      AIAnalysis[]
 }
 
 model Vulnerability {
@@ -111,12 +116,100 @@ model Vulnerability {
   scan        Scan      @relation(fields: [scanId], references: [id], onDelete: Cascade)
 }
 
+model ScanTask {
+  id           Int              @id @default(autoincrement())
+  scanId       Int
+  toolName     String           // OWASP_ZAP, SEMGREP, GITLEAKS, TRIVY, NPM_AUDIT
+  status       String           @default("PENDING") // PENDING, QUEUED, RUNNING, COMPLETED, FAILED, TIMED_OUT, CANCELLED, SKIPPED
+  attempts     Int              @default(0)
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  errorMessage String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  scan         Scan             @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  executions   ToolExecution[]
+}
+
+model ToolExecution {
+  id            Int       @id @default(autoincrement())
+  scanTaskId    Int
+  toolName      String
+  toolVersion   String?
+  exitCode      Int?
+  resultPath    String?
+  rawOutputJson String?
+  errorSummary  String?
+  durationMs    Int?
+  createdAt     DateTime  @default(now())
+  scanTask      ScanTask  @relation(fields: [scanTaskId], references: [id], onDelete: Cascade)
+}
+
+model Finding {
+  id            Int               @id @default(autoincrement())
+  scanId        Int
+  toolName      String            // OWASP_ZAP, SEMGREP, GITLEAKS, TRIVY, NPM_AUDIT
+  sourceRuleId  String?
+  title         String
+  description   String?
+  severity      String            // CRITICAL, HIGH, MEDIUM, LOW, INFO
+  confidence    String            @default("MEDIUM") // CONFIRMED, HIGH, MEDIUM, LOW
+  category      String?           // SQL_INJECTION, XSS, HARDCODED_SECRET, VULNERABLE_DEPENDENCY, MISCONFIGURATION, etc.
+  fingerprint   String            // SHA-256 fingerprint for deduplication
+  status        String            @default("OPEN") // OPEN, FIXED, FALSE_POSITIVE, MUTED
+  remediation   String?           // Recommended text-only advice
+  cwe           String?
+  cve           String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  scan          Scan              @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  evidences     FindingEvidence[]
+  aiAnalyses    AIAnalysis[]
+}
+
+model FindingEvidence {
+  id              Int       @id @default(autoincrement())
+  findingId       Int
+  url             String?
+  filePath        String?
+  lineStart       Int?
+  lineEnd         Int?
+  evidenceSummary String?
+  rawSnippet      String?
+  httpMethod      String?
+  paramName       String?
+  createdAt       DateTime  @default(now())
+  finding         Finding   @relation(fields: [findingId], references: [id], onDelete: Cascade)
+}
+
+model AIAnalysis {
+  id                       Int       @id @default(autoincrement())
+  scanId                   Int
+  findingId                Int?
+  model                    String    @default("SentinelAI-SecAudit-Pro")
+  summary                  String?
+  technicalDetails         String?
+  impact                   String?
+  evidenceExplanation      String?
+  severityRationale        String?
+  recommendedRemediation   String?   // Strictly text-based remediation advice
+  references               String?
+  confidenceAndLimitations String?
+  analysisJson             String?
+  createdAt                DateTime  @default(now())
+  scan                     Scan      @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  finding                  Finding?  @relation(fields: [findingId], references: [id], onDelete: Cascade)
+}
+
 model Report {
   id          Int       @id @default(autoincrement())
   projectId   Int
   scanId      Int
   title       String
   reportUrl   String?
+  format      String?   @default("JSON") // JSON, HTML, PDF
+  storagePath String?
+  summaryJson String?
   createdAt   DateTime  @default(now())
   project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   scan        Scan      @relation(fields: [scanId], references: [id], onDelete: Cascade)

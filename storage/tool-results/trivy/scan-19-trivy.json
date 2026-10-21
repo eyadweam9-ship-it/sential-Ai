@@ -1,0 +1,8 @@
+{
+  "tool": "TRIVY",
+  "version": "0.51.0",
+  "targetDir": "src",
+  "scannedAt": "2026-10-21T15:14:43.709Z",
+  "findingsCount": 0,
+  "findings": []
+}

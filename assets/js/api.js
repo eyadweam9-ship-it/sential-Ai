@@ -220,6 +220,26 @@ const API = {
         return await this.request(`scans/progress?scan_id=${scanId || ''}`);
     },
 
+    async getScanTasks(scanId) {
+        return await this.request(`scans/tasks?scanId=${scanId || ''}`);
+    },
+
+    async getScanFindings(scanId) {
+        return await this.request(`scans/${scanId}/findings`);
+    },
+
+    async rescanTarget(targetId) {
+        return await this.request(`scans/rescan/${targetId}`, { method: 'POST' });
+    },
+
+    async getScanReport(scanId) {
+        return await this.request(`reports/scan/${scanId}`);
+    },
+
+    async exportScanReport(scanId) {
+        return await this.request(`reports/export/${scanId}`, { method: 'POST' });
+    },
+
     async getScanHistory() {
         return await this.request('scans/history');
     },

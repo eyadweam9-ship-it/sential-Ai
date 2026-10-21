@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SentinelAI Security Assessment Report #18</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.5; color: #0f172a; margin: 0; padding: 32px; background: #f8fafc; }
+    .container { max-width: 960px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 40px; }
+    .header { border-bottom: 2px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-start; }
+    .title { font-size: 26px; font-weight: 800; color: #0f172a; margin: 0; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    .badge-critical { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+    .badge-high { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+    .badge-medium { background: #fefce8; color: #a16207; border: 1px solid #fef08a; }
+    .badge-low { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+    .badge-info { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px; margin-bottom: 20px; }
+    .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 24px 0; }
+    .stat-box { background: #f1f5f9; border-radius: 8px; padding: 16px; text-align: center; }
+    .stat-val { font-size: 28px; font-weight: 800; color: #0f172a; }
+    .stat-lbl { font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; }
+    .finding-card { border: 1px solid #cbd5e1; border-radius: 8px; padding: 20px; margin-bottom: 16px; background: #ffffff; }
+    .code-snippet { background: #0f172a; color: #f8fafc; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 12px; overflow-x: auto; margin-top: 8px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+    th, td { padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+    th { background: #f8fafc; font-weight: 700; color: #475569; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <h1 class="title">SentinelAI Security Assessment</h1>
+        <p style="color:#64748b; margin:6px 0 0 0; font-size:14px;">Target: <b>https://aymanaboelela.com/</b> [STAGING] · Generated: 2026-10-21T15:14:20.260Z</p>
+      </div>
+      <span class="badge badge-high">ANALYZING</span>
+    </div>
+
+    <!-- Stats -->
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-val">2</div><div class="stat-lbl">Total Findings</div></div>
+      <div class="stat-box"><div class="stat-val" style="color:#b91c1c;">0</div><div class="stat-lbl">Critical</div></div>
+      <div class="stat-box"><div class="stat-val" style="color:#c2410c;">0</div><div class="stat-lbl">High</div></div>
+      <div class="stat-box"><div class="stat-val" style="color:#2563eb;">100/100</div><div class="stat-lbl">Security Score</div></div>
+    </div>
+
+    <!-- Executive Summary -->
+    <div class="card">
+      <h3 style="margin-top:0; color:#0f172a;">AI Threat Intelligence & Executive Summary</h3>
+      <p style="font-size:13px; color:#334155;"><b>Overall Posture:</b> SECURE</p>
+      <p style="font-size:13px; color:#334155;">Analysis based on outputs from OWASP_ZAP. Tools skipped due to input scope: SEMGREP, GITLEAKS, TRIVY, NPM_AUDIT. No automated code changes or destructive tests were performed.</p>
+      <h4 style="font-size:13px; margin-bottom:6px;">Recommended Prioritized Actions (Advisory):</h4>
+      <ul style="font-size:12px; color:#475569; padding-left:20px; margin:0;">
+        <li>Prioritize immediate rotation of exposed secrets and API tokens.</li><li>Refactor dynamic SQL/Command execution routines to use prepared parameterized queries.</li><li>Configure enterprise defense headers (CSP, HSTS, X-Frame-Options) on origin web servers.</li><li>Upgrade third-party dependencies with published CVE advisories.</li>
+      </ul>
+    </div>
+
+    <!-- Tool Execution Matrix -->
+    <h3>Multi-Tool Verification Matrix</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Tool Name</th>
+          <th>Status</th>
+          <th>Execution Time</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        
+          <tr>
+            <td><b>OWASP_ZAP</b></td>
+            <td><span class="badge badge-low">COMPLETED</span></td>
+            <td>930ms</td>
+            <td style="color:#64748b; font-size:11px;">Executed with clean output</td>
+          </tr>
+        
+          <tr>
+            <td><b>SEMGREP</b></td>
+            <td><span class="badge badge-info">SKIPPED</span></td>
+            <td>—</td>
+            <td style="color:#64748b; font-size:11px;">SAST requires repository source code or uploaded archive.</td>
+          </tr>
+        
+          <tr>
+            <td><b>GITLEAKS</b></td>
+            <td><span class="badge badge-info">SKIPPED</span></td>
+            <td>—</td>
+            <td style="color:#64748b; font-size:11px;">Secret detection requires source code files or git repository history.</td>
+          </tr>
+        
+          <tr>
+            <td><b>TRIVY</b></td>
+            <td><span class="badge badge-info">SKIPPED</span></td>
+            <td>—</td>
+            <td style="color:#64748b; font-size:11px;">Trivy requires project dependency manifests (package.json, requirements.txt) or container files.</td>
+          </tr>
+        
+          <tr>
+            <td><b>NPM_AUDIT</b></td>
+            <td><span class="badge badge-info">SKIPPED</span></td>
+            <td>—</td>
+            <td style="color:#64748b; font-size:11px;">npm audit requires package.json and lockfile within the project.</td>
+          </tr>
+        
+      </tbody>
+    </table>
+
+    <!-- Detailed Findings -->
+    <h3 style="margin-top:36px;">Verified Vulnerabilities & Findings</h3>
+    
+    
+      <div class="finding-card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h4 style="margin:0; font-size:15px; color:#0f172a;">Server or Technology Version Banner Disclosed</h4>
+          <span class="badge badge-low">LOW</span>
+        </div>
+        <p style="font-size:11px; color:#64748b; margin:4px 0 10px 0;">Discovered by <b>OWASP_ZAP</b> · Rule: 10036-1 · Confidence: CONFIRMED</p>
+        <p style="font-size:13px; color:#334155; margin:0 0 10px 0;">Server discloses internal stack: Server: cloudflare.</p>
+        
+          <div style="font-size:12px; color:#475569;"><b>Evidence:</b> Server discloses internal stack: Server: cloudflare.</div>
+          
+        
+        
+          <div style="margin-top:10px; padding:10px; background:#f0fdf4; border-left:3px solid #16a34a; font-size:12px; color:#14532d;">
+            <b>Recommended Fix:</b> Disable server version tokens in web server configurations (e.g. server_tokens off in Nginx, ServerSignature Off in Apache).
+          </div>
+        
+      </div>
+    
+      <div class="finding-card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h4 style="margin:0; font-size:15px; color:#0f172a;">Cookie Missing HttpOnly Attribute</h4>
+          <span class="badge badge-low">LOW</span>
+        </div>
+        <p style="font-size:11px; color:#64748b; margin:4px 0 10px 0;">Discovered by <b>OWASP_ZAP</b> · Rule: 10010-1 · Confidence: HIGH</p>
+        <p style="font-size:13px; color:#334155; margin:0 0 10px 0;">Cookie is accessible via client-side JavaScript, increasing risk in case of Cross-Site Scripting (XSS).</p>
+        
+          <div style="font-size:12px; color:#475569;"><b>Evidence:</b> Cookie is accessible via client-side JavaScript, increasing risk in case of Cross-Site Scripting (XSS).</div>
+          
+        
+        
+          <div style="margin-top:10px; padding:10px; background:#f0fdf4; border-left:3px solid #16a34a; font-size:12px; color:#14532d;">
+            <b>Recommended Fix:</b> Append "; HttpOnly" to all session and authentication cookies.
+          </div>
+        
+      </div>
+    
+  </div>
+</body>
+</html>

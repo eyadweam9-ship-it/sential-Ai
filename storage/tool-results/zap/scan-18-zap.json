@@ -1,0 +1,31 @@
+{
+  "tool": "OWASP_ZAP",
+  "version": "2.14.0",
+  "targetUrl": "https://aymanaboelela.com/",
+  "scannedAt": "2026-10-21T15:14:20.170Z",
+  "findingsCount": 2,
+  "findings": [
+    {
+      "title": "Server or Technology Version Banner Disclosed",
+      "severity": "LOW",
+      "confidence": "CONFIRMED",
+      "category": "INFORMATION_DISCLOSURE",
+      "sourceRuleId": "10036-1",
+      "targetUrl": "https://aymanaboelela.com/",
+      "evidenceSummary": "Server discloses internal stack: Server: cloudflare.",
+      "remediation": "Disable server version tokens in web server configurations (e.g. server_tokens off in Nginx, ServerSignature Off in Apache).",
+      "cwe": "CWE-200"
+    },
+    {
+      "title": "Cookie Missing HttpOnly Attribute",
+      "severity": "LOW",
+      "confidence": "HIGH",
+      "category": "SESSION_MANAGEMENT",
+      "sourceRuleId": "10010-1",
+      "targetUrl": "https://aymanaboelela.com/",
+      "evidenceSummary": "Cookie is accessible via client-side JavaScript, increasing risk in case of Cross-Site Scripting (XSS).",
+      "remediation": "Append \"; HttpOnly\" to all session and authentication cookies.",
+      "cwe": "CWE-1004"
+    }
+  ]
+}
