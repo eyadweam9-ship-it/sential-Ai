@@ -419,6 +419,10 @@ const App = {
             }
         }
 
+        if (viewName !== 'scope') {
+            this.stopAuthPolling();
+        }
+
         this.currentView = viewName;
         if (updateHash) {
             window.location.hash = viewName;
@@ -2589,11 +2593,83 @@ const App = {
     // 3 Methods: DNS (Auto), File Probe (Auto), Written Letter (Admin Review)
     // Cohesive, clean Sential AI styling matching user requirements
     // =========================================================
+    async checkAuthStatusLive(showNotice = false) {
+        const env = (this.scanState.environment || 'development').toLowerCase();
+        if (env === 'development') return true;
+
+        const targetUrl = (this.scanState.url || '').trim();
+        if (!targetUrl) return false;
+
+        try {
+            const gateRes = await API.checkAuthorizationGate(targetUrl, env);
+            if (gateRes && gateRes.allowed) {
+                const wasPending = this.scanState.authData.status === 'PENDING' || !this.scanState.authData.gateAllowed;
+                this.scanState.authData.gateAllowed = true;
+                this.scanState.authData.status = gateRes.status || 'APPROVED';
+                this.scanState.authData.method = gateRes.method || this.scanState.authData.method || 'WRITTEN';
+                this.scanState.authData.gateMessage = 'Authorization approved by Administrator! Gate is cleared.';
+                this.stopAuthPolling();
+                this.render();
+                if (showNotice || wasPending) {
+                    showToast('Authorization approved by Administrator! Gate is cleared.', 'success');
+                }
+                return true;
+            } else if (gateRes && gateRes.status === 'NEEDS_CHANGES') {
+                this.scanState.authData.status = 'NEEDS_CHANGES';
+                this.scanState.authData.gateMessage = gateRes.notes || 'Administrator requested updates to the authorization document.';
+                this.stopAuthPolling();
+                this.render();
+            } else if (gateRes && gateRes.status === 'REJECTED') {
+                this.scanState.authData.status = 'REJECTED';
+                this.scanState.authData.gateMessage = gateRes.notes || 'Authorization was rejected by Administrator.';
+                this.stopAuthPolling();
+                this.render();
+            }
+        } catch (err) {
+            console.warn('checkAuthStatusLive poll error:', err);
+        }
+        return false;
+    },
+
+    startAuthPolling() {
+        this.stopAuthPolling();
+        this._authPollInterval = setInterval(() => {
+            if (this.currentView !== 'scope') {
+                this.stopAuthPolling();
+                return;
+            }
+            this.checkAuthStatusLive(false);
+        }, 2500);
+    },
+
+    stopAuthPolling() {
+        if (this._authPollInterval) {
+            clearInterval(this._authPollInterval);
+            this._authPollInterval = null;
+        }
+    },
+
     async ensureAuthLoaded() {
         const env = (this.scanState.environment || 'development').toLowerCase();
         if (env === 'development') return;
 
         const targetUrl = (this.scanState.url || 'https://app.northstar.io').trim();
+
+        // Always check live gate status in background so admin approval is picked up immediately
+        if (!this.scanState.authData.gateAllowed) {
+            API.checkAuthorizationGate(targetUrl, env).then(gateRes => {
+                if (gateRes && gateRes.allowed) {
+                    this.scanState.authData.gateAllowed = true;
+                    this.scanState.authData.status = gateRes.status || 'APPROVED';
+                    this.scanState.authData.method = gateRes.method || this.scanState.authData.method || 'WRITTEN';
+                    this.stopAuthPolling();
+                    this.render();
+                } else if (this.scanState.authData.status === 'PENDING') {
+                    this.startAuthPolling();
+                }
+            }).catch(() => null);
+        }
+
         if (this.scanState.authData.targetUrl === targetUrl && this.scanState.authData.dnsChallenge) {
             return;
         }
@@ -2620,6 +2696,8 @@ const App = {
                 this.scanState.authData.gateAllowed = true;
                 this.scanState.authData.status = gateRes.status || 'VERIFIED';
                 this.scanState.authData.method = gateRes.method || 'DNS';
+            } else if (this.scanState.authData.status === 'PENDING') {
+                this.startAuthPolling();
             }
 
             this.render();
@@ -2793,6 +2871,7 @@ const App = {
                 this.scanState.authData.writtenLetter.status = 'PENDING';
                 this.scanState.authData.gateMessage = 'Written authorization submitted! Request is queued for Administrator Review.';
                 showToast(this.scanState.authData.gateMessage, 'success');
+                this.startAuthPolling();
             }
         } catch (err) {
             this.scanState.authData.isSubmittingLetter = false;
@@ -3091,7 +3170,7 @@ const App = {
         const hostname = targetUrl.replace(/^https?:\/\//i, '').split('/')[0].split(':')[0] || 'target-domain.com';
 
         const auth = this.scanState.authData;
-        const isVerified = auth.status === 'VERIFIED' || auth.status === 'APPROVED';
+        const isVerified = auth.status === 'VERIFIED' || auth.status === 'APPROVED' || auth.gateAllowed;
         const isPending = auth.status === 'PENDING';
         const isNeedsChanges = auth.status === 'NEEDS_CHANGES';
         const isFailed = auth.status === 'FAILED' || auth.status === 'REJECTED';
@@ -3368,7 +3447,7 @@ const App = {
                                             </button>
                                         </div>
 
-                                        ${isVerified && auth.method === 'WRITTEN' ? `
+                                        ${(auth.status === 'APPROVED' || (isVerified && auth.method === 'WRITTEN')) ? `
                                             <div class="auth-notice-banner verified">
                                                 ${Icons.get('check', 'size-4 text-emerald-600 mt-0.5')}
                                                 <div>
@@ -3385,12 +3464,17 @@ const App = {
                                                 </div>
                                             </div>
                                         ` : isPending ? `
-                                            <div class="auth-notice-banner pending">
-                                                ${Icons.get('clock', 'size-4 text-amber-600 mt-0.5')}
-                                                <div>
-                                                    <b>Under Administrator Review</b><br>
-                                                    <span>Your authorization request has been submitted and is currently in the Administrator Review queue.</span>
+                                            <div class="auth-notice-banner pending" style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+                                                <div style="display:flex; align-items:flex-start; gap:8px;">
+                                                    ${Icons.get('clock', 'size-4 text-amber-600 mt-0.5')}
+                                                    <div>
+                                                        <b>Under Administrator Review</b><br>
+                                                        <span>Request queued. Polling for admin approval...</span>
+                                                    </div>
                                                 </div>
+                                                <button type="button" class="button button-secondary" style="font-size:11px; padding:5px 12px; height:auto;" onclick="App.checkAuthStatusLive(true)">
+                                                    ↻ Refresh Status
+                                                </button>
                                             </div>
                                         ` : ''}
                                     </div>
@@ -3509,7 +3593,25 @@ const App = {
         }
 
         const isDev = this.scanState.environment === 'development';
-        const auth = this.scanState.authData;
+        let auth = this.scanState.authData;
+
+        // Ensure live check with backend gate before determining authorization
+        if (!isDev && !(auth.status === 'VERIFIED' || auth.status === 'APPROVED' || auth.gateAllowed)) {
+            try {
+                const targetUrl = (this.scanState.url || '').trim();
+                const env = (this.scanState.environment || 'staging').toLowerCase();
+                const gateRes = await API.checkAuthorizationGate(targetUrl, env);
+                if (gateRes && gateRes.allowed) {
+                    this.scanState.authData.gateAllowed = true;
+                    this.scanState.authData.status = gateRes.status || 'APPROVED';
+                    this.scanState.authData.method = gateRes.method || this.scanState.authData.method || 'WRITTEN';
+                    auth = this.scanState.authData;
+                }
+            } catch (err) {
+                console.warn('Live gate check on continue error:', err);
+            }
+        }
+
         const isAuthorized = auth.status === 'VERIFIED' || auth.status === 'APPROVED' || auth.gateAllowed;
 
         // Enforce Authorization & Scope Gate: Strict Halt if not authorized
