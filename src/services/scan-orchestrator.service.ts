@@ -5,6 +5,7 @@ import { normalizeAndSaveFindings } from './findings-normalizer.service';
 import { deduplicateScanFindings } from './findings-deduplication.service';
 import { analyzeFindingWithAI, generateScanExecutiveSummary } from './ai-analysis.service';
 import { generateScanReport } from './report.service';
+import { extractSourcesFromTarget } from './source-extractor.service';
 import { ToolInput } from '../tools/security-tool.interface';
 
 export async function orchestrateScan(scanId: number): Promise<void> {
@@ -30,19 +31,42 @@ export async function orchestrateScan(scanId: number): Promise<void> {
 
     const target = scan.target;
     const isUrl = target.targetType === 'URL' || Boolean(target.url);
-    const hasSource = Boolean(target.filePath || target.targetType === 'FILE_ZIP');
+    let effectiveSourcePath = target.filePath || undefined;
+    let hasSource = Boolean(target.filePath || target.targetType === 'FILE_ZIP');
 
-    // 2. Parse Scope & Boundaries
+    // 2. Parse Scope, Boundaries & Optional Authenticated Session Credentials
     let parsedScope = { includedPaths: ['/*'], excludedPaths: [] as string[] };
+    let sessionCookie: string | undefined;
+    let authHeader: string | undefined;
+
     try {
       if (target.scope) {
         const s = typeof target.scope === 'string' ? JSON.parse(target.scope) : target.scope;
         if (s.includedPaths) parsedScope.includedPaths = Array.isArray(s.includedPaths) ? s.includedPaths : [s.includedPaths];
         if (s.excludedPaths) parsedScope.excludedPaths = Array.isArray(s.excludedPaths) ? s.excludedPaths : [s.excludedPaths];
+        if (s.sessionCookie) sessionCookie = String(s.sessionCookie).trim();
+        if (s.authHeader) authHeader = String(s.authHeader).trim();
       }
     } catch {}
 
-    // 3. Plan Tasks (ZAP, Semgrep, Gitleaks, Trivy, npm audit)
+    // 3. Proactive Source Extraction from Target URL (Source Maps, .git, and Backup Archives)
+    if (isUrl && !hasSource) {
+      try {
+        const extractRes = await extractSourcesFromTarget(target.url, scanId);
+        if (extractRes.extractedDir && extractRes.extractedFilesCount > 0) {
+          effectiveSourcePath = extractRes.extractedDir;
+          hasSource = true;
+          console.log(`[ScanOrchestrator] Successfully extracted ${extractRes.extractedFilesCount} source files from target URL for SAST auditing.`);
+        }
+        if (extractRes.findings && extractRes.findings.length > 0) {
+          await normalizeAndSaveFindings(scanId, 'RECON_DISCOVERY', extractRes.findings);
+        }
+      } catch (extractErr) {
+        console.warn('[ScanOrchestrator] Source extraction notice:', (extractErr as Error).message);
+      }
+    }
+
+    // 4. Plan Tasks (ZAP, Nuclei, Semgrep, CodeQL, Gitleaks, Trivy, OSV, Checkov, npm audit)
     // Check if tasks already exist in database or were previously skipped
     let tasks = await prisma.scanTask.findMany({ where: { scanId } });
     if (tasks.length === 0 || (tasks.length > 0 && tasks.every(t => t.status === 'SKIPPED' || t.status === 'FAILED'))) {
@@ -70,10 +94,12 @@ export async function orchestrateScan(scanId: number): Promise<void> {
       targetUrl: target.url,
       targetType: target.targetType as any,
       environment: target.environment as any,
-      sourcePath: target.filePath || undefined,
+      sourcePath: effectiveSourcePath,
       scope: parsedScope,
       rateLimitRps,
       timeoutMs: 60_000,
+      sessionCookie,
+      authHeader,
     };
 
     let completedCount = 0;

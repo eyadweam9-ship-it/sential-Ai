@@ -533,6 +533,11 @@ scanRouter.post(['/create', '/start'], async (req: Request, res: Response): Prom
       gitRepoUrl,
       scope,
       confirmed_authorization,
+      session_cookie,
+      sessionCookie,
+      auth_token,
+      authToken,
+      authHeader,
     } = req.body;
 
     const assessmentTitle = assessmentName || assessment_name || name || 'Security Assessment';
@@ -627,13 +632,22 @@ scanRouter.post(['/create', '/start'], async (req: Request, res: Response): Prom
     const maxRequests = isProduction ? 30 : 50;
 
     // 6. Create or Resolve Target in Database
+    let scopeObj: any = typeof scope === 'object' && scope !== null ? { ...scope } : {};
+    if (typeof scope === 'string' && scope.startsWith('{')) {
+      try { scopeObj = JSON.parse(scope); } catch {}
+    }
+    const effectiveCookie = session_cookie || sessionCookie || scopeObj.sessionCookie;
+    const effectiveAuth = auth_token || authToken || authHeader || scopeObj.authHeader;
+    if (effectiveCookie) scopeObj.sessionCookie = String(effectiveCookie).trim();
+    if (effectiveAuth) scopeObj.authHeader = String(effectiveAuth).trim();
+
     const target = await getOrCreateTarget({
       url: targetLocation,
       name: assessmentTitle,
       environment: normalizedEnv,
       targetType,
       filePath: isDevelopment ? targetLocation : (attachedCodePath || undefined),
-      scope: typeof scope === 'object' ? JSON.stringify(scope) : scope,
+      scope: JSON.stringify(scopeObj),
       isAuthorized: true,
     });
 

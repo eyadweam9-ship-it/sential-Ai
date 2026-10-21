@@ -39,13 +39,17 @@ export class ZapAdapter implements SecurityToolAdapter {
     try {
       // 1. Probe Base Target URL
       let mainHtml = '';
+      const baseReqHeaders: Record<string, string> = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SentinelAI-SecurityScanner/2.0',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      };
+      if (input.sessionCookie) baseReqHeaders['Cookie'] = input.sessionCookie;
+      if (input.authHeader) baseReqHeaders['Authorization'] = input.authHeader;
+
       try {
         const resp = await fetch(targetUrl, {
           method: 'GET',
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SentinelAI-SecurityScanner/2.0',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          },
+          headers: baseReqHeaders,
           signal: AbortSignal.timeout(input.timeoutMs || 25_000),
         });
 
@@ -281,6 +285,10 @@ export class ZapAdapter implements SecurityToolAdapter {
         { path: '/phpinfo.php', title: 'Exposed PHP Information Script (phpinfo.php)', severity: 'HIGH' as const, ruleId: '40032-7', cwe: 'CWE-200' },
         { path: '/backup.sql', title: 'Publicly Accessible Database Backup File (backup.sql)', severity: 'CRITICAL' as const, ruleId: '40032-8', cwe: 'CWE-200' },
         { path: '/server-status', title: 'Exposed Web Server Status Page (/server-status)', severity: 'MEDIUM' as const, ruleId: '40032-9', cwe: 'CWE-200' },
+        { path: '/admin', title: 'Exposed Administration Panel (/admin)', severity: 'HIGH' as const, ruleId: '40032-10', cwe: 'CWE-285' },
+        { path: '/dashboard', title: 'Exposed Dashboard Interface (/dashboard)', severity: 'MEDIUM' as const, ruleId: '40032-11', cwe: 'CWE-200' },
+        { path: '/stream.m3u8', title: 'Exposed Video Stream Manifest (/stream.m3u8)', severity: 'MEDIUM' as const, ruleId: '40032-12', cwe: 'CWE-200' },
+        { path: '/api/videos', title: 'Unprotected Video API Catalog (/api/videos)', severity: 'MEDIUM' as const, ruleId: '40032-13', cwe: 'CWE-200' },
       ];
 
       for (const probe of sensitiveProbes) {
@@ -294,13 +302,37 @@ export class ZapAdapter implements SecurityToolAdapter {
           const probeUrl = new URL(probe.path, targetUrl).toString();
           const pResp = await fetch(probeUrl, {
             method: 'GET',
-            headers: { 'User-Agent': 'SentinelAI-DAST/2.0' },
+            headers: baseReqHeaders,
             signal: AbortSignal.timeout(6000),
           }).catch(() => null);
 
           if (pResp && pResp.status === 200) {
             const body = await pResp.text().catch(() => '');
-            if (probe.path.startsWith('/.env') && (body.includes('DB_') || body.includes('SECRET') || body.includes('KEY=') || body.includes('PASSWORD='))) {
+            if (probe.path === '/admin' && /admin|dashboard|management|cpanel/i.test(body) && !/login|sign in|password/i.test(body)) {
+              findings.push({
+                title: 'Exposed Administrative Management Panel (/admin)',
+                severity: 'HIGH',
+                confidence: 'CONFIRMED',
+                category: 'BROKEN_ACCESS_CONTROL',
+                sourceRuleId: probe.ruleId,
+                targetUrl: probeUrl,
+                evidenceSummary: `Administrative portal is publicly accessible on ${probeUrl} without authentication.`,
+                remediation: 'Place administrative consoles behind VPN, IP allowlist, or strong multi-factor authentication.',
+                cwe: probe.cwe,
+              });
+            } else if (probe.path === '/stream.m3u8' && body.includes('#EXTM3U')) {
+              findings.push({
+                title: 'Publicly Accessible Video Stream Manifest (.m3u8)',
+                severity: 'MEDIUM',
+                confidence: 'CONFIRMED',
+                category: 'INFORMATION_DISCLOSURE',
+                sourceRuleId: probe.ruleId,
+                targetUrl: probeUrl,
+                evidenceSummary: `Streaming video playlist file is publicly readable on ${probeUrl} without token authentication.`,
+                remediation: 'Protect video streaming endpoints with HMAC-signed URLs or DRM encryption.',
+                cwe: probe.cwe,
+              });
+            } else if (probe.path.startsWith('/.env') && (body.includes('DB_') || body.includes('SECRET') || body.includes('KEY=') || body.includes('PASSWORD='))) {
               findings.push({
                 title: probe.title,
                 severity: 'CRITICAL',

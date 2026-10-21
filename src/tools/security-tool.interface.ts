@@ -16,6 +16,8 @@ export interface ToolInput {
   scope?: ScopeRuleSet;
   rateLimitRps?: number;
   timeoutMs?: number;
+  sessionCookie?: string;
+  authHeader?: string;
 }
 
 export interface RawToolFinding {

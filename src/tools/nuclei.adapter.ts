@@ -108,6 +108,39 @@ const NUCLEI_TEMPLATES: NucleiTemplateCheck[] = [
     evidence: 'Strict-Transport-Security header is not set. Attackers can execute SSL-stripping and downgrade attacks.',
     remediation: 'Add "Strict-Transport-Security: max-age=31536000; includeSubDomains; preload" to all HTTPS responses.',
   },
+  {
+    id: 'admin-panel-publicly-accessible',
+    name: 'Exposed Administrative Management Panel (/admin)',
+    category: 'BROKEN_ACCESS_CONTROL',
+    severity: 'HIGH',
+    cwe: 'CWE-285',
+    pathTest: '/admin',
+    matcher: (body, status) => status === 200 && /admin|dashboard|control panel|manage/i.test(body) && !/login|sign in|authenticate/i.test(body),
+    evidence: 'Administrative console endpoint is accessible without authentication barrier.',
+    remediation: 'Enforce strict multi-factor authentication (MFA) or network IP allowlisting for all administrative interfaces.',
+  },
+  {
+    id: 'unprotected-media-stream-manifest',
+    name: 'Exposed Streaming Media Playlist (HLS .m3u8 / Video)',
+    category: 'INFORMATION_DISCLOSURE',
+    severity: 'MEDIUM',
+    cwe: 'CWE-200',
+    pathTest: '/stream.m3u8',
+    matcher: (body, status) => status === 200 && body.includes('#EXTM3U'),
+    evidence: 'Unprotected HLS streaming media playlist is directly accessible without session authorization.',
+    remediation: 'Implement signed URLs, DRM encryption, or tokenized session authentication on video streaming manifests.',
+  },
+  {
+    id: 'exposed-sourcemap-main',
+    name: 'Exposed Production JavaScript Source Map (/main.js.map)',
+    category: 'INFORMATION_DISCLOSURE',
+    severity: 'HIGH',
+    cwe: 'CWE-540',
+    pathTest: '/main.js.map',
+    matcher: (body, status) => status === 200 && body.includes('"sourcesContent"') && body.includes('"sources"'),
+    evidence: 'Production sourcemap file is publicly readable, exposing original unminified application source code.',
+    remediation: 'Disable sourcemap publishing in production builds or configure web server to deny *.map requests.',
+  },
 ];
 
 export class NucleiAdapter implements SecurityToolAdapter {
@@ -140,12 +173,16 @@ export class NucleiAdapter implements SecurityToolAdapter {
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), 4000);
 
+          const reqHeaders: Record<string, string> = {
+            'User-Agent': 'SentinelAI-Nuclei-Engine/3.2.0 (Security Scanner; Authorized)',
+            'Accept': '*/*',
+          };
+          if (input.sessionCookie) reqHeaders['Cookie'] = input.sessionCookie;
+          if (input.authHeader) reqHeaders['Authorization'] = input.authHeader;
+
           const res = await fetch(fullUrl, {
             method: 'GET',
-            headers: {
-              'User-Agent': 'SentinelAI-Nuclei-Engine/3.2.0 (Security Scanner; Authorized)',
-              'Accept': '*/*',
-            },
+            headers: reqHeaders,
             signal: controller.signal,
           }).catch(() => null);
 

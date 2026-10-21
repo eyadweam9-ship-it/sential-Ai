@@ -85,25 +85,29 @@ export interface CrawlDiscoverySummary {
  */
 export async function safeFetchText(
   targetUrl: URL,
-  timeoutMs: number = 6000
+  timeoutMs: number = 6000,
+  customHeaders?: Record<string, string>
 ): Promise<{ statusCode: number; body: string; responseTime: number; finalUrl: string }> {
   const start = Date.now();
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
+    const reqHeaders: Record<string, string> = {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,text/javascript,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
+      'Sec-Ch-Ua': '"Chromium";v="126", "Google Chrome";v="126"',
+      'Sec-Ch-Ua-Mobile': '?0',
+      'Sec-Ch-Ua-Platform': '"Windows"',
+      'Upgrade-Insecure-Requests': '1',
+      ...(customHeaders || {}),
+    };
+
     const res = await fetch(targetUrl.toString(), {
       signal: controller.signal,
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,text/javascript,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
-        'Sec-Ch-Ua': '"Chromium";v="126", "Google Chrome";v="126"',
-        'Sec-Ch-Ua-Mobile': '?0',
-        'Sec-Ch-Ua-Platform': '"Windows"',
-        'Upgrade-Insecure-Requests': '1',
-      },
+      headers: reqHeaders,
       redirect: 'follow',
     });
 
@@ -257,6 +261,17 @@ function extractHtmlResources(
     } catch {}
   }
 
+  // 7. Extract Media & Video Streams: <video>, <source>, <audio>, <iframe>, .m3u8, .mp4
+  const mediaRegex = /<(?:video|source|audio|iframe)\b[^>]*\bsrc=["']([^"'>\s]+)["']/gi;
+  while ((match = mediaRegex.exec(html)) !== null) {
+    const rawSrc = match[1].trim();
+    if (!rawSrc || rawSrc.startsWith('data:')) continue;
+    try {
+      const resolved = new URL(rawSrc, baseUrl);
+      apiEndpoints.add(resolved.toString());
+    } catch {}
+  }
+
   return {
     pages: Array.from(pages),
     scripts: Array.from(scripts),
@@ -290,7 +305,7 @@ function extractSitemapUrls(xml: string, baseUrl: URL): string[] {
 export async function crawlWebsite(
   targetUrlStr: string,
   environment: 'STAGING' | 'PRODUCTION' = 'PRODUCTION',
-  options: { maxPages?: number; maxRequests?: number; timeoutMs?: number } = {}
+  options: { maxPages?: number; maxRequests?: number; timeoutMs?: number; sessionCookie?: string; authHeader?: string } = {}
 ): Promise<CrawlDiscoverySummary> {
   const startOverallTime = Date.now();
   const normalizedEnv = environment.toUpperCase() as 'STAGING' | 'PRODUCTION';
@@ -300,6 +315,10 @@ export async function crawlWebsite(
   const maxPages = options.maxPages || 30;
   const maxRequests = options.maxRequests || 60;
   const maxTimeMs = options.timeoutMs || 15000;
+
+  const customHeaders: Record<string, string> = {};
+  if (options.sessionCookie) customHeaders['Cookie'] = options.sessionCookie;
+  if (options.authHeader) customHeaders['Authorization'] = options.authHeader;
 
   let targetUrl: URL;
   try {
@@ -386,7 +405,7 @@ export async function crawlWebsite(
   } catch {}
 
   // 3. Fetch Root Page (follows redirects to e.g. login.html)
-  const rootRes = await safeFetchText(targetUrl, 5000);
+  const rootRes = await safeFetchText(targetUrl, 5000, customHeaders);
   const rootUrlStr = targetUrl.toString();
   seenUrls.add(rootUrlStr);
   resources.push({
@@ -459,7 +478,7 @@ export async function crawlWebsite(
       const pageUrl = new URL(pageUrlStr);
 
       // Fetch the sub-page
-      const subRes = await safeFetchText(pageUrl, 3000);
+      const subRes = await safeFetchText(pageUrl, 3000, customHeaders);
       if (subRes.statusCode < 400 && subRes.body.length > 0) {
         const subBase = new URL(subRes.finalUrl || pageUrlStr);
         const subExt = extractHtmlResources(subRes.body, subBase);
@@ -474,6 +493,40 @@ export async function crawlWebsite(
           if (!seenUrls.has(p) && resources.filter(r => r.type === 'PAGE').length < 40) {
             addResource(p, 'PAGE');
           }
+        }
+      }
+    } catch {}
+  }
+
+  // 5. Deep Probes: Admin panels, Dashboards, and Media/Video endpoints
+  const deepProbes = [
+    '/admin',
+    '/dashboard',
+    '/login',
+    '/portal',
+    '/manage',
+    '/cpanel',
+    '/api/videos',
+    '/api/admin',
+    '/api/v2/users',
+  ];
+
+  for (const dp of deepProbes) {
+    if (resources.length >= maxRequests || (Date.now() - startOverallTime) > maxTimeMs) break;
+    try {
+      const probeUrl = new URL(dp, targetUrl);
+      if (!seenUrls.has(probeUrl.toString())) {
+        const probeRes = await safeFetchText(probeUrl, 2500, customHeaders);
+        seenUrls.add(probeUrl.toString());
+        if (probeRes.statusCode < 500) {
+          resources.push({
+            url: probeUrl.toString(),
+            type: dp.startsWith('/api') ? 'API_ENDPOINT' : 'PAGE',
+            statusCode: probeRes.statusCode,
+            responseTimeMs: probeRes.responseTime,
+            status: probeRes.statusCode < 400 ? 'REACHABLE' : (probeRes.statusCode < 500 ? 'PROTECTED' : 'NOT_FOUND'),
+            sizeBytes: probeRes.body.length,
+          });
         }
       }
     } catch {}
