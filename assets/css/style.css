@@ -2698,6 +2698,19 @@
     box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.3);
     animation: slideUpModal 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     overflow: hidden; /* Header and footer stay fixed in place; only body scrolls */
+    position: relative;
+}
+
+/* Sential AI Signature Top Gradient Accent */
+.discovery-modal-box::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #2563eb 0%, #6366f1 35%, #a855f7 70%, #10b981 100%);
+    z-index: 10;
 }
 
 /* Modal Header */
@@ -2705,7 +2718,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1.1rem 1.4rem;
+    padding: 1.15rem 1.4rem;
     border-bottom: 1px solid #f1f5f9;
     background: #ffffff;
     flex-shrink: 0;
@@ -2714,8 +2727,15 @@
 .discovery-modal-header .title-group {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.85rem;
     min-width: 0;
+}
+
+.discovery-modal-header .icon-tile.blue {
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    color: #2563eb;
+    border: 1px solid #bfdbfe;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.12);
 }
 
 .discovery-modal-header h3 {
@@ -2737,8 +2757,8 @@
     border: 0;
     color: #94a3b8;
     cursor: pointer;
-    padding: 0.35rem;
-    border-radius: 0.4rem;
+    padding: 0.4rem;
+    border-radius: 0.45rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2750,75 +2770,103 @@
     color: #0f172a;
 }
 
-/* Modal Controls: Search & Tabs */
+/* Modal Controls: Clean Category Pills in Site Colors */
 .discovery-modal-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    padding: 0.65rem 1.4rem;
+    justify-content: flex-start;
+    padding: 0.75rem 1.4rem;
     background: #f8fafc;
     border-bottom: 1px solid #e2e8f0;
     flex-shrink: 0;
-    flex-wrap: wrap;
-}
-
-.discovery-modal-search {
-    display: flex;
-    align-items: center;
-    background: #ffffff;
-    border: 1px solid #cbd5e1;
-    border-radius: 0.45rem;
-    padding: 0 0.55rem;
-    height: 32px;
-    width: 280px;
-    max-width: 100%;
-    transition: all 0.15s ease;
-}
-
-.discovery-modal-search:focus-within {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
-}
-
-.discovery-modal-search input {
-    border: none;
-    outline: none;
-    background: transparent;
-    width: 100%;
-    font-size: 0.75rem;
-    color: #0f172a;
-    padding: 0 0.35rem;
 }
 
 .discovery-modal-filter-pills {
     display: flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: 0.45rem;
     flex-wrap: wrap;
 }
 
 .discovery-modal-pill {
-    padding: 0.2rem 0.55rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.28rem 0.75rem;
     border-radius: 9999px;
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     font-weight: 600;
     border: 1px solid #e2e8f0;
     background: #ffffff;
     color: #475569;
     cursor: pointer;
-    transition: all 0.12s ease;
+    transition: all 0.15s ease;
 }
 
 .discovery-modal-pill:hover {
-    background: #f1f5f9;
-    color: #0f172a;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
-.discovery-modal-pill.active {
+/* Brand Theme Colors for Pills */
+.discovery-modal-pill.pill-all {
+    color: #334155;
+    background: #ffffff;
+    border-color: #cbd5e1;
+}
+.discovery-modal-pill.pill-all.active {
     background: #0f172a;
     color: #ffffff;
     border-color: #0f172a;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.2);
+}
+
+.discovery-modal-pill.pill-page {
+    color: #1d4ed8;
+    background: #eff6ff;
+    border-color: #bfdbfe;
+}
+.discovery-modal-pill.pill-page.active {
+    background: #2563eb;
+    color: #ffffff;
+    border-color: #2563eb;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+}
+
+.discovery-modal-pill.pill-script {
+    color: #4338ca;
+    background: #e0e7ff;
+    border-color: #c7d2fe;
+}
+.discovery-modal-pill.pill-script.active {
+    background: #4f46e5;
+    color: #ffffff;
+    border-color: #4f46e5;
+    box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);
+}
+
+.discovery-modal-pill.pill-style {
+    color: #7e22ce;
+    background: #f3e8ff;
+    border-color: #e9d5ff;
+}
+.discovery-modal-pill.pill-style.active {
+    background: #9333ea;
+    color: #ffffff;
+    border-color: #9333ea;
+    box-shadow: 0 2px 6px rgba(147, 51, 234, 0.25);
+}
+
+.discovery-modal-pill.pill-api {
+    color: #047857;
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+}
+.discovery-modal-pill.pill-api.active {
+    background: #059669;
+    color: #ffffff;
+    border-color: #059669;
+    box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25);
 }
 
 /* Scrollable Container (THE CRITICAL FIX: min-height: 0 ensures mouse wheel scrolls properly) */

@@ -1791,7 +1791,6 @@ const App = {
         const target = this.scanState.url || disc?.targetUrl || 'Target Application';
 
         const activeFilter = this.scanState.discoveryFilter || 'ALL';
-        const searchQuery = (this.scanState.discoverySearchQuery || '').trim().toLowerCase();
 
         let filteredResources = resources;
         if (activeFilter === 'PAGE') {
@@ -1802,13 +1801,6 @@ const App = {
             filteredResources = filteredResources.filter(r => r.type === 'STYLESHEET');
         } else if (activeFilter === 'API_ENDPOINT') {
             filteredResources = filteredResources.filter(r => r.type === 'API_ENDPOINT');
-        }
-
-        if (searchQuery) {
-            filteredResources = filteredResources.filter(r => 
-                (r.url && r.url.toLowerCase().includes(searchQuery)) || 
-                (r.type && r.type.toLowerCase().includes(searchQuery))
-            );
         }
 
         return `
@@ -1828,22 +1820,24 @@ const App = {
                         </button>
                     </div>
 
-                    <!-- Search & Filter Controls -->
+                    <!-- Filter Controls with Site Brand Colors -->
                     <div class="discovery-modal-bar">
-                        <div class="discovery-modal-search">
-                            ${Icons.get('search', 'size-3.5 text-slate-400')}
-                            <input type="text" id="discovery-modal-search-input" placeholder="Search files (e.g. .js, /api)..." value="${escapeHtml(this.scanState.discoverySearchQuery || '')}" oninput="App.setDiscoverySearch(this.value)">
-                            ${this.scanState.discoverySearchQuery ? `
-                                <button type="button" class="text-slate-400 hover:text-slate-600 text-xs ml-1" onclick="App.setDiscoverySearch('')">✕</button>
-                            ` : ''}
-                        </div>
-
                         <div class="discovery-modal-filter-pills">
-                            <button type="button" class="discovery-modal-pill ${activeFilter === 'ALL' ? 'active' : ''}" onclick="App.setDiscoveryFilter('ALL')">All (${resources.length})</button>
-                            <button type="button" class="discovery-modal-pill ${activeFilter === 'PAGE' ? 'active' : ''}" onclick="App.setDiscoveryFilter('PAGE')">Pages (${pagesCount})</button>
-                            <button type="button" class="discovery-modal-pill ${activeFilter === 'SCRIPT' ? 'active' : ''}" onclick="App.setDiscoveryFilter('SCRIPT')">Scripts (${scriptsCount})</button>
-                            <button type="button" class="discovery-modal-pill ${activeFilter === 'STYLESHEET' ? 'active' : ''}" onclick="App.setDiscoveryFilter('STYLESHEET')">Styles (${stylesCount})</button>
-                            <button type="button" class="discovery-modal-pill ${activeFilter === 'API_ENDPOINT' ? 'active' : ''}" onclick="App.setDiscoveryFilter('API_ENDPOINT')">APIs (${apiCount})</button>
+                            <button type="button" class="discovery-modal-pill pill-all ${activeFilter === 'ALL' ? 'active' : ''}" onclick="App.setDiscoveryFilter('ALL')">
+                                All (${resources.length})
+                            </button>
+                            <button type="button" class="discovery-modal-pill pill-page ${activeFilter === 'PAGE' ? 'active' : ''}" onclick="App.setDiscoveryFilter('PAGE')">
+                                Pages (${pagesCount})
+                            </button>
+                            <button type="button" class="discovery-modal-pill pill-script ${activeFilter === 'SCRIPT' ? 'active' : ''}" onclick="App.setDiscoveryFilter('SCRIPT')">
+                                Scripts (${scriptsCount})
+                            </button>
+                            <button type="button" class="discovery-modal-pill pill-style ${activeFilter === 'STYLESHEET' ? 'active' : ''}" onclick="App.setDiscoveryFilter('STYLESHEET')">
+                                Styles (${stylesCount})
+                            </button>
+                            <button type="button" class="discovery-modal-pill pill-api ${activeFilter === 'API_ENDPOINT' ? 'active' : ''}" onclick="App.setDiscoveryFilter('API_ENDPOINT')">
+                                APIs (${apiCount})
+                            </button>
                         </div>
                     </div>
 
@@ -1861,7 +1855,7 @@ const App = {
                                         <tr>
                                             <th style="width: 100px;">Type</th>
                                             <th>Resource / File URL</th>
-                                            <th style="width: 110px;">Status</th>
+                                            <th style="width: 120px;">Status</th>
                                             <th style="width: 80px;">Latency</th>
                                             <th style="width: 110px; text-align: right;">Action</th>
                                         </tr>
@@ -1874,7 +1868,8 @@ const App = {
                                                     ${escapeHtml(res.url)}
                                                 </td>
                                                 <td>
-                                                    <span class="text-xs font-semibold ${res.statusCode === 200 ? 'text-emerald-600' : 'text-amber-600'}">
+                                                    <span class="inline-flex items-center gap-1.5 text-xs font-semibold ${res.statusCode === 200 ? 'text-emerald-700' : 'text-amber-700'}">
+                                                        <span class="size-1.5 rounded-full ${res.statusCode === 200 ? 'bg-emerald-500' : 'bg-amber-500'}"></span>
                                                         ${res.statusCode || 200} ${res.status || 'OK'}
                                                     </span>
                                                 </td>
@@ -1902,14 +1897,17 @@ const App = {
                             </div>
                         ` : `
                             <div class="p-8 text-center text-slate-500 bg-slate-50 rounded-lg">
-                                <p class="text-xs">${searchQuery ? `No resources match "${escapeHtml(searchQuery)}".` : 'No assets discovered yet.'}</p>
+                                <p class="text-xs">No assets discovered in this category yet.</p>
                             </div>
                         `)}
                     </div>
 
                     <!-- Footer -->
                     <div class="discovery-modal-footer">
-                        <span class="text-xs text-slate-500 font-medium">Showing ${filteredResources.length} of ${resources.length} resources</span>
+                        <span class="text-xs text-slate-500 font-medium flex items-center gap-1.5">
+                            <span class="size-2 rounded-full bg-emerald-500"></span>
+                            Showing ${filteredResources.length} of ${resources.length} resources
+                        </span>
                         <button type="button" class="button button-secondary text-xs" onclick="App.toggleDiscoveryModal()">Close</button>
                     </div>
                 </div>
