@@ -295,8 +295,8 @@ const App = {
         discoveryCollapsedCategories: {},
         treeCollapsed: false,
         scope: {
-            includedPaths: '/*',
-            excludedPaths: 'node_modules/*, dist/*, /billing/*, /logout',
+            includedPaths: ['/*'],
+            excludedPaths: ['/logout', '/payments', '/api/delete-account'],
             rateLimit: '10 req/sec'
         },
         verifyMethod: 0,
@@ -395,7 +395,15 @@ const App = {
                     this.closeCodeViewer();
                 } else if (this.scanState && this.scanState.showDiscoveryModal) {
                     this.toggleDiscoveryModal(false);
+                } else {
+                    this.closeScopeAutocomplete();
                 }
+            }
+        });
+
+        window.addEventListener('click', (e) => {
+            if (!e.target.closest('.scope-tag-field')) {
+                this.closeScopeAutocomplete();
             }
         });
     },
@@ -2794,6 +2802,247 @@ const App = {
         this.render();
     },
 
+    ensureScopeArrays() {
+        if (!this.scanState.scope) {
+            this.scanState.scope = {
+                includedPaths: ['/*'],
+                excludedPaths: ['/logout', '/payments', '/api/delete-account'],
+                rateLimit: '10 req/sec'
+            };
+        }
+        if (typeof this.scanState.scope.includedPaths === 'string') {
+            this.scanState.scope.includedPaths = this.scanState.scope.includedPaths
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+        } else if (!Array.isArray(this.scanState.scope.includedPaths)) {
+            this.scanState.scope.includedPaths = ['/*'];
+        }
+
+        if (typeof this.scanState.scope.excludedPaths === 'string') {
+            this.scanState.scope.excludedPaths = this.scanState.scope.excludedPaths
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+        } else if (!Array.isArray(this.scanState.scope.excludedPaths)) {
+            this.scanState.scope.excludedPaths = ['/logout', '/payments', '/api/delete-account'];
+        }
+    },
+
+    renderScopeTagsHtml(type) {
+        this.ensureScopeArrays();
+        const isInc = type === 'included';
+        const list = isInc ? this.scanState.scope.includedPaths : this.scanState.scope.excludedPaths;
+        const placeholder = isInc ? 'Type /path to add or filter...' : 'Type /path to exclude (e.g. /logout)...';
+
+        return `
+            <div class="scope-tag-box" id="scope-tag-box-${type}" onclick="document.getElementById('scope-tag-input-${type}')?.focus()">
+                ${list.map((tag, idx) => `
+                    <span class="scope-tag-chip ${isInc ? 'included' : 'excluded'}">
+                        <span>${escapeHtml(tag)}</span>
+                        <span class="scope-tag-remove" onclick="event.stopPropagation(); App.removeScopeTag('${type}', ${idx})" title="Remove ${escapeHtml(tag)}">&times;</span>
+                    </span>
+                `).join('')}
+                <input type="text" 
+                    id="scope-tag-input-${type}" 
+                    class="scope-tag-input" 
+                    placeholder="${list.length === 0 ? placeholder : 'Add more...'}" 
+                    autocomplete="off"
+                    oninput="App.onScopeInput(event, '${type}')"
+                    onkeydown="App.onScopeKeyDown(event, '${type}')"
+                    onfocus="App.onScopeInput(event, '${type}')"
+                >
+            </div>
+            <div id="scope-autocomplete-${type}" class="scope-autocomplete-dropdown" style="display: none;"></div>
+        `;
+    },
+
+    renderScopeTags(type) {
+        const container = document.getElementById(`scope-field-wrap-${type}`);
+        if (container) {
+            container.innerHTML = this.renderScopeTagsHtml(type);
+            const input = document.getElementById(`scope-tag-input-${type}`);
+            if (input) input.focus();
+        } else {
+            this.render();
+        }
+    },
+
+    addScopeTag(type, rawPath) {
+        this.ensureScopeArrays();
+        if (!rawPath) return;
+        let p = rawPath.trim();
+        if (!p.startsWith('/') && !p.startsWith('*') && !p.startsWith('.')) {
+            p = '/' + p;
+        }
+        const list = type === 'included' ? this.scanState.scope.includedPaths : this.scanState.scope.excludedPaths;
+        if (!list.includes(p)) {
+            list.push(p);
+        }
+        this.closeScopeAutocomplete();
+        this.renderScopeTags(type);
+    },
+
+    removeScopeTag(type, index) {
+        this.ensureScopeArrays();
+        const list = type === 'included' ? this.scanState.scope.includedPaths : this.scanState.scope.excludedPaths;
+        if (index >= 0 && index < list.length) {
+            list.splice(index, 1);
+        }
+        this.renderScopeTags(type);
+    },
+
+    setScopePreset(type, preset) {
+        this.ensureScopeArrays();
+        if (type === 'included') {
+            if (preset === 'all') {
+                this.scanState.scope.includedPaths = ['/*'];
+            } else if (preset === 'api') {
+                this.scanState.scope.includedPaths = ['/api/v1', '/api/v2'];
+            } else {
+                this.addScopeTag('included', preset);
+                return;
+            }
+        } else {
+            if (preset === 'none') {
+                this.scanState.scope.excludedPaths = [];
+            } else if (preset === 'sensitive') {
+                this.scanState.scope.excludedPaths = ['/logout', '/payments', '/api/delete-account', '/admin/critical-operation'];
+            } else {
+                this.addScopeTag('excluded', preset);
+                return;
+            }
+        }
+        this.renderScopeTags(type);
+    },
+
+    onScopeInput(e, type) {
+        const query = (e.target.value || '').trim().toLowerCase();
+        const dropdown = document.getElementById(`scope-autocomplete-${type}`);
+        if (!dropdown) return;
+
+        const candidates = [];
+        const seen = new Set();
+
+        const addCandidate = (path, badge, badgeClass) => {
+            if (!path) return;
+            const norm = (path.startsWith('/') || path.startsWith('*')) ? path : '/' + path;
+            if (seen.has(norm.toLowerCase())) return;
+            seen.add(norm.toLowerCase());
+            candidates.push({ path: norm, badge, badgeClass });
+        };
+
+        // 1. Endpoints from Step 2 Discovery
+        if (this.scanState.discoverySummary && Array.isArray(this.scanState.discoverySummary.resources)) {
+            for (const r of this.scanState.discoverySummary.resources) {
+                try {
+                    const u = new URL(r.url);
+                    const p = u.pathname;
+                    if (p && p !== '/' && !seen.has(p.toLowerCase())) {
+                        addCandidate(p, r.type || 'PAGE', r.type === 'API_ENDPOINT' ? 'api' : 'page');
+                    }
+                } catch {}
+            }
+        }
+
+        // 2. Pre-configured Common Web Endpoints
+        const commonPaths = type === 'included' ? [
+            { path: '/*', badge: 'All Paths', badgeClass: 'preset' },
+            { path: '/login', badge: 'Auth Page', badgeClass: 'page' },
+            { path: '/api/v1', badge: 'API Route', badgeClass: 'api' },
+            { path: '/api/v2', badge: 'API Route', badgeClass: 'api' },
+            { path: '/dashboard', badge: 'App View', badgeClass: 'page' },
+            { path: '/products', badge: 'Catalog', badgeClass: 'page' },
+            { path: '/checkout', badge: 'Checkout', badgeClass: 'page' },
+            { path: '/account', badge: 'Settings', badgeClass: 'page' },
+            { path: '/search', badge: 'Search', badgeClass: 'page' },
+            { path: '/graphql', badge: 'GraphQL', badgeClass: 'api' }
+        ] : [
+            { path: '/logout', badge: 'Session Terminate', badgeClass: 'sensitive' },
+            { path: '/payments', badge: 'Financial Gateway', badgeClass: 'sensitive' },
+            { path: '/checkout/pay', badge: 'Payment Processing', badgeClass: 'sensitive' },
+            { path: '/api/delete-account', badge: 'Destructive Op', badgeClass: 'sensitive' },
+            { path: '/admin/critical-operation', badge: 'Super Admin', badgeClass: 'sensitive' },
+            { path: '/api/reset-password', badge: 'Password Reset', badgeClass: 'sensitive' },
+            { path: '/billing', badge: 'Billing Hub', badgeClass: 'sensitive' },
+            { path: '/webhook', badge: 'Integration', badgeClass: 'preset' }
+        ];
+
+        for (const item of commonPaths) {
+            addCandidate(item.path, item.badge, item.badgeClass);
+        }
+
+        const filtered = query ? candidates.filter(c => c.path.toLowerCase().includes(query)) : candidates.slice(0, 7);
+
+        if (filtered.length === 0 && !query) {
+            dropdown.style.display = 'none';
+            return;
+        }
+
+        let itemsHtml = '';
+        if (query && !seen.has(query.toLowerCase()) && !seen.has(('/' + query).toLowerCase())) {
+            const customNorm = query.startsWith('/') ? query : '/' + query;
+            itemsHtml += `
+                <div class="scope-autocomplete-item" onclick="App.addScopeTag('${type}', '${escapeHtml(customNorm)}')">
+                    <span class="match-text">Add custom: <span class="match-hl">${escapeHtml(customNorm)}</span></span>
+                    <span class="scope-autocomplete-badge preset">Custom</span>
+                </div>
+            `;
+        }
+
+        for (const item of filtered) {
+            let displayPath = escapeHtml(item.path);
+            if (query) {
+                const idx = item.path.toLowerCase().indexOf(query);
+                if (idx !== -1) {
+                    const before = item.path.slice(0, idx);
+                    const match = item.path.slice(idx, idx + query.length);
+                    const after = item.path.slice(idx + query.length);
+                    displayPath = `${escapeHtml(before)}<span class="match-hl">${escapeHtml(match)}</span>${escapeHtml(after)}`;
+                }
+            }
+
+            itemsHtml += `
+                <div class="scope-autocomplete-item" onclick="App.addScopeTag('${type}', '${escapeHtml(item.path)}')">
+                    <span class="match-text">${displayPath}</span>
+                    <span class="scope-autocomplete-badge ${item.badgeClass}">${item.badge}</span>
+                </div>
+            `;
+        }
+
+        if (!itemsHtml) {
+            dropdown.style.display = 'none';
+            return;
+        }
+
+        dropdown.innerHTML = itemsHtml;
+        dropdown.style.display = 'block';
+    },
+
+    onScopeKeyDown(e, type) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const val = (e.target.value || '').trim();
+            if (val) {
+                this.addScopeTag(type, val);
+            }
+        } else if (e.key === 'Backspace' && !e.target.value) {
+            const list = type === 'included' ? this.scanState.scope.includedPaths : this.scanState.scope.excludedPaths;
+            if (list.length > 0) {
+                this.removeScopeTag(type, list.length - 1);
+            }
+        } else if (e.key === 'Escape') {
+            this.closeScopeAutocomplete();
+        }
+    },
+
+    closeScopeAutocomplete() {
+        const d1 = document.getElementById('scope-autocomplete-included');
+        const d2 = document.getElementById('scope-autocomplete-excluded');
+        if (d1) d1.style.display = 'none';
+        if (d2) d2.style.display = 'none';
+    },
+
     renderScopeStep() {
         const env = (this.scanState.environment || 'development').toLowerCase();
         const isDev = env === 'development';
@@ -2874,16 +3123,12 @@ const App = {
                                             DNS Verification
                                             <span class="auth-badge-auto">Instant Automatic</span>
                                         </h3>
-                                        <p>Publish a DNS TXT record to prove domain management.</p>
+                                        <p>Add a DNS TXT record to prove domain ownership.</p>
                                     </div>
                                 </div>
 
                                 ${verifyMethod === 0 ? `
                                     <div class="auth-expand-body">
-                                        <p class="text-xs text-slate-500 mb-2 leading-relaxed">
-                                            Add this unique TXT record at your DNS provider (Cloudflare, Route 53, GoDaddy). SentinelAI queries your nameservers to automatically confirm ownership of <b>${escapeHtml(hostname)}</b>.
-                                        </p>
-
                                         <div class="auth-snippet-box">
                                             <div class="auth-snippet-item">
                                                 <span class="auth-snippet-key">Type</span>
@@ -2924,7 +3169,7 @@ const App = {
                                             <div class="auth-notice-banner pending">
                                                 ${Icons.get('clock', 'size-4 text-amber-600 mt-0.5')}
                                                 <div>
-                                                    <b>Waiting for DNS Record Propagation</b><br>
+                                                    <b>Waiting for DNS Propagation</b><br>
                                                     <span>${escapeHtml(auth.gateMessage || 'Record not detected yet. Click "Verify DNS Record" once your DNS provider publishes the record.')}</span>
                                                 </div>
                                             </div>
@@ -2951,16 +3196,12 @@ const App = {
                                             Upload Verification File
                                             <span class="auth-badge-auto">Instant Automatic</span>
                                         </h3>
-                                        <p>Place a small token file on your web server to confirm origin access.</p>
+                                        <p>Host a lightweight token file on your web server.</p>
                                     </div>
                                 </div>
 
                                 ${verifyMethod === 1 ? `
                                     <div class="auth-expand-body">
-                                        <p class="text-xs text-slate-500 mb-2 leading-relaxed">
-                                            Download our lightweight verification token file and place it on your web server. Our engine probes the exact path over secure HTTPS with strict SSRF filtering.
-                                        </p>
-
                                         <div class="auth-snippet-box">
                                             <div class="auth-snippet-item">
                                                 <span class="auth-snippet-key">File</span>
@@ -3022,37 +3263,50 @@ const App = {
 
                                 ${verifyMethod === 2 ? `
                                     <div class="auth-expand-body">
-                                        <p class="text-xs text-slate-500 mb-3 leading-relaxed">
-                                            Recommended for client assessments, staging environments, or internal platforms. Download our official 2-page template, obtain owner signatures, and upload for security administrator approval.
-                                        </p>
-
-                                        <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 mb-3">
-                                            <div>
-                                                <b class="text-xs text-slate-800">1. Official 2-Page Legal Template</b>
-                                                <p class="text-[11px] text-slate-500 mt-0.5">Pre-filled with scope, non-destructive clauses & assessment window.</p>
+                                        <!-- Official 2-page template chip (ChatGPT style) -->
+                                        <div class="mb-3">
+                                            <span class="field-label" style="font-size: 0.72rem; margin-bottom: 0.35rem;">1. Official 2-Page Legal Template:</span>
+                                            <div class="chatgpt-doc-card">
+                                                <div class="chatgpt-doc-badge pdf">
+                                                    <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                                    <span>PDF</span>
+                                                </div>
+                                                <div class="chatgpt-doc-info">
+                                                    <div class="chatgpt-doc-name">sentinel-authorization-template.pdf</div>
+                                                    <div class="chatgpt-doc-sub">2 Pages · Official Template · Download &amp; Sign</div>
+                                                </div>
+                                                <button type="button" class="chatgpt-doc-btn" onclick="App.openOfficialLetterTemplate()" title="Download Official Template">
+                                                    ${Icons.get('download', 'size-3.5')}
+                                                    <span>Download</span>
+                                                </button>
                                             </div>
-                                            <button type="button" class="btn-copy-tactile" onclick="App.openOfficialLetterTemplate()">
-                                                ${Icons.get('download', 'size-3')} Download Template
-                                            </button>
                                         </div>
 
+                                        <!-- Signed document upload chip (ChatGPT style) -->
                                         <div class="mb-3">
-                                            <b class="block text-xs text-slate-700 mb-1.5 font-bold">2. Upload Signed Document:</b>
+                                            <span class="field-label" style="font-size: 0.72rem; margin-bottom: 0.35rem;">2. Upload Signed Authorization Document:</span>
                                             ${auth.writtenLetter.fileName ? `
-                                                <div class="chatgpt-file-badge-active">
-                                                    ${Icons.get('file', 'size-3.5')}
-                                                    <span>${escapeHtml(auth.writtenLetter.fileName)}</span>
-                                                    <span class="close-btn" onclick="App.removeWrittenLetterFile()">&times;</span>
+                                                <div class="chatgpt-doc-card uploaded">
+                                                    <div class="chatgpt-doc-badge pdf">
+                                                        <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                                        <span>PDF</span>
+                                                    </div>
+                                                    <div class="chatgpt-doc-info">
+                                                        <div class="chatgpt-doc-name">${escapeHtml(auth.writtenLetter.fileName)}</div>
+                                                        <div class="chatgpt-doc-sub">Signed authorization document · Attached</div>
+                                                    </div>
+                                                    <button type="button" class="chatgpt-doc-btn remove" onclick="App.removeWrittenLetterFile()" title="Remove file">&times;</button>
                                                 </div>
                                             ` : `
-                                                <label class="chatgpt-minimal-upload">
+                                                <label class="chatgpt-doc-upload-trigger">
                                                     <input type="file" accept=".pdf,.png,.jpg,.jpeg" style="display: none;" onchange="App.handleWrittenLetterSelect(event)">
                                                     ${Icons.get('upload', 'size-4 text-blue-600')}
-                                                    <span class="text-xs font-semibold text-slate-700">Click to choose signed authorization document (PDF / PNG)</span>
+                                                    <span>Attach signed authorization document (PDF / Image)</span>
                                                 </label>
                                             `}
                                         </div>
 
+                                        <!-- Signatory Name & Title -->
                                         <div class="grid grid-cols-2 gap-3 mb-3">
                                             <div>
                                                 <span class="field-label" style="font-size: 0.72rem; margin-bottom: 0.25rem;">Signatory Full Name:</span>
@@ -3116,20 +3370,69 @@ const App = {
                         </div>
                     </div>
 
-                    <label class="field mt-5">
-                        <span class="field-label">${isDev ? 'Included file patterns' : 'Included paths'}</span>
-                        <span class="input-wrap">
-                            <input type="text" id="scope-included-paths" value="${escapeHtml(this.scanState.scope.includedPaths || (isDev ? '*.ts, *.js, *.py, *.php' : '/*'))}">
-                        </span>
-                        <span class="field-hint">${isDev ? 'All source files matching extensions will be analyzed.' : 'All application paths within domain.'}</span>
-                    </label>
+                    ${isDev ? `
+                        <label class="field mt-5">
+                            <span class="field-label">Included file patterns</span>
+                            <span class="input-wrap">
+                                <input type="text" id="scope-included-paths" value="${escapeHtml(Array.isArray(this.scanState.scope.includedPaths) ? this.scanState.scope.includedPaths.join(', ') : (this.scanState.scope.includedPaths || '*.ts, *.js, *.py, *.php'))}">
+                            </span>
+                            <span class="field-hint">All source files matching extensions will be analyzed.</span>
+                        </label>
 
-                    <label class="field mt-4">
-                        <span class="field-label">${isDev ? 'Excluded directories' : 'Excluded paths'}</span>
-                        <span class="input-wrap">
-                            <input type="text" id="scope-excluded-paths" value="${escapeHtml(this.scanState.scope.excludedPaths || (isDev ? 'node_modules/*, dist/*, .git/*' : '/billing/*, /logout'))}">
-                        </span>
-                    </label>
+                        <label class="field mt-4">
+                            <span class="field-label">Excluded directories</span>
+                            <span class="input-wrap">
+                                <input type="text" id="scope-excluded-paths" value="${escapeHtml(Array.isArray(this.scanState.scope.excludedPaths) ? this.scanState.scope.excludedPaths.join(', ') : (this.scanState.scope.excludedPaths || 'node_modules/*, dist/*, .git/*'))}">
+                            </span>
+                        </label>
+                    ` : `
+                        <!-- Included Paths Field with Tags + Autocomplete -->
+                        <div class="scope-tag-field mt-4">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <span class="field-label" style="margin: 0; font-size: 0.76rem; font-weight: 700;">Included Paths</span>
+                                <span class="text-[11px] text-slate-400">Routes allowed for scan</span>
+                            </div>
+                            <div id="scope-field-wrap-included">
+                                ${this.renderScopeTagsHtml('included')}
+                            </div>
+                            <div class="scope-preset-row">
+                                <span class="scope-preset-lbl">Presets:</span>
+                                <span class="scope-preset-pill ${(this.scanState.scope.includedPaths || []).includes('/*') ? 'active' : ''}" onclick="App.setScopePreset('included', 'all')">All Paths (/*)</span>
+                                <span class="scope-preset-pill" onclick="App.setScopePreset('included', '/login')">+ /login</span>
+                                <span class="scope-preset-pill" onclick="App.setScopePreset('included', '/api/v1')">+ /api/v1</span>
+                                <span class="scope-preset-pill" onclick="App.setScopePreset('included', '/dashboard')">+ /dashboard</span>
+                                <span class="scope-preset-pill" onclick="App.setScopePreset('included', '/products')">+ /products</span>
+                            </div>
+                        </div>
+
+                        <!-- Excluded Paths Field with Tags + Autocomplete -->
+                        <div class="scope-tag-field mt-3">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <span class="field-label" style="margin: 0; font-size: 0.76rem; font-weight: 700;">Excluded Paths</span>
+                                <span class="text-[11px] text-rose-500 font-semibold">Strictly bypassed routes</span>
+                            </div>
+                            <div id="scope-field-wrap-excluded">
+                                ${this.renderScopeTagsHtml('excluded')}
+                            </div>
+                            <div class="scope-preset-row">
+                                <span class="scope-preset-lbl">Sensitive shortcuts:</span>
+                                <span class="scope-preset-pill danger-preset" onclick="App.setScopePreset('excluded', '/logout')">+ /logout</span>
+                                <span class="scope-preset-pill danger-preset" onclick="App.setScopePreset('excluded', '/payments')">+ /payments</span>
+                                <span class="scope-preset-pill danger-preset" onclick="App.setScopePreset('excluded', '/api/delete-account')">+ /api/delete-account</span>
+                                <span class="scope-preset-pill danger-preset" onclick="App.setScopePreset('excluded', '/admin/critical-operation')">+ /admin/critical</span>
+                                <span class="scope-preset-pill" onclick="App.setScopePreset('excluded', 'none')">None</span>
+                            </div>
+                        </div>
+
+                        <!-- Priority Precedence Banner -->
+                        <div class="scope-priority-banner">
+                            <div class="scope-priority-icon">⚡</div>
+                            <div>
+                                <span class="scope-priority-title">Rule Priority: Exclusion overrides Inclusion (الاستثناء أقوى من التضمين)</span>
+                                <p class="scope-priority-copy">Any endpoint in Excluded Paths (e.g. <code>/payments</code>) is strictly bypassed and logged, even if a parent path (e.g. <code>/api/v1</code>) is included.</p>
+                            </div>
+                        </div>
+                    `}
 
                     <div class="mt-4 flex items-center justify-between rounded-xl bg-slate-50 p-3.5 border border-slate-100">
                         <div>
@@ -3172,10 +3475,15 @@ const App = {
     },
 
     async handleScopeContinue() {
+        this.ensureScopeArrays();
         const inc = document.getElementById('scope-included-paths');
         const exc = document.getElementById('scope-excluded-paths');
-        if (inc && inc.value) this.scanState.scope.includedPaths = inc.value.trim();
-        if (exc && exc.value) this.scanState.scope.excludedPaths = exc.value.trim();
+        if (inc && inc.value) {
+            this.scanState.scope.includedPaths = inc.value.split(',').map(s => s.trim()).filter(Boolean);
+        }
+        if (exc && exc.value) {
+            this.scanState.scope.excludedPaths = exc.value.split(',').map(s => s.trim()).filter(Boolean);
+        }
 
         const isDev = this.scanState.environment === 'development';
         const auth = this.scanState.authData;

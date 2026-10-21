@@ -6,6 +6,7 @@ import { prisma } from '../config/db';
 import { validateTargetUrl, isInternalHostname } from '../services/validator.service';
 import { crawlWebsite, safeFetchText } from '../services/crawler.service';
 import { checkAuthorizationGate } from '../services/authorization.service';
+import { evaluateScope, normalizeScopePath, ScopeRule } from '../services/scope.service';
 
 export const scanRouter = Router();
 
@@ -223,6 +224,47 @@ scanRouter.post('/view-resource', async (req: Request, res: Response): Promise<v
     });
   } catch (error) {
     console.error('View resource error:', error);
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/scans/evaluate-scope
+ * Evaluates whether a candidate path or URL is permitted under given scope rules.
+ * Enforces rule: Exclusion strictly overrides Inclusion (الاستثناء أقوى من التضمين).
+ */
+scanRouter.post('/evaluate-scope', (req: Request, res: Response): void => {
+  try {
+    const { path: testPath, scope } = req.body;
+    if (!testPath) {
+      res.status(400).json({ success: false, error: 'Path or URL is required for evaluation.' });
+      return;
+    }
+
+    const scopeRule: ScopeRule = {
+      includedPaths: Array.isArray(scope?.includedPaths)
+        ? scope.includedPaths
+        : typeof scope?.includedPaths === 'string'
+        ? scope.includedPaths.split(',').map((s: string) => s.trim()).filter(Boolean)
+        : ['/*'],
+      excludedPaths: Array.isArray(scope?.excludedPaths)
+        ? scope.excludedPaths
+        : typeof scope?.excludedPaths === 'string'
+        ? scope.excludedPaths.split(',').map((s: string) => s.trim()).filter(Boolean)
+        : [],
+    };
+
+    const evaluation = evaluateScope(testPath, scopeRule);
+    res.status(200).json({
+      success: true,
+      path: testPath,
+      normalizedPath: normalizeScopePath(testPath),
+      allowed: evaluation.allowed,
+      reason: evaluation.reason,
+      matchedRule: evaluation.matchedRule,
+    });
+  } catch (error) {
+    console.error('Evaluate scope error:', error);
     res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
@@ -646,7 +688,33 @@ scanRouter.post(['/create', '/start'], async (req: Request, res: Response): Prom
         templateFindings = WEB_FINDINGS;
       }
 
+      // Parse scope rules for strict boundary enforcement
+      let parsedScope: ScopeRule = { includedPaths: ['/*'], excludedPaths: [] };
+      try {
+        if (typeof scope === 'string' && scope.startsWith('{')) {
+          const sObj = JSON.parse(scope);
+          parsedScope = {
+            includedPaths: Array.isArray(sObj.includedPaths) ? sObj.includedPaths : (sObj.includedPaths ? String(sObj.includedPaths).split(',') : ['/*']),
+            excludedPaths: Array.isArray(sObj.excludedPaths) ? sObj.excludedPaths : (sObj.excludedPaths ? String(sObj.excludedPaths).split(',') : []),
+          };
+        } else if (typeof scope === 'object' && scope !== null) {
+          parsedScope = {
+            includedPaths: Array.isArray(scope.includedPaths) ? scope.includedPaths : ['/*'],
+            excludedPaths: Array.isArray(scope.excludedPaths) ? scope.excludedPaths : [],
+          };
+        }
+      } catch {}
+
       for (const t of templateFindings) {
+        // Absolute Rule: Exclusion strictly overrides Inclusion!
+        if (t.endpoint && !isDevelopment) {
+          const evalRes = evaluateScope(t.endpoint, parsedScope);
+          if (!evalRes.allowed) {
+            console.log(`[Scope Gate] Skipped finding on excluded path: ${t.endpoint} (${evalRes.reason})`);
+            continue;
+          }
+        }
+
         await prisma.vulnerability.create({
           data: {
             scanId: scan.id,
