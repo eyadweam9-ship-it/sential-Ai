@@ -702,20 +702,39 @@ export async function getAdminAuthorizationRequests(statusFilter?: string) {
  * 4. Authorization & Scope Gate Check
  */
 export async function checkAuthorizationGate(targetUrl: string, environment: string = 'PRODUCTION') {
-  const normEnv = environment.toUpperCase();
-  if (normEnv === 'DEVELOPMENT') {
+  const normEnv = String(environment || '').toUpperCase();
+  if (normEnv === 'DEVELOPMENT' || !targetUrl) {
     return {
       allowed: true,
+      status: 'APPROVED',
       reason: 'Development environment uses sandboxed static analysis on local uploaded files.',
     };
   }
 
   const hostname = extractHostname(targetUrl);
-  const target = await prisma.target.findFirst({
-    where: { url: { contains: hostname } },
+
+  // Check if ANY target record for this domain has approved or verified authorization
+  let target = await prisma.target.findFirst({
+    where: {
+      url: { contains: hostname },
+      isAuthorized: true,
+      OR: [
+        { authorizationStatus: 'APPROVED' },
+        { authorizationStatus: 'VERIFIED' }
+      ]
+    },
     orderBy: { id: 'desc' },
     include: { authorizations: { orderBy: { id: 'desc' } } },
   });
+
+  // If no approved target found, get the latest target record for this domain
+  if (!target) {
+    target = await prisma.target.findFirst({
+      where: { url: { contains: hostname } },
+      orderBy: { id: 'desc' },
+      include: { authorizations: { orderBy: { id: 'desc' } } },
+    });
+  }
 
   if (!target) {
     return {
@@ -738,7 +757,7 @@ export async function checkAuthorizationGate(targetUrl: string, environment: str
 
   return {
     allowed: true,
-    method: target.authorizationMethod,
+    method: target.authorizationMethod || (latestAuth ? latestAuth.method : 'WRITTEN'),
     status: target.authorizationStatus,
     authorizedAt: target.authorizedAt,
     targetId: target.id,

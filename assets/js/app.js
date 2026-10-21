@@ -2651,7 +2651,8 @@ const App = {
 
     async ensureAuthLoaded() {
         const env = (this.scanState.environment || 'development').toLowerCase();
-        if (env === 'development') return;
+        const isDev = env === 'development' || Boolean(this.scanState.uploadedFile);
+        if (isDev) return;
 
         const targetUrl = (this.scanState.url || 'https://app.northstar.io').trim();
 
@@ -3592,14 +3593,14 @@ const App = {
             this.scanState.scope.excludedPaths = exc.value.split(',').map(s => s.trim()).filter(Boolean);
         }
 
-        const isDev = this.scanState.environment === 'development';
+        const env = (this.scanState.environment || 'development').toLowerCase();
+        const isDev = env === 'development' || Boolean(this.scanState.uploadedFile);
         let auth = this.scanState.authData;
 
         // Ensure live check with backend gate before determining authorization
         if (!isDev && !(auth.status === 'VERIFIED' || auth.status === 'APPROVED' || auth.gateAllowed)) {
             try {
                 const targetUrl = (this.scanState.url || '').trim();
-                const env = (this.scanState.environment || 'staging').toLowerCase();
                 const gateRes = await API.checkAuthorizationGate(targetUrl, env);
                 if (gateRes && gateRes.allowed) {
                     this.scanState.authData.gateAllowed = true;
@@ -3612,10 +3613,10 @@ const App = {
             }
         }
 
-        const isAuthorized = auth.status === 'VERIFIED' || auth.status === 'APPROVED' || auth.gateAllowed;
+        const isAuthorized = isDev || auth.status === 'VERIFIED' || auth.status === 'APPROVED' || auth.gateAllowed;
 
         // Enforce Authorization & Scope Gate: Strict Halt if not authorized
-        if (!isDev && !isAuthorized) {
+        if (!isAuthorized) {
             showToast('Target Authorization Gate Locked: Domain ownership verification (DNS or File) or Admin approval of a Written Letter is required before starting the scan.', 'error');
             return;
         }
@@ -3631,7 +3632,7 @@ const App = {
                 url: isDev ? (this.scanState.uploadedFile?.name || 'uploaded_project.zip') : this.scanState.url,
                 name: this.scanState.name || 'Security Assessment',
                 assessmentName: this.scanState.name || 'Security Assessment',
-                environment: this.scanState.environment,
+                environment: isDev ? 'development' : this.scanState.environment,
                 scan_mode: this.scanState.scanType,
                 scan_type: this.scanState.scanType,
                 target_type: isDev ? 'FILE_ZIP' : 'URL',
@@ -3657,7 +3658,15 @@ const App = {
             showToast('Security assessment initialized and authorized!', 'success');
             this.navigate('progress');
         } catch (err) {
-            console.warn('API createScan fallback:', err);
+            console.warn('API createScan notice:', err);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = `Continue ${Icons.get('arrow', 'size-4')}`;
+            }
+            if (err.message && (err.message.includes('Gate') || err.message.includes('authorization') || err.message.includes('Authorization') || err.message.includes('ownership'))) {
+                showToast(err.message, 'error');
+                return;
+            }
             this.scanState.maxUnlockedStep = Math.max(this.scanState.maxUnlockedStep || 1, 4);
             showToast('Assessment launched: ' + err.message, 'info');
             this.navigate('progress');
@@ -4401,11 +4410,11 @@ const App = {
         // 2. Fetch Findings from database
         try {
             const findingsRes = scanId ? await API.getScanFindings(scanId).catch(() => null) : null;
-            const res = (findingsRes && findingsRes.findings && findingsRes.findings.length > 0) 
+            const res = (findingsRes && Array.isArray(findingsRes.findings)) 
                 ? findingsRes 
                 : await API.getFindings().catch(() => null);
 
-            if (res && res.findings && res.findings.length > 0) {
+            if (res && Array.isArray(res.findings)) {
                 this.findingsData = res.findings;
                 const criticalCount = this.findingsData.filter(f => (f.severity || '').toUpperCase() === 'CRITICAL').length;
                 const highCount = this.findingsData.filter(f => (f.severity || '').toUpperCase() === 'HIGH').length;
@@ -4463,7 +4472,18 @@ const App = {
         const target = document.getElementById('findings-rows-target');
         if (!target) return;
 
-        const list = findings && findings.length > 0 ? findings : FIGMA_FINDINGS;
+        if (Array.isArray(findings) && findings.length === 0) {
+            target.innerHTML = `
+                <div style="padding: 2.75rem 1.5rem; text-align: center; background: #ffffff; border-radius: 8px; border: 1px dashed #cbd5e1; margin: 0.75rem 0;">
+                    <div style="font-size: 1.75rem; margin-bottom: 0.5rem; color: #10b981;">${Icons.get('check', 'size-8 inline-block')}</div>
+                    <b style="color: #0f172a; font-size: 0.95rem; display: block; font-weight: 700;">No Vulnerabilities Detected</b>
+                    <p style="font-size: 0.8rem; color: #64748b; margin-top: 0.35rem; max-width: 420px; margin-left: auto; margin-right: auto;">All automated security tests, DOM taint checks, dependency audits, and secret scanning finished cleanly for this assessment.</p>
+                </div>
+            `;
+            return;
+        }
+
+        const list = (findings && findings.length > 0) ? findings : FIGMA_FINDINGS;
         const isScanOnly = this.scanState.scanType === 'scan_only';
 
         target.innerHTML = list.map(f => {

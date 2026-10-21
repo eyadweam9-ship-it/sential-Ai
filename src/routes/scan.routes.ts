@@ -5,7 +5,7 @@ import multer from 'multer';
 import { prisma } from '../config/db';
 import { validateTargetUrl, isInternalHostname } from '../services/validator.service';
 import { crawlWebsite, safeFetchText } from '../services/crawler.service';
-import { checkAuthorizationGate } from '../services/authorization.service';
+import { checkAuthorizationGate, extractHostname } from '../services/authorization.service';
 import { evaluateScope, normalizeScopePath, ScopeRule } from '../services/scope.service';
 import { orchestrateScan } from '../services/scan-orchestrator.service';
 
@@ -448,7 +448,21 @@ async function getOrCreateTarget(options: {
   }
 
   const normalizedEnv = options.environment.toUpperCase();
-  const targetIdentifier = options.targetType === 'FILE_ZIP' ? (options.filePath || options.name || 'uploaded_project.zip') : (options.url || 'https://app.northstar.io');
+  const isDevTarget = options.targetType === 'FILE_ZIP' || normalizedEnv === 'DEVELOPMENT';
+  const targetIdentifier = isDevTarget ? (options.filePath || options.name || 'uploaded_project.zip') : (options.url || 'https://app.northstar.io');
+
+  // Check if this domain already has an authorized target
+  const hostname = extractHostname(options.url || '');
+  const existingDomainApproval = hostname ? await prisma.target.findFirst({
+    where: {
+      url: { contains: hostname },
+      isAuthorized: true,
+      OR: [{ authorizationStatus: 'APPROVED' }, { authorizationStatus: 'VERIFIED' }]
+    }
+  }) : null;
+
+  const targetIsAuthorized = isDevTarget || Boolean(existingDomainApproval) || options.isAuthorized;
+  const targetAuthStatus = isDevTarget ? 'APPROVED' : (existingDomainApproval ? existingDomainApproval.authorizationStatus : (targetIsAuthorized ? 'APPROVED' : 'PENDING'));
 
   let target = await prisma.target.findFirst({
     where: {
@@ -467,8 +481,10 @@ async function getOrCreateTarget(options: {
         environment: normalizedEnv,
         filePath: options.filePath,
         scope: options.scope || 'Standard authorized scope',
-        isAuthorized: options.isAuthorized,
-        authorizedAt: options.isAuthorized ? new Date() : null,
+        isAuthorized: targetIsAuthorized,
+        authorizationStatus: targetAuthStatus,
+        authorizationMethod: existingDomainApproval?.authorizationMethod || (isDevTarget ? 'SAST_LOCAL' : 'WRITTEN'),
+        authorizedAt: targetIsAuthorized ? new Date() : null,
         status: 'ACTIVE',
       },
     });
@@ -480,8 +496,9 @@ async function getOrCreateTarget(options: {
         targetType: options.targetType,
         filePath: options.filePath || target.filePath,
         scope: options.scope || target.scope,
-        isAuthorized: options.isAuthorized,
-        authorizedAt: new Date(),
+        isAuthorized: targetIsAuthorized,
+        authorizationStatus: targetAuthStatus,
+        authorizedAt: targetIsAuthorized ? new Date() : target.authorizedAt,
       },
     });
   }
