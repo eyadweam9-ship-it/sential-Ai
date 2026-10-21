@@ -2669,334 +2669,232 @@
 }
 
 /* =========================================================
-   DISCOVERY SIDE DRAWER (COMPACT & MINIMALIST)
+   DISCOVERY CENTERED MODAL (SIMPLE & SCROLLABLE / في النص وبسيطة)
    ========================================================= */
-.discovery-drawer-overlay {
+.discovery-modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.25);
-    backdrop-filter: blur(2px);
-    z-index: 9500;
-    animation: drawerOverlayFadeIn 0.15s ease-out;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 1.5rem;
+    animation: fadeInModal 0.2s ease-out;
 }
 
-@keyframes drawerOverlayFadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-@keyframes drawerSlideInRight {
-    from {
-        transform: translateX(100%);
-    }
-    to {
-        transform: translateX(0);
-    }
-}
-
-.discovery-side-drawer {
-    position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: 380px;
-    max-width: 92vw;
-    height: 100vh;
+.discovery-modal-box {
     background: #ffffff;
-    z-index: 9501;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    width: 100%;
+    max-width: 820px;
+    height: 80vh;
+    max-height: 80vh;
     display: flex;
     flex-direction: column;
-    border-left: 1px solid #e2e8f0;
-    box-shadow: -8px 0 25px rgba(0, 0, 0, 0.06);
-    animation: drawerSlideInRight 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    overflow: hidden;
+    box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.3);
+    animation: slideUpModal 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    overflow: hidden; /* Header and footer stay fixed in place; only body scrolls */
 }
 
-/* Minimal Header */
-.discovery-drawer-header {
+/* Modal Header */
+.discovery-modal-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.65rem 0.85rem;
+    padding: 1.1rem 1.4rem;
     border-bottom: 1px solid #f1f5f9;
     background: #ffffff;
     flex-shrink: 0;
-    height: 46px;
 }
 
-.discovery-drawer-title-wrap {
+.discovery-modal-header .title-group {
     display: flex;
     align-items: center;
-    gap: 0.45rem;
+    gap: 0.75rem;
     min-width: 0;
 }
 
-.discovery-drawer-title {
-    font-size: 0.8rem;
+.discovery-modal-header h3 {
+    margin: 0;
+    font-size: 1.05rem;
     font-weight: 700;
     color: #0f172a;
-    margin: 0;
 }
 
-.discovery-drawer-count {
-    font-size: 0.65rem;
+.discovery-modal-header p {
+    margin: 0.15rem 0 0;
+    font-size: 0.72rem;
     color: #64748b;
-    font-weight: 600;
-    background: #f1f5f9;
-    padding: 0.05rem 0.35rem;
-    border-radius: 9999px;
+    font-family: ui-monospace, monospace;
 }
 
-.discovery-drawer-close-btn {
-    width: 26px;
-    height: 26px;
-    border-radius: 0.35rem;
-    border: none;
+.discovery-modal-close {
     background: transparent;
+    border: 0;
     color: #94a3b8;
-    display: inline-flex;
+    cursor: pointer;
+    padding: 0.35rem;
+    border-radius: 0.4rem;
+    display: flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
     transition: all 0.15s ease;
 }
 
-.discovery-drawer-close-btn:hover {
+.discovery-modal-close:hover {
     background: #f1f5f9;
     color: #0f172a;
 }
 
-/* Minimal Controls: Search & Simple Tabs */
-.discovery-drawer-controls {
-    padding: 0.5rem 0.75rem;
-    border-bottom: 1px solid #f1f5f9;
-    background: #fafbfc;
+/* Modal Controls: Search & Tabs */
+.discovery-modal-bar {
     display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.65rem 1.4rem;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
     flex-shrink: 0;
+    flex-wrap: wrap;
 }
 
-.discovery-drawer-search-wrap {
+.discovery-modal-search {
     display: flex;
     align-items: center;
     background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.4rem;
-    padding: 0 0.5rem;
-    height: 28px;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.45rem;
+    padding: 0 0.55rem;
+    height: 32px;
+    width: 280px;
+    max-width: 100%;
     transition: all 0.15s ease;
 }
 
-.discovery-drawer-search-wrap:focus-within {
+.discovery-modal-search:focus-within {
     border-color: #3b82f6;
-    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
 
-.discovery-drawer-search-input {
+.discovery-modal-search input {
     border: none;
     outline: none;
     background: transparent;
     width: 100%;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     color: #0f172a;
     padding: 0 0.35rem;
 }
 
-.discovery-drawer-search-input::placeholder {
-    color: #94a3b8;
-}
-
-.discovery-drawer-search-clear {
-    border: none;
-    background: transparent;
-    color: #94a3b8;
-    cursor: pointer;
-    font-size: 0.7rem;
-    padding: 0.1rem;
+.discovery-modal-filter-pills {
     display: flex;
     align-items: center;
-    justify-content: center;
+    gap: 0.3rem;
+    flex-wrap: wrap;
 }
 
-.discovery-drawer-search-clear:hover {
-    color: #0f172a;
-}
-
-.discovery-filter-tabs {
-    display: flex;
-    align-items: center;
-    gap: 0.2rem;
-    overflow-x: auto;
-    scrollbar-width: none;
-}
-
-.discovery-filter-tabs::-webkit-scrollbar {
-    display: none;
-}
-
-.discovery-filter-tab {
-    padding: 0.15rem 0.45rem;
-    border-radius: 0.25rem;
-    font-size: 0.66rem;
-    font-weight: 500;
-    color: #64748b;
-    background: transparent;
-    border: none;
+.discovery-modal-pill {
+    padding: 0.2rem 0.55rem;
+    border-radius: 9999px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    color: #475569;
     cursor: pointer;
-    white-space: nowrap;
     transition: all 0.12s ease;
 }
 
-.discovery-filter-tab:hover {
-    color: #0f172a;
+.discovery-modal-pill:hover {
     background: #f1f5f9;
+    color: #0f172a;
 }
 
-.discovery-filter-tab.active {
-    color: #2563eb;
-    background: #eff6ff;
-    font-weight: 600;
+.discovery-modal-pill.active {
+    background: #0f172a;
+    color: #ffffff;
+    border-color: #0f172a;
 }
 
-/* Scrollable Drawer Body */
-.discovery-drawer-body {
-    flex: 1;
-    overflow-y: auto;
+/* Scrollable Container (THE CRITICAL FIX: min-height: 0 ensures mouse wheel scrolls properly) */
+.discovery-modal-scroll {
+    flex: 1 1 auto;
+    min-height: 0 !important;
+    height: 0;
+    overflow-y: auto !important;
     overflow-x: hidden;
-    padding: 0.4rem 0.5rem 1.5rem 0.5rem;
+    padding: 1rem 1.4rem 2rem 1.4rem;
+    overscroll-behavior: contain;
     scroll-behavior: smooth;
 }
 
-.discovery-drawer-body::-webkit-scrollbar {
-    width: 4px;
+.discovery-modal-scroll::-webkit-scrollbar {
+    width: 6px;
 }
 
-.discovery-drawer-body::-webkit-scrollbar-thumb {
+.discovery-modal-scroll::-webkit-scrollbar-track {
+    background: #f8fafc;
+}
+
+.discovery-modal-scroll::-webkit-scrollbar-thumb {
     background: #cbd5e1;
     border-radius: 9999px;
 }
 
-/* Section Header */
-.discovery-section-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.4rem 0.35rem 0.15rem 0.35rem;
-    font-size: 0.65rem;
-    font-weight: 700;
+.discovery-modal-scroll::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Table Wrapper */
+.discovery-table-wrapper {
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+.discovery-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+}
+
+.discovery-table th {
+    text-align: left;
+    padding: 0.55rem 0.75rem;
+    background: #f8fafc;
+    color: #475569;
+    font-weight: 600;
+    font-size: 0.7rem;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: #94a3b8;
-    margin-top: 0.35rem;
+    letter-spacing: 0.03em;
+    border-bottom: 1px solid #e2e8f0;
 }
 
-/* Compact File Row */
-.discovery-compact-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.4rem;
-    padding: 0.28rem 0.4rem;
-    border-radius: 0.35rem;
-    transition: background 0.12s ease;
-    cursor: pointer;
+.discovery-table td {
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid #f1f5f9;
+    color: #1e293b;
+    vertical-align: middle;
 }
 
-.discovery-compact-row:hover {
+.discovery-table tr:hover td {
     background: #f8fafc;
 }
 
-.discovery-row-main {
+/* Modal Footer */
+.discovery-modal-footer {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    min-width: 0;
-    flex: 1;
-}
-
-.discovery-tag-mini {
-    font-size: 0.58rem;
-    font-weight: 700;
-    padding: 0.05rem 0.28rem;
-    border-radius: 0.25rem;
+    justify-content: space-between;
+    padding: 0.85rem 1.4rem;
+    border-top: 1px solid #f1f5f9;
+    background: #fafcff;
     flex-shrink: 0;
-    font-family: ui-monospace, monospace;
-}
-
-.discovery-tag-mini.PAGE { background: #eff6ff; color: #2563eb; }
-.discovery-tag-mini.SCRIPT { background: #fef3c7; color: #b45309; }
-.discovery-tag-mini.STYLESHEET { background: #f3e8ff; color: #7e22ce; }
-.discovery-tag-mini.API_ENDPOINT { background: #ecfdf5; color: #059669; }
-.discovery-tag-mini.SITEMAP,
-.discovery-tag-mini.ROBOTS { background: #f1f5f9; color: #475569; }
-
-.discovery-row-path {
-    font-size: 0.72rem;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    color: #334155;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    min-width: 0;
-}
-
-.discovery-compact-row:hover .discovery-row-path {
-    color: #0f172a;
-}
-
-.discovery-row-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    flex-shrink: 0;
-    opacity: 0.8;
-    transition: opacity 0.12s ease;
-}
-
-.discovery-compact-row:hover .discovery-row-actions {
-    opacity: 1;
-}
-
-.discovery-mini-code-btn {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.1rem 0.32rem;
-    font-size: 0.64rem;
-    font-weight: 600;
-    color: #2563eb;
-    background: #eff6ff;
-    border: 1px solid #dbeafe;
-    border-radius: 0.25rem;
-    cursor: pointer;
-    transition: all 0.12s ease;
-}
-
-.discovery-mini-code-btn:hover {
-    background: #2563eb;
-    color: #ffffff;
-    border-color: #2563eb;
-}
-
-.discovery-mini-link-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0.15rem;
-    color: #94a3b8;
-    border-radius: 0.25rem;
-    transition: color 0.12s ease;
-}
-
-.discovery-mini-link-btn:hover {
-    color: #0f172a;
-}
-
-.discovery-drawer-quiet-footer {
-    text-align: center;
-    padding: 1.25rem 0.5rem 0.5rem 0.5rem;
-    font-size: 0.65rem;
-    color: #94a3b8;
-    font-family: ui-monospace, monospace;
 }
 
