@@ -915,6 +915,38 @@ scanRouter.get('/progress', async (req: Request, res: Response): Promise<void> =
       },
     ];
 
+    // Retrieve live tasks and findings for this scan
+    const tasks = scan ? await prisma.scanTask.findMany({
+      where: { scanId: scan.id },
+      include: { executions: true },
+      orderBy: { id: 'asc' },
+    }) : [];
+
+    const findings = scan ? await prisma.finding.findMany({ where: { scanId: scan.id } }) : [];
+    const criticalCount = findings.filter(f => f.severity === 'CRITICAL').length;
+    const highCount = findings.filter(f => f.severity === 'HIGH').length;
+    const mediumCount = findings.filter(f => f.severity === 'MEDIUM').length;
+    const lowCount = findings.filter(f => f.severity === 'LOW').length;
+
+    const activeRunningTask = tasks.find(t => t.status === 'RUNNING');
+    let activeMessage = 'All security tools and assessment checks completed.';
+    if (scan?.status === 'CANCELLED') {
+      activeMessage = 'Assessment cancelled by user request. Partial findings preserved.';
+    } else if (scan?.status === 'ANALYZING') {
+      activeMessage = 'Findings pipeline: Normalizing evidence & synthesizing AI Threat Intelligence...';
+    } else if (activeRunningTask) {
+      if (activeRunningTask.toolName === 'OWASP_ZAP') activeMessage = `OWASP ZAP: Dynamic DAST inspection on ${targetLabel} (${rateLimit} req/s)`;
+      else if (activeRunningTask.toolName === 'SEMGREP') activeMessage = `Semgrep: Static AST taint and code vulnerability analysis`;
+      else if (activeRunningTask.toolName === 'GITLEAKS') activeMessage = `Gitleaks: Scanning source tree for exposed secrets & API keys`;
+      else if (activeRunningTask.toolName === 'TRIVY') activeMessage = `Trivy: Auditing package manifests & container configurations`;
+      else if (activeRunningTask.toolName === 'NPM_AUDIT') activeMessage = `npm audit: Inspecting dependency vulnerability advisories`;
+    } else if (scan?.status === 'RUNNING' || scan?.status === 'QUEUED') {
+      activeMessage = `Starting multi-tool scan engines on ${targetLabel}...`;
+    }
+
+    const realStatus = (scan?.status || 'RUNNING').toLowerCase();
+    const realProgress = typeof scan?.progress === 'number' ? scan.progress : (realStatus === 'completed' ? 100 : 25);
+
     res.json({
       success: true,
       scan: {
@@ -926,8 +958,20 @@ scanRouter.get('/progress', async (req: Request, res: Response): Promise<void> =
         scan_profile: scanConfig?.scanProfile || (isDev ? 'PURE_SAST' : 'URL_BASED_DAST'),
         rate_limit_rps: rateLimit,
         is_scan_only: isScanOnly,
-        status: 'completed',
-        progress: 100,
+        status: realStatus,
+        progress: realProgress,
+        startedAt: scan?.startedAt || scan?.createdAt,
+        endedAt: scan?.endedAt,
+        tasks,
+        counts: {
+          total: findings.length,
+          critical: criticalCount,
+          high: highCount,
+          medium: mediumCount,
+          low: lowCount,
+        },
+        activeTool: activeRunningTask?.toolName || (realStatus === 'completed' ? 'All Tools' : 'Engine'),
+        activeMessage,
         stages,
         logs,
       },
@@ -1348,6 +1392,28 @@ scanRouter.post('/:id/start', async (req: Request, res: Response): Promise<void>
  * POST /api/scans/:id/cancel
  * Cancel an active scan
  */
+scanRouter.post('/cancel', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const scanId = Number(req.body.scanId || req.body.scan_id);
+    if (!scanId) {
+      res.status(400).json({ success: false, error: 'scanId is required.' });
+      return;
+    }
+    const updated = await prisma.scan.update({
+      where: { id: scanId },
+      data: { status: 'CANCELLED', endedAt: new Date() },
+    });
+    await prisma.scanTask.updateMany({
+      where: { scanId, status: { in: ['PENDING', 'QUEUED', 'RUNNING'] } },
+      data: { status: 'CANCELLED', errorMessage: 'Cancelled by user request.' },
+    });
+    res.status(200).json({ success: true, message: `Scan #${scanId} has been cancelled.`, scan: updated });
+  } catch (error) {
+    console.error('Cancel scan error:', error);
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
 scanRouter.post('/:id/cancel', async (req: Request, res: Response): Promise<void> => {
   try {
     const scanId = Number(req.params.id);

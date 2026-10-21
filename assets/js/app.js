@@ -3668,7 +3668,7 @@ const App = {
     // 9. STEP 5: ASSESSMENT IN PROGRESS (DYNAMIC STAGES)
     // =========================================================
     renderProgressStep() {
-        const p = this.scanState.progress || 64;
+        const p = this.scanState.progress || 15;
         const env = (this.scanState.environment || 'development').toLowerCase();
         const mode = this.scanState.scanType || 'scan_only';
         const isScanOnly = mode === 'scan_only';
@@ -3676,59 +3676,17 @@ const App = {
         const isHybrid = Boolean(!isDev && (this.scanState.optionalCodeFile || this.scanState.gitRepoUrl));
         const targetHost = isDev
             ? (this.scanState.uploadedFile?.name || 'Local Code Repository')
-            : ((this.scanState.url || 'https://app.northstar.io').replace(/^https?:\/\//, '').replace(/\/.*$/, '') || 'app.northstar.io');
-
-        let stages = [];
-        if (isDev) {
-            stages = isScanOnly ? [
-                { label: 'Parsing source files & AST', copy: 'Repository AST & symbols indexed', done: true },
-                { label: 'Static taint & dataflow analysis', copy: 'Cross-module dataflow checked', done: true },
-                { label: 'Scanning code for vulnerabilities', copy: 'Testing injection, hardcoded secrets, misconfigurations', active: true },
-                { label: 'Executive audit report generation', copy: 'Queued (Scan Only: No code modification)', done: false }
-            ] : [
-                { label: 'Parsing source files & AST', copy: 'Repository AST & symbols indexed', done: true },
-                { label: 'Static taint & dataflow analysis', copy: 'Cross-module dataflow checked', done: true },
-                { label: 'Scanning code for vulnerabilities', copy: 'Analyzing OWASP Top 10 SAST patterns', active: true },
-                { label: 'Generating AI code patches', copy: 'Queued', done: false },
-                { label: 'AST syntax & regression verification', copy: 'Queued', done: false }
-            ];
-        } else if (isHybrid) {
-            stages = isScanOnly ? [
-                { label: 'Website Discovery & Endpoint Mapping', copy: 'Sitemap.xml, robots.txt, HTML/JS/CSS assets & API routes discovered', done: true },
-                { label: 'DAST Web Vulnerability Assessment', copy: `Active inspection throttled to ${env === 'production' ? '10' : '25'} req/s`, done: true },
-                { label: 'Static Code Analysis (Hybrid SAST)', copy: 'AST taint analysis on staged source files', active: true },
-                { label: 'Unified DAST + SAST Findings Report', copy: 'Queued (Scan Only: No remediation required)', done: false }
-            ] : [
-                { label: 'Website Discovery & Endpoint Mapping', copy: 'Sitemap.xml, robots.txt, HTML/JS/CSS assets & API routes discovered', done: true },
-                { label: 'DAST Web Vulnerability Assessment', copy: `Active inspection throttled to ${env === 'production' ? '10' : '25'} req/s`, done: true },
-                { label: 'Static Code Analysis (Hybrid SAST)', copy: 'AST taint analysis on staged source files', active: true },
-                { label: 'AI Remediation & Patch Synthesis', copy: 'Queued', done: false },
-                { label: 'Verification Retesting & Regression Check', copy: 'Queued', done: false }
-            ];
-        } else {
-            stages = isScanOnly ? [
-                { label: 'Website Discovery & Crawling', copy: 'Pages, sitemap.xml, stylesheets, scripts & API routes cataloged', done: true },
-                { label: 'Service Profiling & TLS Verification', copy: 'DNS resolved, TLS cipher suite verified, SSRF safe', done: true },
-                { label: 'Web Application Vulnerability Scan (DAST)', copy: `Active inspection at ${env === 'production' ? '10' : '25'} req/s boundary`, active: true },
-                { label: 'Risk Scoring & Executive Report', copy: 'Queued (Scan Only: No remediation required)', done: false }
-            ] : [
-                { label: 'Website Discovery & Crawling', copy: 'Pages, sitemap.xml, stylesheets, scripts & API routes cataloged', done: true },
-                { label: 'Service Profiling & TLS Verification', copy: 'DNS resolved, TLS cipher suite verified, SSRF safe', done: true },
-                { label: 'Web Application Vulnerability Scan (DAST)', copy: `Active inspection at ${env === 'production' ? '10' : '25'} req/s boundary`, active: true },
-                { label: 'Analyzing findings & AI fixes', copy: 'Queued', done: false },
-                { label: 'Verification retesting', copy: 'Queued', done: false }
-            ];
-        }
+            : ((this.scanState.url || 'aymanaboelela.com').replace(/^https?:\/\//, '').replace(/\/.*$/, '') || 'aymanaboelela.com');
 
         return `
             ${renderPageTitle({
-                eyebrow: isScanOnly ? 'Scan Only · Pipeline Active' : 'Full Lifecycle Assessment · Running',
+                eyebrow: isScanOnly ? 'Scan Only · Multi-Tool Engine Active' : 'Full Lifecycle Assessment · Running',
                 title: isDev ? 'Analyzing Code Repository' : `We’re assessing ${escapeHtml(targetHost)}`,
                 copy: isScanOnly 
-                    ? 'Running independent vulnerability inspection. Findings will be cataloged and an executive report generated without altering your code.' 
-                    : 'Running full security assessment pipeline with AI code remediation and automated retesting.',
+                    ? 'Running independent multi-tool vulnerability inspection. Findings are cataloged in real-time with zero code modifications.' 
+                    : 'Running full multi-tool assessment pipeline with AI threat intelligence and verification.',
                 action: `
-                    <button type="button" class="button button-danger" onclick="App.stopAssessment()">
+                    <button type="button" class="button button-danger" id="btn-stop-assessment" onclick="App.stopAssessment()">
                         ${Icons.get('x', 'size-4')} Stop assessment
                     </button>
                 `
@@ -3740,7 +3698,7 @@ const App = {
                     <div class="progress-orb" style="background: radial-gradient(closest-side, #fff 80%, transparent 81% 99%), conic-gradient(#2563eb ${p}%, #e9eff6 0);">
                         <div>
                             <strong id="progress-percent-text">${p}%</strong>
-                            <span>Complete</span>
+                            <span id="progress-status-sub">${p >= 100 ? 'Complete' : 'Scanning'}</span>
                         </div>
                     </div>
                     <h2>${isDev ? 'Scanning Code for Vulnerabilities' : (isHybrid ? 'Hybrid DAST &amp; SAST Assessment' : 'Scanning for Vulnerabilities')}</h2>
@@ -3748,23 +3706,23 @@ const App = {
 
                     <div class="stats-row">
                         <div>
-                            <b>08:42</b>
+                            <b id="progress-elapsed-timer">00:00</b>
                             <span>Elapsed</span>
                         </div>
                         <div>
-                            <b>~04:15</b>
+                            <b id="progress-remaining-timer">~00:45</b>
                             <span>Remaining</span>
                         </div>
                         <div>
-                            <b>${isDev ? '6,420 lines' : '1,842 tests'}</b>
-                            <span>${isDev ? 'Code analyzed' : 'Tests run'}</span>
+                            <b id="progress-tests-count">${isDev ? 'SAST Engine' : 'DAST Engine'}</b>
+                            <span id="progress-tests-sub">Active Tool</span>
                         </div>
                     </div>
 
                     <div class="live-line">
-                        <span class="pulse-dot"></span>
-                        <code>${isDev ? 'src/api/users/search.ts:42' : 'GET /api/v2/users/search?q='}</code>
-                        <span>${isDev ? 'Checking SQL query parameterization...' : 'Testing SQL injection in query parameters...'}</span>
+                        <span class="pulse-dot" id="progress-pulse-dot"></span>
+                        <code id="progress-live-code">${isDev ? 'SEMGREP' : 'OWASP_ZAP'}</code>
+                        <span id="progress-live-message">Initializing multi-tool security engine...</span>
                     </div>
 
                     ${!isDev ? `
@@ -3796,26 +3754,69 @@ const App = {
                     ` : ''}
                 </div>
 
-                <!-- Right: Assessment progress -->
+                <!-- Right: Assessment progress & Tools Matrix -->
                 <div class="stage-card">
-                    <div class="flex items-center justify-between">
+                    <div class="flex items-center justify-between mb-2">
                         <h2>Assessment progress</h2>
-                        <span class="status status-running"><span></span> ${isScanOnly ? 'Scan Only' : (isHybrid ? 'Hybrid Pipeline' : 'Full Pipeline')}</span>
+                        <span class="status status-running" id="progress-engine-mode-badge">
+                            <span></span> ${isScanOnly ? 'Scan Only' : (isHybrid ? 'Hybrid Pipeline' : 'Full Pipeline')}
+                        </span>
                     </div>
 
-                    <div class="stage-list">
-                        ${stages.map((st, idx) => `
-                            <div class="stage ${st.active ? 'active' : ''}">
-                                <span class="stage-marker">
-                                    ${st.done ? Icons.get('check', 'size-4') : (st.active ? '<span class="spinner"></span>' : (idx + 1))}
-                                </span>
-                                <div>
-                                    <b>${st.label}</b>
-                                    <p>${st.copy}</p>
-                                </div>
-                                ${st.active ? '<span class="status status-running">Running</span>' : ''}
+                    <div class="stage-list" id="progress-stage-list">
+                        <div class="stage active" id="prog-stage-OWASP_ZAP">
+                            <span class="stage-marker" id="prog-marker-OWASP_ZAP"><span class="spinner"></span></span>
+                            <div>
+                                <b>OWASP ZAP (DAST)</b>
+                                <p id="prog-desc-OWASP_ZAP">Dynamic vulnerability inspection &amp; security headers</p>
                             </div>
-                        `).join('')}
+                            <span class="status status-running" id="prog-badge-OWASP_ZAP">Running</span>
+                        </div>
+
+                        <div class="stage" id="prog-stage-SEMGREP">
+                            <span class="stage-marker" id="prog-marker-SEMGREP">2</span>
+                            <div>
+                                <b>Semgrep (SAST)</b>
+                                <p id="prog-desc-SEMGREP">Static AST code taint &amp; injection analysis</p>
+                            </div>
+                            <span class="status" id="prog-badge-SEMGREP" style="color:#64748b;">Pending</span>
+                        </div>
+
+                        <div class="stage" id="prog-stage-GITLEAKS">
+                            <span class="stage-marker" id="prog-marker-GITLEAKS">3</span>
+                            <div>
+                                <b>Gitleaks (Secrets)</b>
+                                <p id="prog-desc-GITLEAKS">Scanning source files for exposed API keys &amp; tokens</p>
+                            </div>
+                            <span class="status" id="prog-badge-GITLEAKS" style="color:#64748b;">Pending</span>
+                        </div>
+
+                        <div class="stage" id="prog-stage-TRIVY">
+                            <span class="stage-marker" id="prog-marker-TRIVY">4</span>
+                            <div>
+                                <b>Trivy (Dependencies)</b>
+                                <p id="prog-desc-TRIVY">Auditing package manifests &amp; container CVEs</p>
+                            </div>
+                            <span class="status" id="prog-badge-TRIVY" style="color:#64748b;">Pending</span>
+                        </div>
+
+                        <div class="stage" id="prog-stage-NPM_AUDIT">
+                            <span class="stage-marker" id="prog-marker-NPM_AUDIT">5</span>
+                            <div>
+                                <b>npm audit</b>
+                                <p id="prog-desc-NPM_AUDIT">Advisory database validation for npm dependencies</p>
+                            </div>
+                            <span class="status" id="prog-badge-NPM_AUDIT" style="color:#64748b;">Pending</span>
+                        </div>
+
+                        <div class="stage" id="prog-stage-AI">
+                            <span class="stage-marker" id="prog-marker-AI">6</span>
+                            <div>
+                                <b>AI Threat Intelligence</b>
+                                <p id="prog-desc-AI">Deduplication, severity evaluation &amp; report generation</p>
+                            </div>
+                            <span class="status" id="prog-badge-AI" style="color:#64748b;">Queued</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -3824,25 +3825,25 @@ const App = {
             <div class="finding-summary">
                 <div>
                     <span class="severity-dot critical"></span>
-                    <b>2</b>
+                    <b id="prog-ribbon-critical">0</b>
                     <small>Critical</small>
                 </div>
                 <div>
                     <span class="severity-dot high"></span>
-                    <b>5</b>
+                    <b id="prog-ribbon-high">0</b>
                     <small>High</small>
                 </div>
                 <div>
                     <span class="severity-dot medium"></span>
-                    <b>8</b>
+                    <b id="prog-ribbon-medium">0</b>
                     <small>Medium</small>
                 </div>
                 <div>
                     <span class="severity-dot low"></span>
-                    <b>3</b>
+                    <b id="prog-ribbon-low">0</b>
                     <small>Low</small>
                 </div>
-                <button type="button" class="button button-primary" onclick="App.proceedToDashboard()">
+                <button type="button" class="button button-primary" id="btn-prog-view-dashboard" onclick="App.proceedToDashboard()">
                     View findings dashboard ${Icons.get('arrow', 'size-4')}
                 </button>
             </div>
@@ -3851,6 +3852,7 @@ const App = {
 
     startProgressPolling() {
         if (this.scanState.timer) clearInterval(this.scanState.timer);
+        this.scanState.scanStartTime = Date.now();
 
         this.scanState.timer = setInterval(async () => {
             if (this.currentView !== 'progress') {
@@ -3858,30 +3860,170 @@ const App = {
                 return;
             }
 
+            // 1. Live Ticking Elapsed Timer
+            const elapsedSec = Math.max(1, Math.floor((Date.now() - this.scanState.scanStartTime) / 1000));
+            const elMins = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
+            const elSecs = String(elapsedSec % 60).padStart(2, '0');
+            const elTimer = document.getElementById('progress-elapsed-timer');
+            if (elTimer) elTimer.textContent = `${elMins}:${elSecs}`;
+
             try {
                 const res = await API.getScanProgress(this.scanState.currentScanId);
-                if (res.scan && typeof res.scan.progress === 'number') {
-                    this.scanState.progress = res.scan.progress;
-                } else if (this.scanState.progress < 82) {
-                    this.scanState.progress += 1;
+                if (res && res.scan) {
+                    const scan = res.scan;
+                    this.scanState.progress = typeof scan.progress === 'number' ? scan.progress : this.scanState.progress;
+
+                    // Remaining time estimate
+                    const remTimer = document.getElementById('progress-remaining-timer');
+                    if (remTimer) {
+                        if (this.scanState.progress >= 100 || scan.status === 'completed') {
+                            remTimer.textContent = '00:00';
+                        } else {
+                            const totalEst = Math.max(30, (elapsedSec / Math.max(5, this.scanState.progress)) * 100);
+                            const remSec = Math.max(0, Math.floor(totalEst - elapsedSec));
+                            const remMins = String(Math.floor(remSec / 60)).padStart(2, '0');
+                            const remSecs = String(remSec % 60).padStart(2, '0');
+                            remTimer.textContent = `~${remMins}:${remSecs}`;
+                        }
+                    }
+
+                    // Progress Orb
+                    const orbEl = document.querySelector('.progress-orb');
+                    const txtEl = document.getElementById('progress-percent-text');
+                    const subEl = document.getElementById('progress-status-sub');
+                    if (txtEl) txtEl.textContent = `${this.scanState.progress}%`;
+                    if (subEl) subEl.textContent = scan.status === 'completed' ? 'Complete' : (scan.status === 'cancelled' ? 'Halted' : 'Scanning');
+                    if (orbEl) {
+                        const orbColor = scan.status === 'cancelled' ? '#ea580c' : '#2563eb';
+                        orbEl.style.background = `radial-gradient(closest-side, #fff 80%, transparent 81% 99%), conic-gradient(${orbColor} ${this.scanState.progress}%, #e9eff6 0)`;
+                    }
+
+                    // Live Line
+                    const liveCode = document.getElementById('progress-live-code');
+                    const liveMsg = document.getElementById('progress-live-message');
+                    const liveTool = document.getElementById('progress-tests-count');
+                    if (liveCode && scan.activeTool) liveCode.textContent = scan.activeTool;
+                    if (liveMsg && scan.activeMessage) liveMsg.textContent = scan.activeMessage;
+                    if (liveTool && scan.activeTool) liveTool.textContent = scan.activeTool;
+
+                    // Live Ribbon Counters
+                    if (scan.counts) {
+                        const critEl = document.getElementById('prog-ribbon-critical');
+                        const highEl = document.getElementById('prog-ribbon-high');
+                        const medEl = document.getElementById('prog-ribbon-medium');
+                        const lowEl = document.getElementById('prog-ribbon-low');
+                        if (critEl) critEl.textContent = scan.counts.critical || 0;
+                        if (highEl) highEl.textContent = scan.counts.high || 0;
+                        if (medEl) medEl.textContent = scan.counts.medium || 0;
+                        if (lowEl) lowEl.textContent = scan.counts.low || 0;
+                    }
+
+                    // Live Tool Stages
+                    if (scan.tasks && Array.isArray(scan.tasks)) {
+                        scan.tasks.forEach(t => {
+                            const stageEl = document.getElementById(`prog-stage-${t.toolName}`);
+                            const markerEl = document.getElementById(`prog-marker-${t.toolName}`);
+                            const badgeEl = document.getElementById(`prog-badge-${t.toolName}`);
+
+                            if (badgeEl) {
+                                badgeEl.textContent = t.status.charAt(0).toUpperCase() + t.status.slice(1).toLowerCase();
+                                if (t.status === 'COMPLETED') {
+                                    badgeEl.className = 'status status-safe';
+                                    if (markerEl) markerEl.innerHTML = Icons.get('check', 'size-4 text-emerald-600');
+                                    if (stageEl) stageEl.className = 'stage';
+                                } else if (t.status === 'RUNNING') {
+                                    badgeEl.className = 'status status-running';
+                                    if (markerEl) markerEl.innerHTML = '<span class="spinner"></span>';
+                                    if (stageEl) stageEl.className = 'stage active';
+                                } else if (t.status === 'SKIPPED') {
+                                    badgeEl.className = 'status';
+                                    badgeEl.style.color = '#64748b';
+                                    if (markerEl) markerEl.textContent = '—';
+                                } else if (t.status === 'FAILED') {
+                                    badgeEl.className = 'status status-low';
+                                    if (markerEl) markerEl.textContent = '!';
+                                }
+                            }
+                        });
+                    }
+
+                    // Completed or Partial Handling
+                    if (scan.status === 'completed' || scan.status === 'partial') {
+                        clearInterval(this.scanState.timer);
+                        this.scanState.progress = 100;
+                        if (txtEl) txtEl.textContent = '100%';
+                        if (subEl) subEl.textContent = 'Complete';
+                        if (orbEl) orbEl.style.background = `radial-gradient(closest-side, #fff 80%, transparent 81% 99%), conic-gradient(#059669 100%, #e9eff6 0)`;
+
+                        const stopBtn = document.getElementById('btn-stop-assessment');
+                        if (stopBtn) {
+                            stopBtn.className = 'button button-primary';
+                            stopBtn.innerHTML = `View findings dashboard ${Icons.get('arrow', 'size-4')}`;
+                            stopBtn.onclick = () => App.proceedToDashboard();
+                        }
+                    } else if (scan.status === 'cancelled') {
+                        clearInterval(this.scanState.timer);
+                        if (txtEl) txtEl.textContent = 'Halted';
+                        if (subEl) subEl.textContent = 'Cancelled';
+                        const stopBtn = document.getElementById('btn-stop-assessment');
+                        if (stopBtn) {
+                            stopBtn.className = 'button button-secondary';
+                            stopBtn.innerHTML = `View findings dashboard ${Icons.get('arrow', 'size-4')}`;
+                            stopBtn.onclick = () => App.proceedToDashboard();
+                        }
+                    }
                 }
             } catch (e) {
-                if (this.scanState.progress < 82) {
-                    this.scanState.progress += 1;
-                }
+                console.warn('Progress poll error:', e);
             }
-
-            const orbEl = document.querySelector('.progress-orb');
-            const txtEl = document.getElementById('progress-percent-text');
-            if (txtEl) txtEl.textContent = `${this.scanState.progress}%`;
-            if (orbEl) orbEl.style.background = `radial-gradient(closest-side, #fff 80%, transparent 81% 99%), conic-gradient(#2563eb ${this.scanState.progress}%, #e9eff6 0)`;
-        }, 1200);
+        }, 1000);
     },
 
-    stopAssessment() {
+    async stopAssessment() {
         if (this.scanState.timer) clearInterval(this.scanState.timer);
-        showToast('Assessment stopped. Cataloged findings are available on the dashboard.', 'info');
-        this.navigate('dashboard');
+        const scanId = this.scanState.currentScanId;
+        showToast('Halting security assessment...', 'info');
+
+        const stopBtn = document.getElementById('btn-stop-assessment');
+        if (stopBtn) {
+            stopBtn.disabled = true;
+            stopBtn.innerHTML = '<span class="spinner"></span> Halting...';
+        }
+
+        try {
+            if (scanId) {
+                await API.cancelScan(scanId);
+            }
+        } catch (e) {
+            console.warn('Cancel scan API notice:', e);
+        }
+
+        const txtEl = document.getElementById('progress-percent-text');
+        if (txtEl) txtEl.textContent = 'Halted';
+
+        const subEl = document.getElementById('progress-status-sub');
+        if (subEl) subEl.textContent = 'Cancelled';
+
+        const orbEl = document.querySelector('.progress-orb');
+        if (orbEl) orbEl.style.background = `radial-gradient(closest-side, #fff 80%, transparent 81% 99%), conic-gradient(#ea580c ${this.scanState.progress || 50}%, #e9eff6 0)`;
+
+        const dot = document.getElementById('progress-pulse-dot');
+        if (dot) dot.style.background = '#ea580c';
+
+        const liveCode = document.getElementById('progress-live-code');
+        if (liveCode) liveCode.textContent = 'HALTED';
+
+        const liveMsg = document.getElementById('progress-live-message');
+        if (liveMsg) liveMsg.textContent = 'Assessment stopped by user. All findings discovered up to this point have been preserved.';
+
+        if (stopBtn) {
+            stopBtn.disabled = false;
+            stopBtn.className = 'button button-primary';
+            stopBtn.innerHTML = `View findings dashboard ${Icons.get('arrow', 'size-4')}`;
+            stopBtn.onclick = () => App.proceedToDashboard();
+        }
+
+        showToast('Assessment stopped. Click "View findings dashboard" to see all cataloged results.', 'warning');
     },
 
     // =========================================================

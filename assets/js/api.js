@@ -248,6 +248,10 @@ const API = {
         return await this.request(`scans/${scanId}`, { method: 'DELETE' });
     },
 
+    async cancelScan(scanId) {
+        return await this.request(`scans/${scanId}/cancel`, { method: 'POST' });
+    },
+
     async clearAllScans() {
         return await this.request('scans/history/all', { method: 'DELETE' });
     },
