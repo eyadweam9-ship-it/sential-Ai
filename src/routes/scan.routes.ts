@@ -5,6 +5,7 @@ import multer from 'multer';
 import { prisma } from '../config/db';
 import { validateTargetUrl, isInternalHostname } from '../services/validator.service';
 import { crawlWebsite, safeFetchText } from '../services/crawler.service';
+import { checkAuthorizationGate } from '../services/authorization.service';
 
 export const scanRouter = Router();
 
@@ -527,6 +528,18 @@ scanRouter.post(['/create', '/start'], async (req: Request, res: Response): Prom
           success: false,
           error: `Target URL validation failed: ${validationResult.error || 'Blocked by security policy.'}`,
           details: validationResult,
+        });
+        return;
+      }
+
+      // Enforce Target Authorization & Scope Gate
+      const gateCheck = await checkAuthorizationGate(targetLocation, normalizedEnv);
+      if (!gateCheck.allowed) {
+        res.status(403).json({
+          success: false,
+          gateBlocked: true,
+          error: gateCheck.error,
+          authorizationStatus: gateCheck.status,
         });
         return;
       }

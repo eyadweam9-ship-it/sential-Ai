@@ -120,6 +120,70 @@ const API = {
         return data;
     },
 
+    // Target Authorization & Scope Gate
+    async getDnsChallenge(targetUrl) {
+        return await this.request('authorization/dns/challenge', {
+            method: 'POST',
+            body: JSON.stringify({ targetUrl })
+        });
+    },
+
+    async verifyDns(targetUrl, targetId) {
+        return await this.request('authorization/dns/verify', {
+            method: 'POST',
+            body: JSON.stringify({ targetUrl, targetId })
+        });
+    },
+
+    async getFileChallenge(targetUrl) {
+        return await this.request('authorization/file/challenge', {
+            method: 'POST',
+            body: JSON.stringify({ targetUrl })
+        });
+    },
+
+    async verifyFile(targetUrl, targetId) {
+        return await this.request('authorization/file/verify', {
+            method: 'POST',
+            body: JSON.stringify({ targetUrl, targetId })
+        });
+    },
+
+    async submitWrittenLetter(formData) {
+        const token = this.getToken();
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch(`${this.BASE_URL}/authorization/letter/submit`, {
+            method: 'POST',
+            headers,
+            body: formData
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            throw new Error(data.error || data.message || 'Failed to submit authorization letter');
+        }
+        return data;
+    },
+
+    async checkAuthorizationGate(targetUrl, environment = 'production') {
+        return await this.request('authorization/check-gate', {
+            method: 'POST',
+            body: JSON.stringify({ targetUrl, environment })
+        });
+    },
+
+    async getAdminAuthorizations(status = 'ALL') {
+        return await this.request(`authorization/admin/list?status=${encodeURIComponent(status)}`);
+    },
+
+    async reviewAuthorization(id, decision, reason = '', adminName = 'Security Administrator') {
+        return await this.request(`authorization/admin/${id}/review`, {
+            method: 'PATCH',
+            body: JSON.stringify({ decision, reason, adminName })
+        });
+    },
+
     async validateUrl(url, assessmentName = '', environment = 'production') {
         return await this.request('scans/validate-url', {
             method: 'POST',

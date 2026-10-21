@@ -299,6 +299,33 @@ const App = {
             excludedPaths: 'node_modules/*, dist/*, /billing/*, /logout',
             rateLimit: '10 req/sec'
         },
+        verifyMethod: 0,
+        authData: {
+            targetId: null,
+            targetUrl: '',
+            method: 'DNS',
+            status: 'UNVERIFIED',
+            dnsChallenge: null,
+            fileChallenge: null,
+            writtenLetter: {
+                file: null,
+                fileName: '',
+                ownerName: '',
+                ownerTitle: '',
+                status: 'NONE',
+                reviewNotes: ''
+            },
+            isCheckingDns: false,
+            isCheckingFile: false,
+            isSubmittingLetter: false,
+            gateAllowed: false,
+            gateMessage: '',
+            showAdminModal: false,
+            adminRequests: [],
+            adminFilter: 'ALL',
+            isLoadingAdmin: false,
+            adminDecisionNotes: ''
+        },
         confirmedAuthorization: false,
         showConfirmModal: false,
         currentScanId: 1,
@@ -423,6 +450,8 @@ const App = {
             this.startProgressPolling();
         } else if (this.currentView === 'settings') {
             this.loadScanHistory();
+        } else if (this.currentView === 'scope') {
+            this.ensureAuthLoaded();
         }
     },
 
@@ -2547,16 +2576,308 @@ const App = {
     // =========================================================
     // 7. STEP 3: AUTHORIZATION & SCOPE (EXACT FIGMA le COMPONENT)
     // =========================================================
+    // =========================================================
+    // 7. STEP 3: AUTHORIZATION & SCOPE GATE
+    // 3 Methods: DNS (Auto), File Probe (Auto), Written Letter (Admin Review)
+    // Cohesive, clean Sential AI styling matching user requirements
+    // =========================================================
+    async ensureAuthLoaded() {
+        const env = (this.scanState.environment || 'development').toLowerCase();
+        if (env === 'development') return;
+
+        const targetUrl = (this.scanState.url || 'https://app.northstar.io').trim();
+        if (this.scanState.authData.targetUrl === targetUrl && this.scanState.authData.dnsChallenge) {
+            return;
+        }
+
+        this.scanState.authData.targetUrl = targetUrl;
+        try {
+            const [dnsRes, fileRes, gateRes] = await Promise.all([
+                API.getDnsChallenge(targetUrl).catch(() => null),
+                API.getFileChallenge(targetUrl).catch(() => null),
+                API.checkAuthorizationGate(targetUrl, env).catch(() => null)
+            ]);
+
+            if (dnsRes && dnsRes.success) {
+                this.scanState.authData.dnsChallenge = dnsRes;
+                this.scanState.authData.targetId = dnsRes.targetId;
+            }
+            if (fileRes && fileRes.success) {
+                this.scanState.authData.fileChallenge = fileRes;
+                if (!this.scanState.authData.targetId) {
+                    this.scanState.authData.targetId = fileRes.targetId;
+                }
+            }
+            if (gateRes && gateRes.allowed) {
+                this.scanState.authData.gateAllowed = true;
+                this.scanState.authData.status = gateRes.status || 'VERIFIED';
+                this.scanState.authData.method = gateRes.method || 'DNS';
+            }
+
+            this.render();
+        } catch (err) {
+            console.warn('ensureAuthLoaded notice:', err);
+        }
+    },
+
+    selectVerifyMethod(idx) {
+        this.scanState.verifyMethod = idx;
+        const methodNames = ['DNS', 'FILE', 'WRITTEN'];
+        this.scanState.authData.method = methodNames[idx] || 'DNS';
+        this.render();
+    },
+
+    copyDnsRecord(type) {
+        const challenge = this.scanState.authData.dnsChallenge;
+        if (!challenge) {
+            navigator.clipboard.writeText('sential-verify=ns_9d4f2a7c');
+            showToast('DNS verification record copied to clipboard!', 'success');
+            return;
+        }
+
+        if (type === 'name') {
+            navigator.clipboard.writeText(challenge.recordName);
+            showToast(`DNS record name "${challenge.recordName}" copied!`, 'success');
+        } else {
+            navigator.clipboard.writeText(challenge.recordValue);
+            showToast(`DNS record value "${challenge.recordValue}" copied!`, 'success');
+        }
+    },
+
+    async runDnsVerification() {
+        const targetUrl = (this.scanState.url || 'https://app.northstar.io').trim();
+        const targetId = this.scanState.authData.targetId;
+
+        this.scanState.authData.isCheckingDns = true;
+        this.render();
+
+        try {
+            const res = await API.verifyDns(targetUrl, targetId);
+            this.scanState.authData.isCheckingDns = false;
+
+            if (res.verified || res.status === 'VERIFIED') {
+                this.scanState.authData.status = 'VERIFIED';
+                this.scanState.authData.gateAllowed = true;
+                this.scanState.authData.gateMessage = res.message || 'DNS TXT record verified successfully!';
+                showToast('Domain ownership verified via DNS TXT record! Gate cleared.', 'success');
+            } else {
+                this.scanState.authData.status = res.status || 'PENDING';
+                this.scanState.authData.gateMessage = res.error || 'DNS record not detected yet. Changes can take 1-5 minutes to propagate.';
+                showToast(this.scanState.authData.gateMessage, 'info');
+            }
+        } catch (err) {
+            this.scanState.authData.isCheckingDns = false;
+            this.scanState.authData.status = 'FAILED';
+            this.scanState.authData.gateMessage = err.message || 'DNS verification request failed.';
+            showToast(this.scanState.authData.gateMessage, 'error');
+        }
+
+        this.render();
+    },
+
+    downloadVerificationFile() {
+        const challenge = this.scanState.authData.fileChallenge;
+        if (!challenge || !challenge.downloadUrl) {
+            showToast('Verification file challenge is generating, please wait...', 'info');
+            return;
+        }
+        window.open(challenge.downloadUrl, '_blank');
+        showToast(`Downloading "${challenge.fileName}"... Place it under ${challenge.filePath}`, 'success');
+    },
+
+    async runFileVerification() {
+        const targetUrl = (this.scanState.url || 'https://app.northstar.io').trim();
+        const targetId = this.scanState.authData.targetId;
+
+        this.scanState.authData.isCheckingFile = true;
+        this.render();
+
+        try {
+            const res = await API.verifyFile(targetUrl, targetId);
+            this.scanState.authData.isCheckingFile = false;
+
+            if (res.verified || res.status === 'VERIFIED') {
+                this.scanState.authData.status = 'VERIFIED';
+                this.scanState.authData.gateAllowed = true;
+                this.scanState.authData.gateMessage = res.message || 'Verification file validated on origin server!';
+                showToast('Target ownership verified via file probe! Gate cleared.', 'success');
+            } else {
+                this.scanState.authData.status = res.status || 'FAILED';
+                this.scanState.authData.gateMessage = res.error || 'Could not validate file at expected URL.';
+                showToast(this.scanState.authData.gateMessage, 'error');
+            }
+        } catch (err) {
+            this.scanState.authData.isCheckingFile = false;
+            this.scanState.authData.status = 'FAILED';
+            this.scanState.authData.gateMessage = err.message || 'File verification probe failed.';
+            showToast(this.scanState.authData.gateMessage, 'error');
+        }
+
+        this.render();
+    },
+
+    openOfficialLetterTemplate() {
+        const targetUrl = (this.scanState.url || 'https://app.northstar.io').trim();
+        const operatorName = (this.currentUser?.name || 'Security Assessor').trim();
+        const orgName = (this.scanState.name || 'Target Organization').trim();
+        const url = `/api/authorization/template?targetUrl=${encodeURIComponent(targetUrl)}&operatorName=${encodeURIComponent(operatorName)}&orgName=${encodeURIComponent(orgName)}`;
+        window.open(url, '_blank');
+        showToast('Opening official 2-page printable Written Authorization letter...', 'info');
+    },
+
+    handleWrittenLetterSelect(event) {
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+
+        this.scanState.authData.writtenLetter.file = file;
+        this.scanState.authData.writtenLetter.fileName = file.name;
+        showToast(`Selected signed letter: ${file.name} (${Math.round(file.size / 1024)} KB)`, 'info');
+        this.render();
+    },
+
+    removeWrittenLetterFile() {
+        this.scanState.authData.writtenLetter.file = null;
+        this.scanState.authData.writtenLetter.fileName = '';
+        this.render();
+    },
+
+    async submitWrittenLetterForReview() {
+        const file = this.scanState.authData.writtenLetter.file;
+        if (!file) {
+            showToast('Please select a signed authorization letter file (PDF or PNG) first.', 'error');
+            return;
+        }
+
+        const nameInput = document.getElementById('letter-owner-name');
+        const titleInput = document.getElementById('letter-owner-title');
+        const ownerName = nameInput && nameInput.value.trim() ? nameInput.value.trim() : (this.scanState.authData.writtenLetter.ownerName || 'System Owner');
+        const ownerTitle = titleInput && titleInput.value.trim() ? titleInput.value.trim() : (this.scanState.authData.writtenLetter.ownerTitle || 'Authorized Representative');
+
+        this.scanState.authData.writtenLetter.ownerName = ownerName;
+        this.scanState.authData.writtenLetter.ownerTitle = ownerTitle;
+        this.scanState.authData.isSubmittingLetter = true;
+        this.render();
+
+        try {
+            const formData = new FormData();
+            formData.append('letterFile', file);
+            formData.append('targetUrl', (this.scanState.url || 'https://app.northstar.io').trim());
+            if (this.scanState.authData.targetId) {
+                formData.append('targetId', String(this.scanState.authData.targetId));
+            }
+            formData.append('ownerName', ownerName);
+            formData.append('ownerTitle', ownerTitle);
+            formData.append('scopeJson', JSON.stringify(this.scanState.scope || {}));
+
+            const res = await API.submitWrittenLetter(formData);
+            this.scanState.authData.isSubmittingLetter = false;
+
+            if (res.success) {
+                this.scanState.authData.status = 'PENDING';
+                this.scanState.authData.writtenLetter.status = 'PENDING';
+                this.scanState.authData.gateMessage = 'Written authorization submitted! Request is queued for Administrator Review.';
+                showToast(this.scanState.authData.gateMessage, 'success');
+            }
+        } catch (err) {
+            this.scanState.authData.isSubmittingLetter = false;
+            showToast(err.message || 'Failed to submit authorization letter.', 'error');
+        }
+
+        this.render();
+    },
+
+    async toggleAdminReviewModal(show = true) {
+        this.scanState.authData.showAdminModal = show;
+        if (show) {
+            await this.loadAdminAuthorizations();
+        } else {
+            this.render();
+        }
+    },
+
+    async loadAdminAuthorizations(statusFilter = 'ALL') {
+        this.scanState.authData.adminFilter = statusFilter;
+        this.scanState.authData.isLoadingAdmin = true;
+        this.render();
+
+        try {
+            const res = await API.getAdminAuthorizations(statusFilter);
+            this.scanState.authData.adminRequests = res.requests || [];
+        } catch (err) {
+            console.warn('loadAdminAuthorizations error:', err);
+            this.scanState.authData.adminRequests = [];
+        }
+
+        this.scanState.authData.isLoadingAdmin = false;
+        this.render();
+    },
+
+    async handleAdminDecision(requestId, decision) {
+        let reason = '';
+        if (decision !== 'APPROVED') {
+            reason = prompt(`Please enter mandatory reason/feedback for ${decision}:`, decision === 'NEEDS_CHANGES' ? 'Please provide clear stamp and signature on Page 2.' : 'Domain does not match company credentials.');
+            if (reason === null) return; // user cancelled
+            if (!reason.trim()) {
+                showToast('A reason is mandatory when rejecting or requesting changes.', 'error');
+                return;
+            }
+        }
+
+        try {
+            const res = await API.reviewAuthorization(requestId, decision, reason, this.currentUser?.name || 'Security Administrator');
+            showToast(res.message || `Request #${requestId} marked as ${decision}.`, 'success');
+
+            // If approved, update active target gate
+            if (decision === 'APPROVED') {
+                this.scanState.authData.status = 'APPROVED';
+                this.scanState.authData.gateAllowed = true;
+                this.scanState.authData.method = 'WRITTEN';
+                this.scanState.authData.gateMessage = `Written authorization approved by administrator! Scans are unlocked.`;
+            } else if (decision === 'NEEDS_CHANGES') {
+                this.scanState.authData.status = 'NEEDS_CHANGES';
+                this.scanState.authData.gateAllowed = false;
+                this.scanState.authData.gateMessage = `Administrator requested changes: "${reason}"`;
+            } else {
+                this.scanState.authData.status = 'REJECTED';
+                this.scanState.authData.gateAllowed = false;
+                this.scanState.authData.gateMessage = `Administrator rejected request: "${reason}"`;
+            }
+
+            await this.loadAdminAuthorizations(this.scanState.authData.adminFilter || 'ALL');
+        } catch (err) {
+            showToast(err.message || 'Failed to update authorization review.', 'error');
+        }
+    },
+
     renderScopeStep() {
         const env = (this.scanState.environment || 'development').toLowerCase();
         const isDev = env === 'development';
         const verifyMethod = this.scanState.verifyMethod || 0;
+        const targetUrl = (this.scanState.url || 'https://app.northstar.io').trim();
+        const hostname = targetUrl.replace(/^https?:\/\//i, '').split('/')[0].split(':')[0] || 'target-domain.com';
+
+        const auth = this.scanState.authData;
+        const isVerified = auth.status === 'VERIFIED' || auth.status === 'APPROVED';
+        const isPending = auth.status === 'PENDING';
+        const isNeedsChanges = auth.status === 'NEEDS_CHANGES';
+        const isFailed = auth.status === 'FAILED' || auth.status === 'REJECTED';
+
+        const dnsChal = auth.dnsChallenge || {
+            recordName: `_sentinel-challenge.${hostname}`,
+            recordValue: `sential-verify=ns_${(hostname.length * 13).toString(16)}8f4d9a`
+        };
+
+        const fileChal = auth.fileChallenge || {
+            fileName: `sentinel-verification-${hostname.slice(0, 4)}.txt`,
+            filePath: `/.well-known/sentinel-verification-${hostname.slice(0, 4)}.txt`,
+            downloadUrl: `/api/authorization/file/download/${auth.targetId || 1}`
+        };
 
         return `
             ${renderPageTitle({
                 eyebrow: 'New assessment · Step 3 of 3',
                 title: 'Authorization & scope',
-                copy: 'Confirm permission and define where Sential AI is allowed to test.'
+                copy: 'Confirm target control and define safe assessment boundaries.'
             })}
 
             <div class="scope-layout">
@@ -2565,8 +2886,8 @@ const App = {
                     <div class="form-card-head">
                         <div class="icon-tile blue">${Icons.get('lock', 'size-5')}</div>
                         <div>
-                            <h2>${isDev ? 'Code Analysis Policies' : 'Proof of Authorization'}</h2>
-                            <p>${isDev ? 'Define rule sets and security standards.' : 'Choose how you verify target ownership.'}</p>
+                            <h2>${isDev ? 'Code Analysis Policies' : 'Target Authorization & Ownership'}</h2>
+                            <p>${isDev ? 'Define rule sets and security standards.' : 'Choose proof method to confirm control of ' + escapeHtml(hostname)}</p>
                         </div>
                     </div>
 
@@ -2595,88 +2916,357 @@ const App = {
                             </div>
                         </div>
                     ` : `
-                        <div class="verification-option ${verifyMethod === 0 ? 'selected' : ''}" onclick="App.selectVerifyMethod(0)">
-                            <span class="radio"><i></i></span>
-                            <div>
-                                <b>DNS verification</b>
-                                <p>Add a TXT record to your domain. Recommended for full coverage.</p>
-                                <code>sential-verify=ns_9d4f2a7c</code>
+                        <!-- 3-Method Top Switcher -->
+                        <div class="auth-method-nav">
+                            <div class="auth-method-tab ${verifyMethod === 0 ? 'active' : ''}" onclick="App.selectVerifyMethod(0)">
+                                <div class="auth-method-tab-header">
+                                    ${Icons.get('globe', 'size-4 text-blue-600')}
+                                    <b>DNS Record</b>
+                                    <span class="auth-badge-auto">Auto</span>
+                                </div>
+                                <p>TXT record proof</p>
                             </div>
-                            <button type="button" class="button button-secondary" onclick="event.stopPropagation(); App.copyDnsToken();">
-                                ${Icons.get('copy', 'size-4')} Copy
-                            </button>
+
+                            <div class="auth-method-tab ${verifyMethod === 1 ? 'active' : ''}" onclick="App.selectVerifyMethod(1)">
+                                <div class="auth-method-tab-header">
+                                    ${Icons.get('file', 'size-4 text-blue-600')}
+                                    <b>Verify File</b>
+                                    <span class="auth-badge-auto">Auto</span>
+                                </div>
+                                <p>HTTPS token probe</p>
+                            </div>
+
+                            <div class="auth-method-tab ${verifyMethod === 2 ? 'active' : ''}" onclick="App.selectVerifyMethod(2)">
+                                <div class="auth-method-tab-header">
+                                    ${Icons.get('shield', 'size-4 text-amber-600')}
+                                    <b>Written Letter</b>
+                                    <span class="auth-badge-admin">Admin</span>
+                                </div>
+                                <p>Signed PDF authorization</p>
+                            </div>
                         </div>
 
-                        <div class="verification-option ${verifyMethod === 1 ? 'selected' : ''}" onclick="App.selectVerifyMethod(1)">
-                            <span class="radio"><i></i></span>
-                            <div>
-                                <b>Upload verification file</b>
-                                <p>Place a verification file in your website root.</p>
-                            </div>
-                        </div>
+                        <!-- METHOD 0: DNS Verification -->
+                        ${verifyMethod === 0 ? `
+                            <div class="auth-panel-box">
+                                <h3>${Icons.get('globe', 'size-4 text-blue-600')} DNS Verification</h3>
+                                <p class="hint">Add this TXT record at your DNS provider (Cloudflare, Route 53, GoDaddy). Sential AI will query DNS to verify domain ownership automatically.</p>
 
-                        <div class="verification-option ${verifyMethod === 2 ? 'selected' : ''}" onclick="App.selectVerifyMethod(2)">
-                            <span class="radio"><i></i></span>
-                            <div>
-                                <b>Written authorization</b>
-                                <p>Upload an authorization letter from the system owner.</p>
+                                <div class="auth-info-grid">
+                                    <div class="auth-info-row">
+                                        <span class="auth-info-label">Record Type:</span>
+                                        <span class="auth-info-val font-bold">TXT</span>
+                                    </div>
+                                    <div class="auth-info-row">
+                                        <span class="auth-info-label">Record Host:</span>
+                                        <span class="auth-info-val">${escapeHtml(dnsChal.recordName)}</span>
+                                        <button type="button" class="button button-secondary text-xs" style="padding: 0.25rem 0.55rem; height: 26px;" onclick="App.copyDnsRecord('name')">
+                                            ${Icons.get('copy', 'size-3')} Copy
+                                        </button>
+                                    </div>
+                                    <div class="auth-info-row">
+                                        <span class="auth-info-label">Record Value:</span>
+                                        <span class="auth-info-val">${escapeHtml(dnsChal.recordValue)}</span>
+                                        <button type="button" class="button button-secondary text-xs" style="padding: 0.25rem 0.55rem; height: 26px;" onclick="App.copyDnsRecord('value')">
+                                            ${Icons.get('copy', 'size-3')} Copy
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="auth-action-btn-row">
+                                    <button type="button" class="button button-primary" ${auth.isCheckingDns ? 'disabled' : ''} onclick="App.runDnsVerification()">
+                                        ${auth.isCheckingDns ? '<span class="spinner"></span> Querying DNS...' : `${Icons.get('check', 'size-4')} Verify DNS Record`}
+                                    </button>
+                                    <span class="text-xs text-slate-500">Propagation takes ~1–5 mins</span>
+                                </div>
+
+                                ${isVerified && auth.method === 'DNS' ? `
+                                    <div class="auth-status-banner verified">
+                                        ${Icons.get('check', 'size-4 text-emerald-600')}
+                                        <span><b>Domain Ownership Confirmed!</b> DNS TXT record validated. Authorization Gate cleared.</span>
+                                    </div>
+                                ` : isPending ? `
+                                    <div class="auth-status-banner pending">
+                                        ${Icons.get('clock', 'size-4 text-amber-600')}
+                                        <span><b>Awaiting TXT Record:</b> ${escapeHtml(auth.gateMessage || 'Record not detected yet. Click "Verify DNS Record" once published.')}</span>
+                                    </div>
+                                ` : ''}
                             </div>
-                        </div>
+                        ` : ''}
+
+                        <!-- METHOD 1: Upload Verification File -->
+                        ${verifyMethod === 1 ? `
+                            <div class="auth-panel-box">
+                                <h3>${Icons.get('file', 'size-4 text-blue-600')} Upload Verification File</h3>
+                                <p class="hint">Download SentinelAI's verification file and place it on your web server. Our engine probes the exact path with SSRF safeguards to confirm origin control.</p>
+
+                                <div class="auth-info-grid">
+                                    <div class="auth-info-row">
+                                        <span class="auth-info-label">File Name:</span>
+                                        <span class="auth-info-val">${escapeHtml(fileChal.fileName)}</span>
+                                    </div>
+                                    <div class="auth-info-row">
+                                        <span class="auth-info-label">Expected Path:</span>
+                                        <span class="auth-info-val">${escapeHtml(fileChal.filePath)}</span>
+                                    </div>
+                                </div>
+
+                                <div class="auth-action-btn-row" style="flex-wrap: wrap;">
+                                    <button type="button" class="button button-secondary" onclick="App.downloadVerificationFile()">
+                                        ${Icons.get('download', 'size-4')} Download Verification File
+                                    </button>
+                                    <button type="button" class="button button-primary" ${auth.isCheckingFile ? 'disabled' : ''} onclick="App.runFileVerification()">
+                                        ${auth.isCheckingFile ? '<span class="spinner"></span> Probing origin...' : `${Icons.get('check', 'size-4')} Verify File on Server`}
+                                    </button>
+                                </div>
+
+                                ${isVerified && auth.method === 'FILE' ? `
+                                    <div class="auth-status-banner verified">
+                                        ${Icons.get('check', 'size-4 text-emerald-600')}
+                                        <span><b>Target Ownership Confirmed!</b> Verification token validated on origin server. Authorization Gate cleared.</span>
+                                    </div>
+                                ` : isFailed ? `
+                                    <div class="auth-status-banner failed">
+                                        ${Icons.get('alert', 'size-4 text-rose-600')}
+                                        <span><b>File Not Validated:</b> ${escapeHtml(auth.gateMessage || 'File not found at expected path. Ensure it is accessible over HTTPS.')}</span>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        ` : ''}
+
+                        <!-- METHOD 2: Written Authorization -->
+                        ${verifyMethod === 2 ? `
+                            <div class="auth-panel-box">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h3>${Icons.get('shield', 'size-4 text-amber-600')} Written Authorization Letter</h3>
+                                    <button type="button" class="button button-secondary text-xs" style="padding: 0.25rem 0.65rem; height: 28px;" onclick="App.toggleAdminReviewModal(true)">
+                                        ${Icons.get('lock', 'size-3')} Admin Review Queue
+                                    </button>
+                                </div>
+                                <p class="hint">Ideal for corporate compliance, staging environments, or third-party assessments. Download the official 2-page template, obtain signatures, and submit for Administrator Review.</p>
+
+                                <div class="auth-info-grid">
+                                    <div class="auth-info-row">
+                                        <span class="auth-info-label">Step 1:</span>
+                                        <div class="flex items-center gap-2">
+                                            <button type="button" class="button button-secondary text-xs" style="height: 30px;" onclick="App.openOfficialLetterTemplate()">
+                                                ${Icons.get('download', 'size-3.5')} Download Official Letter (2 Pages)
+                                            </button>
+                                            <span class="text-xs text-slate-500">Official printable PDF/HTML</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="auth-info-row">
+                                        <span class="auth-info-label">Step 2:</span>
+                                        <div class="flex items-center gap-2">
+                                            ${auth.writtenLetter.fileName ? `
+                                                <div class="chatgpt-file-badge">
+                                                    ${Icons.get('file', 'size-3.5')}
+                                                    <span>${escapeHtml(auth.writtenLetter.fileName)}</span>
+                                                    <span style="cursor: pointer; margin-left: 4px;" onclick="App.removeWrittenLetterFile()">&times;</span>
+                                                </div>
+                                            ` : `
+                                                <label class="chatgpt-upload-pill">
+                                                    ${Icons.get('upload', 'size-3.5 text-slate-500')}
+                                                    <span>Upload Signed Letter (PDF / PNG)</span>
+                                                    <input type="file" accept=".pdf,.png,.jpg,.jpeg" style="display: none;" onchange="App.handleWrittenLetterSelect(event)">
+                                                </label>
+                                            `}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-3 mt-3">
+                                    <div>
+                                        <span class="field-label" style="font-size: 0.72rem; margin-bottom: 0.25rem;">Owner / Signatory Name:</span>
+                                        <div class="input-wrap" style="height: 38px;">
+                                            <input type="text" id="letter-owner-name" placeholder="e.g. Sarah Jenkins" value="${escapeHtml(auth.writtenLetter.ownerName || '')}">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <span class="field-label" style="font-size: 0.72rem; margin-bottom: 0.25rem;">Title / Authorized Role:</span>
+                                        <div class="input-wrap" style="height: 38px;">
+                                            <input type="text" id="letter-owner-title" placeholder="e.g. Chief Information Security Officer" value="${escapeHtml(auth.writtenLetter.ownerTitle || '')}">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="auth-action-btn-row">
+                                    <button type="button" class="button button-primary" ${auth.isSubmittingLetter ? 'disabled' : ''} onclick="App.submitWrittenLetterForReview()">
+                                        ${auth.isSubmittingLetter ? '<span class="spinner"></span> Submitting...' : `${Icons.get('upload', 'size-4')} Submit for Administrator Review`}
+                                    </button>
+                                </div>
+
+                                ${isVerified && auth.method === 'WRITTEN' ? `
+                                    <div class="auth-status-banner verified">
+                                        ${Icons.get('check', 'size-4 text-emerald-600')}
+                                        <span><b>Letter Approved by Administrator!</b> Target authorization granted. Authorization Gate cleared.</span>
+                                    </div>
+                                ` : isNeedsChanges ? `
+                                    <div class="auth-status-banner pending">
+                                        ${Icons.get('alert', 'size-4 text-amber-600')}
+                                        <span><b>Changes Requested by Admin:</b> ${escapeHtml(auth.gateMessage || 'Please review notes and re-upload.')}</span>
+                                    </div>
+                                ` : isPending ? `
+                                    <div class="auth-status-banner pending">
+                                        ${Icons.get('clock', 'size-4 text-amber-600')}
+                                        <span><b>Under Administrator Review:</b> Request queued. You can approve it directly in the Admin Review Queue.</span>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        ` : ''}
                     `}
                 </div>
 
-                <!-- Right: Assessment Boundaries -->
+                <!-- Right: Assessment Boundaries & Gate Status -->
                 <div class="form-card">
                     <div class="form-card-head">
                         <div class="icon-tile violet">${Icons.get('settings', 'size-5')}</div>
                         <div>
                             <h2>Assessment boundaries</h2>
-                            <p>Specify inclusions and excluded components.</p>
+                            <p>Specify inclusions, exclusions, and safety profile.</p>
                         </div>
                     </div>
 
-                    <label class="field mt-7">
+                    <label class="field mt-5">
                         <span class="field-label">${isDev ? 'Included file patterns' : 'Included paths'}</span>
                         <span class="input-wrap">
                             <input type="text" id="scope-included-paths" value="${escapeHtml(this.scanState.scope.includedPaths || (isDev ? '*.ts, *.js, *.py, *.php' : '/*'))}">
                         </span>
-                        <span class="field-hint">${isDev ? 'All source files matching extensions will be analyzed.' : 'All application paths are included.'}</span>
+                        <span class="field-hint">${isDev ? 'All source files matching extensions will be analyzed.' : 'All application paths within domain.'}</span>
                     </label>
 
-                    <label class="field mt-5">
+                    <label class="field mt-4">
                         <span class="field-label">${isDev ? 'Excluded directories' : 'Excluded paths'}</span>
                         <span class="input-wrap">
                             <input type="text" id="scope-excluded-paths" value="${escapeHtml(this.scanState.scope.excludedPaths || (isDev ? 'node_modules/*, dist/*, .git/*' : '/billing/*, /logout'))}">
                         </span>
                     </label>
 
-                    <div class="mt-6 flex items-center justify-between rounded-xl bg-slate-50 p-4">
+                    <div class="mt-4 flex items-center justify-between rounded-xl bg-slate-50 p-3.5">
                         <div>
-                            <b class="text-sm text-slate-800">${isDev ? 'Local analysis engine' : 'Safe request rate'}</b>
-                            <p class="mt-1 text-xs text-slate-500">${isDev ? 'Zero network latency · Sandbox execution' : 'Up to 10 requests per second (Safe mode)'}</p>
+                            <b class="text-xs text-slate-800">${isDev ? 'Local analysis engine' : 'Safe request rate'}</b>
+                            <p class="mt-0.5 text-[11px] text-slate-500">${isDev ? 'Zero network latency · Sandbox execution' : 'Up to 10 requests per second (Safe mode)'}</p>
                         </div>
                         <span class="status status-safe">Recommended</span>
+                    </div>
+
+                    <!-- Authorization & Scope Gate Status Box -->
+                    <div class="gate-card ${isVerified || isDev ? 'cleared' : 'locked'}">
+                        <div class="gate-head ${isVerified || isDev ? 'cleared' : 'locked'}">
+                            <b>
+                                ${isVerified || isDev ? Icons.get('shield', 'size-4') : Icons.get('lock', 'size-4')}
+                                Authorization Gate: ${isVerified || isDev ? 'CLEARED' : 'LOCKED'}
+                            </b>
+                            <span class="status ${isVerified || isDev ? 'status-safe' : 'status-low'}">
+                                ${isVerified ? 'Authorized' : (isDev ? 'Sandboxed' : 'Verification Required')}
+                            </span>
+                        </div>
+                        <p>
+                            ${isDev
+                                ? 'Development static code analysis runs in an isolated local sandbox. No domain verification is required.'
+                                : (isVerified
+                                    ? `Proof of ownership confirmed via <b>${auth.method || 'DNS'}</b>. Target is authorized for active security assessment.`
+                                    : 'Under OWASP and ethical safety rules, scanning cannot start until domain control is verified (DNS / File) or approved by an administrator.')}
+                        </p>
                     </div>
                 </div>
             </div>
 
+            <!-- Page Actions -->
             <div class="page-actions">
                 <button type="button" class="button button-secondary" onclick="App.navigate('url')">Back</button>
                 <button type="button" class="button button-primary" onclick="App.handleScopeContinue()">
                     Continue ${Icons.get('arrow', 'size-4')}
                 </button>
             </div>
+
+            <!-- Admin Review Queue Modal -->
+            ${auth.showAdminModal ? this.renderAdminReviewModal() : ''}
         `;
     },
 
-    selectVerifyMethod(idx) {
-        this.scanState.verifyMethod = idx;
-        this.render();
-    },
+    renderAdminReviewModal() {
+        const auth = this.scanState.authData;
+        const requests = auth.adminRequests || [];
+        const filter = auth.adminFilter || 'ALL';
 
-    copyDnsToken() {
-        navigator.clipboard.writeText('sential-verify=ns_9d4f2a7c');
-        showToast('DNS TXT verification record copied to clipboard!', 'success');
+        return `
+            <div class="admin-modal-backdrop" onclick="App.toggleAdminReviewModal(false)">
+                <div class="admin-modal-card" onclick="event.stopPropagation()">
+                    <div class="admin-modal-header">
+                        <h3>${Icons.get('shield', 'size-5 text-blue-600')} Written Authorization — Administrator Review Queue</h3>
+                        <button type="button" class="button button-secondary text-xs" style="height: 28px; padding: 0 0.5rem;" onclick="App.toggleAdminReviewModal(false)">
+                            &times; Close
+                        </button>
+                    </div>
+
+                    <div style="padding: 0.75rem 1.4rem; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between;">
+                        <span class="text-xs text-slate-600 font-semibold">Filter Requests:</span>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" class="button button-secondary text-xs" style="height: 26px; ${filter === 'ALL' ? 'background: #2563eb; color: #fff;' : ''}" onclick="App.loadAdminAuthorizations('ALL')">All (${requests.length})</button>
+                            <button type="button" class="button button-secondary text-xs" style="height: 26px; ${filter === 'PENDING' ? 'background: #2563eb; color: #fff;' : ''}" onclick="App.loadAdminAuthorizations('PENDING')">Pending</button>
+                            <button type="button" class="button button-secondary text-xs" style="height: 26px; ${filter === 'APPROVED' ? 'background: #2563eb; color: #fff;' : ''}" onclick="App.loadAdminAuthorizations('APPROVED')">Approved</button>
+                        </div>
+                    </div>
+
+                    <div class="admin-modal-body">
+                        ${auth.isLoadingAdmin ? `
+                            <div class="flex items-center justify-center p-8 text-slate-500 text-xs">
+                                <span class="spinner"></span> <span class="ml-2">Loading authorization requests...</span>
+                            </div>
+                        ` : requests.length === 0 ? `
+                            <div class="text-center p-8 text-slate-500 text-xs">
+                                No authorization requests found for filter "${filter}".
+                            </div>
+                        ` : requests.map(req => `
+                            <div class="admin-request-card">
+                                <div class="admin-request-header">
+                                    <div class="flex items-center gap-2">
+                                        <b class="text-sm text-slate-900">${escapeHtml(req.targetUrl)}</b>
+                                        <span class="status ${req.status === 'APPROVED' ? 'status-safe' : (req.status === 'PENDING' ? 'status-low' : 'status-high')}" style="font-size: 0.65rem;">
+                                            ${escapeHtml(req.status)}
+                                        </span>
+                                    </div>
+                                    <span class="text-[11px] text-slate-400">${new Date(req.submittedAt).toLocaleString()}</span>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-2 text-xs text-slate-600 my-2">
+                                    <div><b>Signatory:</b> ${escapeHtml(req.ownerName)} (${escapeHtml(req.ownerTitle)})</div>
+                                    <div><b>Environment:</b> ${escapeHtml(req.environment)}</div>
+                                </div>
+
+                                ${req.reviewNotes ? `
+                                    <div class="text-[11px] bg-slate-50 border border-slate-200 rounded p-2 text-slate-600 my-2">
+                                        <b>Review Notes (${escapeHtml(req.reviewedBy || 'Admin')}):</b> ${escapeHtml(req.reviewNotes)}
+                                    </div>
+                                ` : ''}
+
+                                <div class="admin-decision-btn-row">
+                                    ${req.letterFileUrl ? `
+                                        <a href="${escapeHtml(req.letterFileUrl)}" target="_blank" class="button button-secondary text-xs" style="height: 28px;">
+                                            ${Icons.get('file', 'size-3')} View Uploaded Document
+                                        </a>
+                                    ` : ''}
+
+                                    <div class="flex items-center gap-2 ml-auto">
+                                        <button type="button" class="button button-primary text-xs" style="height: 28px; background: #059669;" onclick="App.handleAdminDecision(${req.id}, 'APPROVED')">
+                                            ✓ Approve
+                                        </button>
+                                        <button type="button" class="button button-secondary text-xs" style="height: 28px; color: #ea580c;" onclick="App.handleAdminDecision(${req.id}, 'NEEDS_CHANGES')">
+                                            ⚠️ Request Changes
+                                        </button>
+                                        <button type="button" class="button button-secondary text-xs" style="height: 28px; color: #dc2626;" onclick="App.handleAdminDecision(${req.id}, 'REJECTED')">
+                                            ✕ Reject
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
     },
 
     async handleScopeContinue() {
@@ -2685,6 +3275,16 @@ const App = {
         if (inc && inc.value) this.scanState.scope.includedPaths = inc.value.trim();
         if (exc && exc.value) this.scanState.scope.excludedPaths = exc.value.trim();
 
+        const isDev = this.scanState.environment === 'development';
+        const auth = this.scanState.authData;
+        const isAuthorized = auth.status === 'VERIFIED' || auth.status === 'APPROVED' || auth.gateAllowed;
+
+        // Enforce Authorization & Scope Gate: Strict Halt if not authorized
+        if (!isDev && !isAuthorized) {
+            showToast('Target Authorization Gate Locked: Domain ownership verification (DNS or File) or Admin approval of a Written Letter is required before starting the scan.', 'error');
+            return;
+        }
+
         const btn = document.querySelector('.page-actions .button-primary');
         if (btn) {
             btn.disabled = true;
@@ -2692,7 +3292,6 @@ const App = {
         }
 
         try {
-            const isDev = this.scanState.environment === 'development';
             const payload = {
                 url: isDev ? (this.scanState.uploadedFile?.name || 'uploaded_project.zip') : this.scanState.url,
                 name: this.scanState.name || 'Security Assessment',

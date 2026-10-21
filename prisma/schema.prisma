@@ -35,22 +35,50 @@ model Project {
 }
 
 model Target {
+  id                  Int       @id @default(autoincrement())
+  projectId           Int
+  name                String    @default("Target Application")
+  url                 String
+  targetType          String    @default("URL") // URL, FILE_ZIP
+  environment         String    @default("PRODUCTION") // DEVELOPMENT, STAGING, PRODUCTION
+  filePath            String?   // Uploaded zip or folder path for SAST
+  scope               String?   // Assessment scope and boundary rules
+  isAuthorized        Boolean   @default(false)
+  authorizationMethod String?   // DNS, FILE, WRITTEN
+  authorizationStatus String    @default("PENDING") // PENDING, VERIFIED, APPROVED, REJECTED, EXPIRED, FAILED
+  authorizedAt        DateTime?
+  status              String    @default("ACTIVE")
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  project             Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scans               Scan[]
+  scanConfigs         ScanConfiguration[]
+  authorizations      AuthorizationVerification[]
+}
+
+model AuthorizationVerification {
   id              Int       @id @default(autoincrement())
-  projectId       Int
-  name            String    @default("Target Application")
-  url             String
-  targetType      String    @default("URL") // URL, FILE_ZIP
-  environment     String    @default("PRODUCTION") // DEVELOPMENT, STAGING, PRODUCTION
-  filePath        String?   // Uploaded zip or folder path for SAST
-  scope           String?   // Assessment scope and boundary rules
-  isAuthorized    Boolean   @default(true)
-  authorizedAt    DateTime?
-  status          String    @default("ACTIVE")
+  targetId        Int
+  userId          Int?
+  method          String    // DNS, FILE, WRITTEN
+  status          String    @default("PENDING") // PENDING, VERIFIED, APPROVED, REJECTED, EXPIRED, FAILED
+  token           String
+  dnsRecordName   String?
+  dnsExpectedVal  String?
+  fileName        String?
+  filePath        String?
+  fileContent     String?
+  letterFileUrl   String?
+  ownerName       String?
+  ownerTitle      String?
+  scopeJson       String?
+  expiresAt       DateTime?
+  verifiedAt      DateTime?
+  reviewedBy      String?
+  reviewNotes     String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
-  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  scans           Scan[]
-  scanConfigs     ScanConfiguration[]
+  target          Target    @relation(fields: [targetId], references: [id], onDelete: Cascade)
 }
 
 model Scan {

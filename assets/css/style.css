@@ -2946,3 +2946,363 @@
     flex-shrink: 0;
 }
 
+/* =========================================================
+   Target Authorization & Scope Gate (Methods: DNS, File, Letter)
+   Simple, clean, Figma-cohesive styling ("بسيط ولايق")
+   ========================================================= */
+
+.auth-method-nav {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.65rem;
+    margin-bottom: 1.25rem;
+}
+
+.auth-method-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0.75rem 0.85rem;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 0.65rem;
+    background: #ffffff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    position: relative;
+}
+
+.auth-method-tab:hover {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+}
+
+.auth-method-tab.active {
+    border-color: #2563eb;
+    background: #f0f7ff;
+    box-shadow: 0 0 0 1px #2563eb;
+}
+
+.auth-method-tab-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    margin-bottom: 0.25rem;
+}
+
+.auth-method-tab-header b {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.auth-method-tab.active .auth-method-tab-header b {
+    color: #1d4ed8;
+}
+
+.auth-method-tab p {
+    font-size: 0.68rem;
+    color: #64748b;
+    margin: 0;
+    line-height: 1.35;
+}
+
+.auth-badge-auto {
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.15rem 0.4rem;
+    border-radius: 9999px;
+    background: #ecfdf5;
+    color: #059669;
+    border: 1px solid #a7f3d0;
+    margin-left: auto;
+}
+
+.auth-badge-admin {
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.15rem 0.4rem;
+    border-radius: 9999px;
+    background: #fff7ed;
+    color: #c2410c;
+    border: 1px solid #fed7aa;
+    margin-left: auto;
+}
+
+/* Method Detail Box */
+.auth-panel-box {
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    background: #ffffff;
+    padding: 1.15rem;
+    margin-bottom: 1.25rem;
+}
+
+.auth-panel-box h3 {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+}
+
+.auth-panel-box p.hint {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin-bottom: 1rem;
+    line-height: 1.45;
+}
+
+/* Challenge Code & Details Block */
+.auth-info-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    margin-bottom: 1rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.55rem;
+    padding: 0.85rem 1rem;
+}
+
+.auth-info-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-size: 0.75rem;
+}
+
+.auth-info-label {
+    font-weight: 600;
+    color: #475569;
+    min-width: 90px;
+    font-size: 0.72rem;
+}
+
+.auth-info-val {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.74rem;
+    color: #0f172a;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    padding: 0.25rem 0.55rem;
+    border-radius: 0.35rem;
+    word-break: break-all;
+    flex: 1;
+}
+
+.auth-action-btn-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.9rem;
+}
+
+/* ChatGPT-Style Minimalist Upload Pill */
+.chatgpt-upload-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.9rem;
+    border: 1.5px dashed #cbd5e1;
+    border-radius: 0.55rem;
+    background: #ffffff;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #334155;
+    transition: all 0.2s ease;
+}
+
+.chatgpt-upload-pill:hover {
+    border-color: #2563eb;
+    background: #f0f7ff;
+    color: #1d4ed8;
+}
+
+.chatgpt-file-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: 0.5rem;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1e40af;
+    font-size: 0.74rem;
+    font-weight: 600;
+}
+
+/* Status Cards & Banners */
+.auth-status-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 0.95rem;
+    border-radius: 0.55rem;
+    font-size: 0.75rem;
+    margin-top: 0.85rem;
+}
+
+.auth-status-banner.verified {
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    color: #065f46;
+}
+
+.auth-status-banner.pending {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    color: #92400e;
+}
+
+.auth-status-banner.failed {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
+}
+
+/* Authorization & Scope Gate Box */
+.gate-card {
+    border-radius: 0.75rem;
+    padding: 1.1rem;
+    border: 1.5px solid #e2e8f0;
+    background: #ffffff;
+    margin-top: 1.25rem;
+    transition: all 0.2s ease;
+}
+
+.gate-card.cleared {
+    border-color: #10b981;
+    background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%);
+}
+
+.gate-card.locked {
+    border-color: #f59e0b;
+    background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%);
+}
+
+.gate-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+.gate-head b {
+    font-size: 0.82rem;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.gate-head.cleared b {
+    color: #065f46;
+}
+
+.gate-head.locked b {
+    color: #92400e;
+}
+
+.gate-card p {
+    font-size: 0.72rem;
+    color: #475569;
+    line-height: 1.45;
+    margin: 0;
+}
+
+/* Admin Review Modal */
+.admin-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    animation: fadeIn 0.15s ease-out;
+}
+
+.admin-modal-card {
+    background: #ffffff;
+    border-radius: 0.85rem;
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.2);
+    width: 100%;
+    max-width: 780px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+}
+
+.admin-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.4rem;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+}
+
+.admin-modal-header h3 {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.admin-modal-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 1.25rem 1.4rem;
+}
+
+.admin-request-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 0.65rem;
+    padding: 1rem;
+    margin-bottom: 0.95rem;
+    background: #ffffff;
+    transition: all 0.2s ease;
+}
+
+.admin-request-card:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.admin-request-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.6rem;
+}
+
+.admin-request-header b {
+    font-size: 0.82rem;
+    color: #0f172a;
+}
+
+.admin-decision-btn-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.85rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed #e2e8f0;
+}
+
+

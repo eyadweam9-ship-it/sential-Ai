@@ -13,6 +13,7 @@ import { prisma } from './config/db';
 import { adminRouter } from './routes/admin.routes';
 import { authRouter } from './routes/auth.routes';
 import { scanRouter } from './routes/scan.routes';
+import { authorizationRouter } from './routes/authorization.routes';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -81,6 +82,7 @@ app.get(['/dashboard', '/dashboard.html'], (req: Request, res: Response) => {
 
 app.use('/api/admin', adminRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/authorization', authorizationRouter);
 app.use('/api/scans', scanRouter);
 app.use('/api', scanRouter);
 
