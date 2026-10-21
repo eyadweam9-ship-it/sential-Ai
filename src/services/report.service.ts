@@ -206,27 +206,42 @@ function generatePrintableHtmlReport(data: GeneratedReportData): string {
     </table>
 
     <!-- Detailed Findings -->
-    <h3 style="margin-top:36px;">Verified Vulnerabilities & Findings</h3>
+    <h3 style="margin-top:36px;">Verified Vulnerabilities &amp; Findings Catalog</h3>
     ${data.findings.length === 0 ? '<p style="color:#15803d; font-weight:600;">No security findings detected for this assessment.</p>' : ''}
-    ${data.findings.map(f => `
+    ${data.findings.map((f, idx) => {
+      const loc = (f.evidences && f.evidences[0] && (f.evidences[0].url || f.evidences[0].filePath)) || data.targetUrl || '/';
+      const line = (f.evidences && f.evidences[0] && f.evidences[0].lineStart) ? ` (Line ${f.evidences[0].lineStart})` : '';
+      const impact = (f.aiAnalyses && f.aiAnalyses[0] && f.aiAnalyses[0].impact) 
+        || 'If left unpatched, this vulnerability expands the attack surface, degrades security baselines, and can be leveraged by attackers to compromise system confidentiality, integrity, or availability.';
+      const rem = (f.aiAnalyses && f.aiAnalyses[0] && f.aiAnalyses[0].recommendedRemediation) || f.remediation || 'Apply appropriate security configurations and input validation.';
+
+      return `
       <div class="finding-card">
         <div style="display:flex; justify-content:space-between; align-items:center;">
-          <h4 style="margin:0; font-size:15px; color:#0f172a;">${f.title}</h4>
-          <span class="badge badge-${f.severity.toLowerCase()}">${f.severity}</span>
+          <h4 style="margin:0; font-size:15px; color:#0f172a;">${idx + 1}. ${f.title}</h4>
+          <span class="badge badge-${(f.severity || 'low').toLowerCase()}">${f.severity}</span>
         </div>
-        <p style="font-size:11px; color:#64748b; margin:4px 0 10px 0;">Discovered by <b>${f.toolName}</b> · Rule: ${f.sourceRuleId || 'N/A'} · Confidence: ${f.confidence}</p>
+        <p style="font-size:11px; color:#64748b; margin:4px 0 8px 0;">Discovered by <b>${f.toolName}</b> · Rule: ${f.sourceRuleId || 'N/A'} · ${f.cwe || 'CWE-200'} · Confidence: ${f.confidence}</p>
+        <p style="font-size:12px; font-family:monospace; color:#3b82f6; margin:0 0 8px 0; word-break:break-all;"><b>Target Location:</b> ${loc}${line}</p>
         <p style="font-size:13px; color:#334155; margin:0 0 10px 0;">${f.description || ''}</p>
+        
+        <!-- Threat Impact: What happens if left open -->
+        <div style="margin:10px 0; padding:10px 12px; background:#fff7ed; border-left:4px solid #ea580c; border-radius:4px; font-size:12px; color:#9a3412;">
+          <b>🚨 What happens if left unpatched (Exploitation Impact):</b>
+          <p style="margin:4px 0 0 0; color:#7c2d12;">${impact}</p>
+        </div>
+
         ${f.evidences && f.evidences[0] ? `
-          <div style="font-size:12px; color:#475569;"><b>Evidence:</b> ${f.evidences[0].evidenceSummary || ''}</div>
+          <div style="font-size:12px; color:#475569; margin-top:8px;"><b>Observed Evidence:</b> ${f.evidences[0].evidenceSummary || ''}</div>
           ${f.evidences[0].rawSnippet ? `<pre class="code-snippet">${f.evidences[0].rawSnippet}</pre>` : ''}
         ` : ''}
-        ${f.remediation ? `
-          <div style="margin-top:10px; padding:10px; background:#f0fdf4; border-left:3px solid #16a34a; font-size:12px; color:#14532d;">
-            <b>Recommended Fix:</b> ${f.remediation}
-          </div>
-        ` : ''}
+
+        <div style="margin-top:10px; padding:10px 12px; background:#f0fdf4; border-left:4px solid #16a34a; border-radius:4px; font-size:12px; color:#14532d;">
+          <b>🛡️ Recommended Remediation Guidance (Advisory):</b>
+          <p style="margin:4px 0 0 0; color:#166534;">${rem}</p>
+        </div>
       </div>
-    `).join('')}
+    `}).join('')}
   </div>
 </body>
 </html>`;
