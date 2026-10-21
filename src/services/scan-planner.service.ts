@@ -54,25 +54,58 @@ export async function planScanExecution(options: {
     });
   }
 
-  // 3. Semgrep (SAST) - Static AST code taint & pattern analysis on source code & client-side scripts
+  // 3. WPScan (CMS & Application Frameworks) - Audits WordPress, Joomla, Drupal, and framework endpoints
+  if (hasUrl) {
+    plannedTasks.push({ toolName: 'WPSCAN', status: 'PENDING' });
+  } else {
+    plannedTasks.push({
+      toolName: 'WPSCAN',
+      status: 'SKIPPED',
+      reason: 'CMS scanning requires an active target URL.',
+    });
+  }
+
+  // 4. WhatWeb (Reconnaissance & WAF) - Identifies technologies, WAFs, and information disclosures
+  if (hasUrl) {
+    plannedTasks.push({ toolName: 'WHATWEB', status: 'PENDING' });
+  } else {
+    plannedTasks.push({
+      toolName: 'WHATWEB',
+      status: 'SKIPPED',
+      reason: 'Technology fingerprinting requires an active target URL.',
+    });
+  }
+
+  // 5. TestSSL (Transport & Security Headers) - Audits TLS encryption, HSTS, and defense headers
+  if (hasUrl) {
+    plannedTasks.push({ toolName: 'TESTSSL', status: 'PENDING' });
+  } else {
+    plannedTasks.push({
+      toolName: 'TESTSSL',
+      status: 'SKIPPED',
+      reason: 'TLS inspection requires an active HTTP/HTTPS endpoint.',
+    });
+  }
+
+  // 6. Semgrep (SAST) - Static AST code taint & pattern analysis on source code & client-side scripts
   plannedTasks.push({ toolName: 'SEMGREP', status: 'PENDING' });
 
-  // 4. CodeQL (SAST) - Advanced data-flow & taint-tracking analysis (Source -> Sanitizer -> Sink)
+  // 7. CodeQL (SAST) - Advanced data-flow & taint-tracking analysis (Source -> Sanitizer -> Sink)
   plannedTasks.push({ toolName: 'CODEQL', status: 'PENDING' });
 
-  // 5. Gitleaks (Secrets) - Scans source code, repositories & web bundles for exposed API keys and tokens
+  // 8. Gitleaks (Secrets) - Scans source code, repositories & web bundles for exposed API keys and tokens
   plannedTasks.push({ toolName: 'GITLEAKS', status: 'PENDING' });
 
-  // 6. Trivy (Component / Dependency CVE Analysis) - Audits package manifests & container configurations
+  // 9. Trivy (Component / Dependency CVE Analysis) - Audits package manifests & container configurations
   plannedTasks.push({ toolName: 'TRIVY', status: 'PENDING' });
 
-  // 7. OSV-Scanner (Supply Chain Intelligence) - Validates dependencies against Google OSV advisory database
+  // 10. OSV-Scanner (Supply Chain Intelligence) - Validates dependencies against Google OSV advisory database
   plannedTasks.push({ toolName: 'OSV_SCANNER', status: 'PENDING' });
 
-  // 8. Checkov (IaC & Security Posture) - Scans Dockerfile, Kubernetes manifests & infrastructure configuration
+  // 11. Checkov (IaC & Security Posture) - Scans Dockerfile, Kubernetes manifests & infrastructure configuration
   plannedTasks.push({ toolName: 'CHECKOV', status: 'PENDING' });
 
-  // 9. npm audit (Dependencies) - Validates npm dependency tree against known vulnerability advisories
+  // 12. npm audit (Dependencies) - Validates npm dependency tree against known vulnerability advisories
   plannedTasks.push({ toolName: 'NPM_AUDIT', status: 'PENDING' });
 
   // Persist planned tasks in database

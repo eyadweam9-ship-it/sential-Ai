@@ -8,6 +8,9 @@ import { TrivyAdapter } from './trivy.adapter';
 import { OsvScannerAdapter } from './osv-scanner.adapter';
 import { CheckovAdapter } from './checkov.adapter';
 import { NpmAuditAdapter } from './npm-audit.adapter';
+import { WpscanAdapter } from './wpscan.adapter';
+import { WhatwebAdapter } from './whatweb.adapter';
+import { TestsslAdapter } from './testssl.adapter';
 
 export * from './security-tool.interface';
 export * from './zap.adapter';
@@ -19,10 +22,16 @@ export * from './trivy.adapter';
 export * from './osv-scanner.adapter';
 export * from './checkov.adapter';
 export * from './npm-audit.adapter';
+export * from './wpscan.adapter';
+export * from './whatweb.adapter';
+export * from './testssl.adapter';
 
 export const TOOL_ADAPTERS: Record<string, SecurityToolAdapter> = {
   OWASP_ZAP: new ZapAdapter(),
   NUCLEI: new NucleiAdapter(),
+  WPSCAN: new WpscanAdapter(),
+  WHATWEB: new WhatwebAdapter(),
+  TESTSSL: new TestsslAdapter(),
   SEMGREP: new SemgrepAdapter(),
   CODEQL: new CodeqlAdapter(),
   GITLEAKS: new GitleaksAdapter(),
