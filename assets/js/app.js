@@ -3784,26 +3784,44 @@ const App = {
                             <span class="status status-running" id="prog-badge-OWASP_ZAP">Running</span>
                         </div>
 
+                        <div class="stage" id="prog-stage-NUCLEI">
+                            <span class="stage-marker" id="prog-marker-NUCLEI">2</span>
+                            <div>
+                                <b>Nuclei (Template DAST)</b>
+                                <p id="prog-desc-NUCLEI">Fast template-based exploit &amp; misconfiguration checks</p>
+                            </div>
+                            <span class="status" id="prog-badge-NUCLEI" style="color:#64748b;">Pending</span>
+                        </div>
+
                         <div class="stage" id="prog-stage-SEMGREP">
-                            <span class="stage-marker" id="prog-marker-SEMGREP">2</span>
+                            <span class="stage-marker" id="prog-marker-SEMGREP">3</span>
                             <div>
                                 <b>Semgrep (SAST)</b>
-                                <p id="prog-desc-SEMGREP">Static AST code taint &amp; injection analysis</p>
+                                <p id="prog-desc-SEMGREP">Static AST code taint &amp; injection pattern analysis</p>
                             </div>
                             <span class="status" id="prog-badge-SEMGREP" style="color:#64748b;">Pending</span>
                         </div>
 
+                        <div class="stage" id="prog-stage-CODEQL">
+                            <span class="stage-marker" id="prog-marker-CODEQL">4</span>
+                            <div>
+                                <b>CodeQL (Data-Flow SAST)</b>
+                                <p id="prog-desc-CODEQL">Deep taint-tracking analysis (Source -> Sanitizer -> Sink)</p>
+                            </div>
+                            <span class="status" id="prog-badge-CODEQL" style="color:#64748b;">Pending</span>
+                        </div>
+
                         <div class="stage" id="prog-stage-GITLEAKS">
-                            <span class="stage-marker" id="prog-marker-GITLEAKS">3</span>
+                            <span class="stage-marker" id="prog-marker-GITLEAKS">5</span>
                             <div>
                                 <b>Gitleaks (Secrets)</b>
-                                <p id="prog-desc-GITLEAKS">Scanning source files for exposed API keys &amp; tokens</p>
+                                <p id="prog-desc-GITLEAKS">Scanning source files &amp; bundles for exposed API keys &amp; tokens</p>
                             </div>
                             <span class="status" id="prog-badge-GITLEAKS" style="color:#64748b;">Pending</span>
                         </div>
 
                         <div class="stage" id="prog-stage-TRIVY">
-                            <span class="stage-marker" id="prog-marker-TRIVY">4</span>
+                            <span class="stage-marker" id="prog-marker-TRIVY">6</span>
                             <div>
                                 <b>Trivy (Dependencies)</b>
                                 <p id="prog-desc-TRIVY">Auditing package manifests &amp; container CVEs</p>
@@ -3811,8 +3829,26 @@ const App = {
                             <span class="status" id="prog-badge-TRIVY" style="color:#64748b;">Pending</span>
                         </div>
 
+                        <div class="stage" id="prog-stage-OSV_SCANNER">
+                            <span class="stage-marker" id="prog-marker-OSV_SCANNER">7</span>
+                            <div>
+                                <b>OSV-Scanner (Supply Chain)</b>
+                                <p id="prog-desc-OSV_SCANNER">Google OSV database vulnerability intelligence</p>
+                            </div>
+                            <span class="status" id="prog-badge-OSV_SCANNER" style="color:#64748b;">Pending</span>
+                        </div>
+
+                        <div class="stage" id="prog-stage-CHECKOV">
+                            <span class="stage-marker" id="prog-marker-CHECKOV">8</span>
+                            <div>
+                                <b>Checkov (IaC &amp; Posture)</b>
+                                <p id="prog-desc-CHECKOV">Dockerfile, Kubernetes &amp; infrastructure security audit</p>
+                            </div>
+                            <span class="status" id="prog-badge-CHECKOV" style="color:#64748b;">Pending</span>
+                        </div>
+
                         <div class="stage" id="prog-stage-NPM_AUDIT">
-                            <span class="stage-marker" id="prog-marker-NPM_AUDIT">5</span>
+                            <span class="stage-marker" id="prog-marker-NPM_AUDIT">9</span>
                             <div>
                                 <b>npm audit</b>
                                 <p id="prog-desc-NPM_AUDIT">Advisory database validation for npm dependencies</p>
@@ -3821,10 +3857,10 @@ const App = {
                         </div>
 
                         <div class="stage" id="prog-stage-AI">
-                            <span class="stage-marker" id="prog-marker-AI">6</span>
+                            <span class="stage-marker" id="prog-marker-AI">10</span>
                             <div>
                                 <b>AI Threat Intelligence</b>
-                                <p id="prog-desc-AI">Deduplication, severity evaluation &amp; report generation</p>
+                                <p id="prog-desc-AI">Cross-engine correlation, deduplication &amp; risk evaluation</p>
                             </div>
                             <span class="status" id="prog-badge-AI" style="color:#64748b;">Queued</span>
                         </div>
@@ -4099,7 +4135,7 @@ const App = {
                     <div style="display:flex; align-items:center; gap:16px;">
                         <div style="text-align:right;">
                             <span style="font-size:10px; color:#64748b; font-weight:600; text-transform:uppercase;">Tools Completed</span>
-                            <div id="tools-completed-ratio" style="font-size:15px; font-weight:800; color:#0f172a;">— / 5</div>
+                            <div id="tools-completed-ratio" style="font-size:15px; font-weight:800; color:#0f172a;">— / 9</div>
                         </div>
                         <div style="text-align:right;">
                             <span style="font-size:10px; color:#64748b; font-weight:600; text-transform:uppercase;">Engine Mode</span>
@@ -4108,7 +4144,7 @@ const App = {
                     </div>
                 </div>
 
-                <!-- 5 Tool Matrix Grid -->
+                <!-- 9 Tool Matrix Grid -->
                 <div id="tool-execution-matrix-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px;">
                     <div class="tool-matrix-tile" id="tile-tool-OWASP_ZAP" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
                         <div>
@@ -4118,12 +4154,28 @@ const App = {
                         <span class="tool-status-pill badge" id="pill-OWASP_ZAP" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
                     </div>
 
+                    <div class="tool-matrix-tile" id="tile-tool-NUCLEI" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-size:12px; font-weight:700; color:#1e293b;">Nuclei</div>
+                            <small style="color:#64748b; font-size:10px;">Template DAST</small>
+                        </div>
+                        <span class="tool-status-pill badge" id="pill-NUCLEI" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
+                    </div>
+
                     <div class="tool-matrix-tile" id="tile-tool-SEMGREP" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
                         <div>
                             <div style="font-size:12px; font-weight:700; color:#1e293b;">Semgrep</div>
                             <small style="color:#64748b; font-size:10px;">SAST Code</small>
                         </div>
                         <span class="tool-status-pill badge" id="pill-SEMGREP" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
+                    </div>
+
+                    <div class="tool-matrix-tile" id="tile-tool-CODEQL" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-size:12px; font-weight:700; color:#1e293b;">CodeQL</div>
+                            <small style="color:#64748b; font-size:10px;">Data-Flow SAST</small>
+                        </div>
+                        <span class="tool-status-pill badge" id="pill-CODEQL" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
                     </div>
 
                     <div class="tool-matrix-tile" id="tile-tool-GITLEAKS" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
@@ -4140,6 +4192,22 @@ const App = {
                             <small style="color:#64748b; font-size:10px;">Config &amp; CVEs</small>
                         </div>
                         <span class="tool-status-pill badge" id="pill-TRIVY" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
+                    </div>
+
+                    <div class="tool-matrix-tile" id="tile-tool-OSV_SCANNER" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-size:12px; font-weight:700; color:#1e293b;">OSV-Scanner</div>
+                            <small style="color:#64748b; font-size:10px;">Supply Chain</small>
+                        </div>
+                        <span class="tool-status-pill badge" id="pill-OSV_SCANNER" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
+                    </div>
+
+                    <div class="tool-matrix-tile" id="tile-tool-CHECKOV" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-size:12px; font-weight:700; color:#1e293b;">Checkov</div>
+                            <small style="color:#64748b; font-size:10px;">IaC &amp; Posture</small>
+                        </div>
+                        <span class="tool-status-pill badge" id="pill-CHECKOV" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
                     </div>
 
                     <div class="tool-matrix-tile" id="tile-tool-NPM_AUDIT" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
@@ -5075,10 +5143,24 @@ const App = {
                         </div>
                         <div class="report-tool-box">
                             <div class="report-tool-head">
+                                <b>Nuclei</b>
+                                <span class="tool-status-pill badge" style="background:#ecfdf5; color:#047857;">Completed</span>
+                            </div>
+                            <small>Fast template-based DAST vulnerability scanner for exposed admin panels, cloud configuration errors, and CVEs.</small>
+                        </div>
+                        <div class="report-tool-box">
+                            <div class="report-tool-head">
                                 <b>Semgrep</b>
                                 <span class="tool-status-pill badge" style="background:#ecfdf5; color:#047857;">Completed</span>
                             </div>
-                            <small>Static Application Security Testing (SAST) analyzing code syntax trees, taint tracking, and DOM security vulnerabilities.</small>
+                            <small>Static Application Security Testing (SAST) analyzing code syntax trees, AST injection patterns, and DOM sinks.</small>
+                        </div>
+                        <div class="report-tool-box">
+                            <div class="report-tool-head">
+                                <b>CodeQL</b>
+                                <span class="tool-status-pill badge" style="background:#ecfdf5; color:#047857;">Completed</span>
+                            </div>
+                            <small>Advanced data-flow &amp; taint-tracking engine tracing untrusted input paths (Source -> Sanitizer -> Dangerous Sink).</small>
                         </div>
                         <div class="report-tool-box">
                             <div class="report-tool-head">
@@ -5093,6 +5175,20 @@ const App = {
                                 <span class="tool-status-pill badge" style="background:#ecfdf5; color:#047857;">Completed</span>
                             </div>
                             <small>Container image, infrastructure-as-code, and dependency vulnerability scanner targeting published CVEs.</small>
+                        </div>
+                        <div class="report-tool-box">
+                            <div class="report-tool-head">
+                                <b>OSV-Scanner</b>
+                                <span class="tool-status-pill badge" style="background:#ecfdf5; color:#047857;">Completed</span>
+                            </div>
+                            <small>Google Open Source Vulnerabilities (OSV) intelligence engine verifying dependencies against GHSA and CVE databases.</small>
+                        </div>
+                        <div class="report-tool-box">
+                            <div class="report-tool-head">
+                                <b>Checkov</b>
+                                <span class="tool-status-pill badge" style="background:#ecfdf5; color:#047857;">Completed</span>
+                            </div>
+                            <small>Infrastructure-as-Code (IaC) scanner auditing Dockerfiles, Kubernetes manifests, and cloud reverse proxy configurations.</small>
                         </div>
                         <div class="report-tool-box">
                             <div class="report-tool-head">

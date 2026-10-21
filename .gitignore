@@ -21,6 +21,12 @@ dev.db-journal
 uploads/*
 !uploads/.gitkeep
 
+# Scan results & generated reports
+storage/reports/*
+!storage/reports/.gitkeep
+storage/tool-results/*
+!storage/tool-results/.gitkeep
+
 # Logs
 *.log
 npm-debug.log*

@@ -1,22 +1,34 @@
 import { SecurityToolAdapter } from './security-tool.interface';
 import { ZapAdapter } from './zap.adapter';
+import { NucleiAdapter } from './nuclei.adapter';
 import { SemgrepAdapter } from './semgrep.adapter';
+import { CodeqlAdapter } from './codeql.adapter';
 import { GitleaksAdapter } from './gitleaks.adapter';
 import { TrivyAdapter } from './trivy.adapter';
+import { OsvScannerAdapter } from './osv-scanner.adapter';
+import { CheckovAdapter } from './checkov.adapter';
 import { NpmAuditAdapter } from './npm-audit.adapter';
 
 export * from './security-tool.interface';
 export * from './zap.adapter';
+export * from './nuclei.adapter';
 export * from './semgrep.adapter';
+export * from './codeql.adapter';
 export * from './gitleaks.adapter';
 export * from './trivy.adapter';
+export * from './osv-scanner.adapter';
+export * from './checkov.adapter';
 export * from './npm-audit.adapter';
 
 export const TOOL_ADAPTERS: Record<string, SecurityToolAdapter> = {
   OWASP_ZAP: new ZapAdapter(),
+  NUCLEI: new NucleiAdapter(),
   SEMGREP: new SemgrepAdapter(),
+  CODEQL: new CodeqlAdapter(),
   GITLEAKS: new GitleaksAdapter(),
   TRIVY: new TrivyAdapter(),
+  OSV_SCANNER: new OsvScannerAdapter(),
+  CHECKOV: new CheckovAdapter(),
   NPM_AUDIT: new NpmAuditAdapter(),
 };
 
