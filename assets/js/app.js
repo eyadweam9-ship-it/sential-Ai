@@ -3549,33 +3549,6 @@ const App = {
                                 </div>
                                 <span class="status status-safe">Recommended</span>
                             </div>
-
-                            <!-- 5. Authenticated Dashboard & Media Reconnaissance (Optional) -->
-                            <div class="mt-4 pt-3 border-t border-slate-200">
-                                <div class="flex items-center justify-between mb-1">
-                                    <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                                        ${Icons.get('lock', 'size-3.5 text-blue-600')} Authenticated Scan &amp; Dashboard Recon
-                                    </span>
-                                    <span class="badge" style="font-size:9px; padding:2px 6px; background:#eff6ff; color:#2563eb; border-radius:4px; font-weight:700;">OPTIONAL</span>
-                                </div>
-                                <p class="text-[11px] text-slate-500 mb-2.5">
-                                    Provide a session cookie or auth token to permit inspection of protected dashboard pages, user data APIs, and video media endpoints behind the login wall.
-                                </p>
-                                <div class="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <span class="field-label" style="font-size:0.68rem; margin-bottom:0.2rem; color:#475569;">Session Cookie (e.g. session_id=...):</span>
-                                        <div class="input-wrap" style="height:34px;">
-                                            <input type="text" id="scope-session-cookie" placeholder="connect.sid=s%3A..." value="${escapeHtml(this.scanState.scope.sessionCookie || '')}" style="font-size:11px;">
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <span class="field-label" style="font-size:0.68rem; margin-bottom:0.2rem; color:#475569;">Authorization Header (Bearer Token):</span>
-                                        <div class="input-wrap" style="height:34px;">
-                                            <input type="text" id="scope-auth-header" placeholder="Bearer eyJhbGci..." value="${escapeHtml(this.scanState.scope.authHeader || '')}" style="font-size:11px;">
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                     `}
 
@@ -3615,20 +3588,11 @@ const App = {
         this.ensureScopeArrays();
         const inc = document.getElementById('scope-included-paths');
         const exc = document.getElementById('scope-excluded-paths');
-        const sessCookie = document.getElementById('scope-session-cookie');
-        const authHdr = document.getElementById('scope-auth-header');
-
         if (inc && inc.value) {
             this.scanState.scope.includedPaths = inc.value.split(',').map(s => s.trim()).filter(Boolean);
         }
         if (exc && exc.value) {
             this.scanState.scope.excludedPaths = exc.value.split(',').map(s => s.trim()).filter(Boolean);
-        }
-        if (sessCookie) {
-            this.scanState.scope.sessionCookie = sessCookie.value.trim();
-        }
-        if (authHdr) {
-            this.scanState.scope.authHeader = authHdr.value.trim();
         }
 
         const env = (this.scanState.environment || 'development').toLowerCase();
