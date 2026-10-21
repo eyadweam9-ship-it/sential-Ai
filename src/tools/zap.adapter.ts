@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import { SecurityToolAdapter, ToolInput, ToolExecutionResult, RawToolFinding } from './security-tool.interface';
-import { safeFetchText } from '../services/crawler.service';
 import { evaluateScope } from '../services/scope.service';
 
 export class ZapAdapter implements SecurityToolAdapter {
@@ -10,7 +9,6 @@ export class ZapAdapter implements SecurityToolAdapter {
   readonly supportedTargetTypes: Array<'URL' | 'FILE_ZIP' | 'HYBRID'> = ['URL', 'HYBRID'];
 
   async isAvailable(): Promise<boolean> {
-    // Available via live active DAST engine & external ZAP daemon integration
     return true;
   }
 
@@ -40,27 +38,24 @@ export class ZapAdapter implements SecurityToolAdapter {
 
     try {
       // 1. Probe Base Target URL
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), input.timeoutMs || 25_000);
+      let mainHtml = '';
+      try {
+        const resp = await fetch(targetUrl, {
+          method: 'GET',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SentinelAI-SecurityScanner/2.0',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          },
+          signal: AbortSignal.timeout(input.timeoutMs || 25_000),
+        });
 
-      const resp = await fetch(targetUrl, {
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SentinelAI-SecurityScanner/2.0',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-        signal: controller.signal,
-      }).catch((err) => {
-        return null;
-      });
-      clearTimeout(timeoutId);
-
-      if (resp) {
         const headers = resp.headers;
         const statusCode = resp.status;
+        mainHtml = await resp.text().catch(() => '');
 
-        // Check A: Missing Content-Security-Policy (CSP)
-        if (!headers.get('content-security-policy')) {
+        // Check A: Content-Security-Policy (CSP)
+        const csp = headers.get('content-security-policy');
+        if (!csp) {
           findings.push({
             title: 'Content Security Policy (CSP) Header Not Set',
             severity: 'MEDIUM',
@@ -68,28 +63,43 @@ export class ZapAdapter implements SecurityToolAdapter {
             category: 'SECURITY_MISCONFIGURATION',
             sourceRuleId: '10038-1',
             targetUrl,
-            evidenceSummary: `The response header "Content-Security-Policy" is missing on status ${statusCode}. Without CSP, the browser cannot restrict script execution sources.`,
-            remediation: 'Implement a strict Content Security Policy (CSP) header specifying trusted sources for scripts, styles, and frames.',
+            evidenceSummary: `The response header "Content-Security-Policy" is missing on status ${statusCode}. Without CSP, the browser cannot restrict script execution sources or prevent Cross-Site Scripting (XSS).`,
+            remediation: "Implement a strict Content Security Policy (CSP) header specifying trusted sources for scripts, styles, and frames (e.g. default-src 'self').",
+            cwe: 'CWE-693',
+          });
+        } else if (csp.includes("'unsafe-inline'") || csp.includes("'unsafe-eval'")) {
+          findings.push({
+            title: 'Insecure Content Security Policy (CSP) Configuration',
+            severity: 'LOW',
+            confidence: 'CONFIRMED',
+            category: 'SECURITY_MISCONFIGURATION',
+            sourceRuleId: '10038-2',
+            targetUrl,
+            evidenceSummary: `CSP contains permissive directives: ${[csp.includes("'unsafe-inline'") ? "'unsafe-inline'" : '', csp.includes("'unsafe-eval'") ? "'unsafe-eval'" : ''].filter(Boolean).join(', ')}.`,
+            remediation: "Refactor scripts to use cryptographic nonces or hashes rather than allowing 'unsafe-inline' or 'unsafe-eval'.",
             cwe: 'CWE-693',
           });
         }
 
-        // Check B: Missing Strict-Transport-Security (HSTS)
-        if (targetUrl.startsWith('https://') && !headers.get('strict-transport-security')) {
-          findings.push({
-            title: 'HTTP Strict Transport Security (HSTS) Header Missing',
-            severity: 'MEDIUM',
-            confidence: 'HIGH',
-            category: 'INSECURE_COMMUNICATION',
-            sourceRuleId: '10035-1',
-            targetUrl,
-            evidenceSummary: 'The application is served over HTTPS but does not transmit the Strict-Transport-Security header to prevent SSL stripping.',
-            remediation: 'Add "Strict-Transport-Security: max-age=31536000; includeSubDomains; preload" to all HTTPS responses.',
-            cwe: 'CWE-319',
-          });
+        // Check B: Strict-Transport-Security (HSTS)
+        if (targetUrl.startsWith('https://')) {
+          const hsts = headers.get('strict-transport-security');
+          if (!hsts) {
+            findings.push({
+              title: 'HTTP Strict Transport Security (HSTS) Header Missing',
+              severity: 'MEDIUM',
+              confidence: 'HIGH',
+              category: 'INSECURE_COMMUNICATION',
+              sourceRuleId: '10035-1',
+              targetUrl,
+              evidenceSummary: 'The application is served over HTTPS but does not transmit the Strict-Transport-Security header to prevent SSL stripping and man-in-the-middle downgrade attacks.',
+              remediation: 'Add "Strict-Transport-Security: max-age=31536000; includeSubDomains; preload" to all HTTPS responses.',
+              cwe: 'CWE-319',
+            });
+          }
         }
 
-        // Check C: Missing X-Frame-Options (Clickjacking)
+        // Check C: Missing Anti-Clickjacking Header (X-Frame-Options)
         if (!headers.get('x-frame-options') && !headers.get('content-security-policy')?.includes('frame-ancestors')) {
           findings.push({
             title: 'Missing Anti-Clickjacking Header (X-Frame-Options)',
@@ -98,7 +108,7 @@ export class ZapAdapter implements SecurityToolAdapter {
             category: 'CLICKJACKING',
             sourceRuleId: '10020-1',
             targetUrl,
-            evidenceSummary: 'Neither X-Frame-Options nor CSP frame-ancestors was detected. The target can potentially be framed by malicious origins.',
+            evidenceSummary: 'Neither X-Frame-Options nor CSP frame-ancestors was detected. The target web page can potentially be framed by malicious origins in an iframe.',
             remediation: 'Send "X-Frame-Options: DENY" or "X-Frame-Options: SAMEORIGIN" in HTTP response headers.',
             cwe: 'CWE-1021',
           });
@@ -113,16 +123,47 @@ export class ZapAdapter implements SecurityToolAdapter {
             category: 'SECURITY_MISCONFIGURATION',
             sourceRuleId: '10021-1',
             targetUrl,
-            evidenceSummary: 'The response does not specify "X-Content-Type-Options: nosniff", allowing browsers to perform MIME-type sniffing.',
+            evidenceSummary: 'The response does not specify "X-Content-Type-Options: nosniff", allowing browsers to perform MIME-type sniffing on ambiguous content.',
             remediation: 'Set "X-Content-Type-Options: nosniff" on all HTTP responses.',
             cwe: 'CWE-16',
           });
         }
 
-        // Check E: Server Technology Banner Disclosure
+        // Check E: Referrer-Policy Header
+        if (!headers.get('referrer-policy')) {
+          findings.push({
+            title: 'Referrer-Policy Header Not Set',
+            severity: 'LOW',
+            confidence: 'HIGH',
+            category: 'INFORMATION_DISCLOSURE',
+            sourceRuleId: '10037-1',
+            targetUrl,
+            evidenceSummary: 'The Referrer-Policy header is missing, allowing internal query strings and paths to be leaked to third-party domains in Referer request headers.',
+            remediation: 'Configure "Referrer-Policy: strict-origin-when-cross-origin" or "no-referrer" on all responses.',
+            cwe: 'CWE-200',
+          });
+        }
+
+        // Check F: Permissions-Policy / Feature-Policy Header
+        if (!headers.get('permissions-policy') && !headers.get('feature-policy')) {
+          findings.push({
+            title: 'Permissions-Policy Header Missing',
+            severity: 'LOW',
+            confidence: 'HIGH',
+            category: 'SECURITY_MISCONFIGURATION',
+            sourceRuleId: '10063-1',
+            targetUrl,
+            evidenceSummary: 'Permissions-Policy header is omitted. Browser hardware APIs (camera, microphone, geolocation) are not explicitly restricted.',
+            remediation: 'Add "Permissions-Policy: camera=(), microphone=(), geolocation=()" to restrict browser API access.',
+            cwe: 'CWE-16',
+          });
+        }
+
+        // Check G: Server Technology Banner Disclosure
         const serverHeader = headers.get('server');
         const poweredBy = headers.get('x-powered-by');
-        if (serverHeader || poweredBy) {
+        const aspNetVersion = headers.get('x-aspnet-version');
+        if (serverHeader || poweredBy || aspNetVersion) {
           findings.push({
             title: 'Server or Technology Version Banner Disclosed',
             severity: 'LOW',
@@ -130,13 +171,13 @@ export class ZapAdapter implements SecurityToolAdapter {
             category: 'INFORMATION_DISCLOSURE',
             sourceRuleId: '10036-1',
             targetUrl,
-            evidenceSummary: `Server discloses internal stack: ${[serverHeader ? `Server: ${serverHeader}` : '', poweredBy ? `X-Powered-By: ${poweredBy}` : ''].filter(Boolean).join(', ')}.`,
-            remediation: 'Disable server version tokens in web server configurations (e.g. server_tokens off in Nginx, ServerSignature Off in Apache).',
+            evidenceSummary: `Server discloses internal stack components: ${[serverHeader ? `Server: ${serverHeader}` : '', poweredBy ? `X-Powered-By: ${poweredBy}` : '', aspNetVersion ? `X-AspNet-Version: ${aspNetVersion}` : ''].filter(Boolean).join(', ')}.`,
+            remediation: 'Disable server version banners in web server configurations (e.g. server_tokens off in Nginx, ServerSignature Off in Apache).',
             cwe: 'CWE-200',
           });
         }
 
-        // Check F: Insecure Cookie Flags
+        // Check H: Insecure Cookie Flags
         const cookies = headers.get('set-cookie');
         if (cookies) {
           const cookieStr = cookies.toLowerCase();
@@ -166,14 +207,80 @@ export class ZapAdapter implements SecurityToolAdapter {
               cwe: 'CWE-1004',
             });
           }
+          if (!cookieStr.includes('samesite')) {
+            findings.push({
+              title: 'Cookie Missing SameSite Attribute',
+              severity: 'LOW',
+              confidence: 'HIGH',
+              category: 'SESSION_MANAGEMENT',
+              sourceRuleId: '10012-1',
+              targetUrl,
+              evidenceSummary: 'Cookie does not specify a SameSite attribute, which increases exposure to Cross-Site Request Forgery (CSRF).',
+              remediation: 'Append "; SameSite=Lax" or "; SameSite=Strict" to all Set-Cookie headers.',
+              cwe: 'CWE-1275',
+            });
+          }
         }
+      } catch (probeErr) {
+        console.warn(`[OWASP ZAP] Initial target probe warning:`, (probeErr as Error).message);
       }
 
-      // 2. Sensitive File & Discovery Probing adhering to scope exclusions
+      // 2. CORS Misconfiguration Audit
+      try {
+        const corsOrigin = 'https://sentinel-audit-probe.org';
+        const corsResp = await fetch(targetUrl, {
+          method: 'GET',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 SentinelAI-DAST/2.0',
+            'Origin': corsOrigin,
+          },
+          signal: AbortSignal.timeout(6000),
+        });
+
+        const allowOrigin = corsResp.headers.get('access-control-allow-origin');
+        const allowCreds = corsResp.headers.get('access-control-allow-credentials');
+
+        if (allowOrigin === '*' && allowCreds === 'true') {
+          findings.push({
+            title: 'Critical CORS Misconfiguration: Wildcard Origin with Credentials Allowed',
+            severity: 'CRITICAL',
+            confidence: 'CONFIRMED',
+            category: 'INSECURE_COMMUNICATION',
+            sourceRuleId: 'CORS-001',
+            targetUrl,
+            evidenceSummary: 'Access-Control-Allow-Origin is set to wildcard (*) while Access-Control-Allow-Credentials is true, enabling unauthorized cross-origin credential harvesting.',
+            remediation: 'Do not use wildcard Access-Control-Allow-Origin with credentials. Maintain a strict allowlist of authorized origins.',
+            cwe: 'CWE-942',
+          });
+        } else if (allowOrigin === corsOrigin) {
+          findings.push({
+            title: 'Permissive CORS: Arbitrary Origin Dynamically Reflected',
+            severity: 'HIGH',
+            confidence: 'CONFIRMED',
+            category: 'INSECURE_COMMUNICATION',
+            sourceRuleId: 'CORS-002',
+            targetUrl,
+            evidenceSummary: `The server reflects untrusted origin "${corsOrigin}" in Access-Control-Allow-Origin without allowlist verification.`,
+            remediation: 'Validate incoming Origin headers against an explicit domain allowlist before echoing into CORS response headers.',
+            cwe: 'CWE-942',
+          });
+        }
+      } catch {}
+
+      // 3. Sensitive File & Path Probing (Enforcing Scope Exclusions)
       const sensitiveProbes = [
-        { path: '/.env', title: 'Publicly Accessible Environment File (.env)', severity: 'CRITICAL', ruleId: '40032-1', cwe: 'CWE-200' },
-        { path: '/.git/config', title: 'Exposed Git Repository Metadata (.git/config)', severity: 'HIGH', ruleId: '40032-2', cwe: 'CWE-538' },
-        { path: '/robots.txt', title: 'Robots.txt Information Disclosure', severity: 'INFO', ruleId: '10018-1', cwe: 'CWE-200' },
+        { path: '/.env', title: 'Publicly Accessible Environment File (.env)', severity: 'CRITICAL' as const, ruleId: '40032-1', cwe: 'CWE-200' },
+        { path: '/.env.local', title: 'Exposed Local Environment File (.env.local)', severity: 'CRITICAL' as const, ruleId: '40032-2', cwe: 'CWE-200' },
+        { path: '/.git/HEAD', title: 'Exposed Git Repository Metadata (.git/HEAD)', severity: 'HIGH' as const, ruleId: '40032-3', cwe: 'CWE-538' },
+        { path: '/.git/config', title: 'Exposed Git Configuration (.git/config)', severity: 'HIGH' as const, ruleId: '40032-4', cwe: 'CWE-538' },
+        { path: '/robots.txt', title: 'Robots.txt Information Disclosure', severity: 'INFO' as const, ruleId: '10018-1', cwe: 'CWE-200' },
+        { path: '/sitemap.xml', title: 'Public Sitemap XML Metadata', severity: 'INFO' as const, ruleId: '10018-2', cwe: 'CWE-200' },
+        { path: '/.well-known/security.txt', title: 'Missing Security.txt Advisory File', severity: 'LOW' as const, ruleId: '10099-1', cwe: 'CWE-200' },
+        { path: '/swagger.json', title: 'Exposed Swagger / OpenAPI API Specification', severity: 'LOW' as const, ruleId: '40032-5', cwe: 'CWE-200' },
+        { path: '/openapi.json', title: 'Exposed OpenAPI 3.0 Documentation', severity: 'LOW' as const, ruleId: '40032-6', cwe: 'CWE-200' },
+        { path: '/phpinfo.php', title: 'Exposed PHP Information Script (phpinfo.php)', severity: 'HIGH' as const, ruleId: '40032-7', cwe: 'CWE-200' },
+        { path: '/backup.sql', title: 'Publicly Accessible Database Backup File (backup.sql)', severity: 'CRITICAL' as const, ruleId: '40032-8', cwe: 'CWE-200' },
+        { path: '/server-status', title: 'Exposed Web Server Status Page (/server-status)', severity: 'MEDIUM' as const, ruleId: '40032-9', cwe: 'CWE-200' },
       ];
 
       for (const probe of sensitiveProbes) {
@@ -193,7 +300,7 @@ export class ZapAdapter implements SecurityToolAdapter {
 
           if (pResp && pResp.status === 200) {
             const body = await pResp.text().catch(() => '');
-            if (probe.path === '/.env' && (body.includes('DB_') || body.includes('SECRET') || body.includes('KEY='))) {
+            if (probe.path.startsWith('/.env') && (body.includes('DB_') || body.includes('SECRET') || body.includes('KEY=') || body.includes('PASSWORD='))) {
               findings.push({
                 title: probe.title,
                 severity: 'CRITICAL',
@@ -205,7 +312,7 @@ export class ZapAdapter implements SecurityToolAdapter {
                 remediation: 'Block direct access to hidden files (.*) and configuration files at the reverse proxy or web server level.',
                 cwe: probe.cwe,
               });
-            } else if (probe.path === '/.git/config' && body.includes('[core]')) {
+            } else if (probe.path === '/.git/HEAD' && body.includes('ref:')) {
               findings.push({
                 title: probe.title,
                 severity: 'HIGH',
@@ -217,6 +324,118 @@ export class ZapAdapter implements SecurityToolAdapter {
                 remediation: 'Configure web server to deny access to .git directories and all child files.',
                 cwe: probe.cwe,
               });
+            } else if (probe.path === '/phpinfo.php' && body.includes('PHP Version')) {
+              findings.push({
+                title: probe.title,
+                severity: 'HIGH',
+                confidence: 'CONFIRMED',
+                category: 'INFORMATION_DISCLOSURE',
+                sourceRuleId: probe.ruleId,
+                targetUrl: probeUrl,
+                evidenceSummary: `Active phpinfo() diagnostic page exposes system configuration, loaded extensions, and server environment variables on ${probeUrl}.`,
+                remediation: 'Delete diagnostic phpinfo() files from production and staging servers.',
+                cwe: probe.cwe,
+              });
+            } else if (probe.path === '/backup.sql' && (body.includes('CREATE TABLE') || body.includes('INSERT INTO'))) {
+              findings.push({
+                title: probe.title,
+                severity: 'CRITICAL',
+                confidence: 'CONFIRMED',
+                category: 'SENSITIVE_DATA_EXPOSURE',
+                sourceRuleId: probe.ruleId,
+                targetUrl: probeUrl,
+                evidenceSummary: `Unprotected SQL database dump discovered on ${probeUrl}.`,
+                remediation: 'Remove database backups from web-accessible directories immediately.',
+                cwe: probe.cwe,
+              });
+            } else if (probe.path === '/server-status' && body.includes('Apache Server Status')) {
+              findings.push({
+                title: probe.title,
+                severity: 'MEDIUM',
+                confidence: 'CONFIRMED',
+                category: 'INFORMATION_DISCLOSURE',
+                sourceRuleId: probe.ruleId,
+                targetUrl: probeUrl,
+                evidenceSummary: `Apache server-status page is publicly accessible on ${probeUrl}, disclosing active client IP addresses and requested URLs.`,
+                remediation: 'Restrict access to /server-status strictly to local loopback addresses (127.0.0.1).',
+                cwe: probe.cwe,
+              });
+            }
+          }
+        } catch {}
+      }
+
+      // 4. Benign Heuristic Parameter Testing (XSS Reflection & SQL Syntax Error Leaks)
+      const testParams = ['q', 'search', 'query', 'id', 'redirect', 'url'];
+      const canaryToken = 'sentinel_audit_probe_9128';
+      const sqlProbeToken = "1' OR '1'='1";
+
+      for (const param of testParams.slice(0, 3)) {
+        try {
+          const testUrl = new URL(targetUrl);
+          testUrl.searchParams.set(param, `<${canaryToken}>`);
+
+          const scopeCheck = evaluateScope(testUrl.pathname, scope);
+          if (!scopeCheck.allowed) continue;
+
+          const paramResp = await fetch(testUrl.toString(), {
+            method: 'GET',
+            headers: { 'User-Agent': 'Mozilla/5.0 SentinelAI-DAST/2.0' },
+            signal: AbortSignal.timeout(6000),
+          }).catch(() => null);
+
+          if (paramResp && paramResp.status === 200) {
+            const body = await paramResp.text().catch(() => '');
+            if (body.includes(`<${canaryToken}>`)) {
+              findings.push({
+                title: `Reflected Cross-Site Scripting (XSS) in Parameter "${param}"`,
+                severity: 'HIGH',
+                confidence: 'CONFIRMED',
+                category: 'CROSS_SITE_SCRIPTING',
+                sourceRuleId: '40012-1',
+                targetUrl: testUrl.toString(),
+                evidenceSummary: `User-supplied parameter "${param}" was reflected in HTML unencoded without escaping angle brackets (< >).`,
+                remediation: 'Apply contextual HTML entity encoding or output escaping to user-controlled parameters before rendering in responses.',
+                cwe: 'CWE-79',
+              });
+            }
+
+            // Check SQL syntax error leak
+            const sqlUrl = new URL(targetUrl);
+            sqlUrl.searchParams.set(param, sqlProbeToken);
+            const sqlResp = await fetch(sqlUrl.toString(), {
+              method: 'GET',
+              headers: { 'User-Agent': 'SentinelAI-DAST/2.0' },
+              signal: AbortSignal.timeout(6000),
+            }).catch(() => null);
+
+            if (sqlResp) {
+              const sqlBody = await sqlResp.text().catch(() => '');
+              const sqlErrorSignatures = [
+                'SQL syntax error',
+                'mysql_fetch',
+                'pg_query',
+                'sqlite3::',
+                'ORA-01756',
+                'unclosed quotation mark',
+                'ODBC SQL Server Driver',
+              ];
+              for (const sig of sqlErrorSignatures) {
+                if (sqlBody.toLowerCase().includes(sig.toLowerCase())) {
+                  findings.push({
+                    title: `Potential SQL Injection / Database Error Leakage in "${param}"`,
+                    severity: 'HIGH',
+                    confidence: 'CONFIRMED',
+                    category: 'SQL_INJECTION',
+                    sourceRuleId: '40018-1',
+                    targetUrl: sqlUrl.toString(),
+                    evidenceSummary: `Database error signature "${sig}" was returned when testing parameter "${param}".`,
+                    remediation: 'Use parameterized queries or ORM prepared statements. Disable detailed database error outputs in web responses.',
+                    cwe: 'CWE-89',
+                  });
+                  break;
+                }
+              }
             }
           }
         } catch {}

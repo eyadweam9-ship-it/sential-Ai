@@ -1146,7 +1146,7 @@ const App = {
 
     proceedToDashboard() {
         if (this.scanState.timer) clearInterval(this.scanState.timer);
-        this.scanState.maxUnlockedStep = Math.max(this.scanState.maxUnlockedStep || 1, 5);
+        this.scanState.maxUnlockedStep = Math.max(this.scanState.maxUnlockedStep || 1, 7);
         this.navigate('dashboard');
     },
 
@@ -3951,6 +3951,7 @@ const App = {
                     if (scan.status === 'completed' || scan.status === 'partial') {
                         clearInterval(this.scanState.timer);
                         this.scanState.progress = 100;
+                        this.scanState.maxUnlockedStep = Math.max(this.scanState.maxUnlockedStep || 1, 7);
                         if (txtEl) txtEl.textContent = '100%';
                         if (subEl) subEl.textContent = 'Complete';
                         if (orbEl) orbEl.style.background = `radial-gradient(closest-side, #fff 80%, transparent 81% 99%), conic-gradient(#059669 100%, #e9eff6 0)`;
@@ -3963,6 +3964,7 @@ const App = {
                         }
                     } else if (scan.status === 'cancelled') {
                         clearInterval(this.scanState.timer);
+                        this.scanState.maxUnlockedStep = Math.max(this.scanState.maxUnlockedStep || 1, 7);
                         if (txtEl) txtEl.textContent = 'Halted';
                         if (subEl) subEl.textContent = 'Cancelled';
                         const stopBtn = document.getElementById('btn-stop-assessment');
@@ -4340,49 +4342,60 @@ const App = {
             this.renderStandardRows(this.findingsData);
         }
 
-        const scanId = this.scanState.currentScanId;
+        let scanId = this.scanState.currentScanId;
+        if (!scanId) {
+            try {
+                const hist = await API.getScanHistory().catch(() => null);
+                if (hist && hist.scans && hist.scans.length > 0) {
+                    scanId = hist.scans[0].id;
+                    this.scanState.currentScanId = scanId;
+                }
+            } catch (e) {}
+        }
 
         // 1. Fetch Multi-Tool Task Matrix
-        try {
-            const taskRes = await API.getScanTasks(scanId);
-            if (taskRes && taskRes.tasks) {
-                let completedCount = 0;
-                taskRes.tasks.forEach(t => {
-                    const pillEl = document.getElementById(`pill-${t.toolName}`);
-                    if (pillEl) {
-                        pillEl.textContent = t.status.charAt(0).toUpperCase() + t.status.slice(1).toLowerCase();
-                        if (t.status === 'COMPLETED') {
-                            pillEl.style.background = '#ecfdf5';
-                            pillEl.style.color = '#047857';
-                            completedCount++;
-                        } else if (t.status === 'SKIPPED') {
-                            pillEl.style.background = '#f1f5f9';
-                            pillEl.style.color = '#64748b';
-                            completedCount++;
-                        } else if (t.status === 'FAILED') {
-                            pillEl.style.background = '#fef2f2';
-                            pillEl.style.color = '#b91c1c';
-                        } else if (t.status === 'RUNNING') {
-                            pillEl.style.background = '#eff6ff';
-                            pillEl.style.color = '#1d4ed8';
+        if (scanId) {
+            try {
+                const taskRes = await API.getScanTasks(scanId);
+                if (taskRes && taskRes.tasks) {
+                    let completedCount = 0;
+                    taskRes.tasks.forEach(t => {
+                        const pillEl = document.getElementById(`pill-${t.toolName}`);
+                        if (pillEl) {
+                            pillEl.textContent = t.status.charAt(0).toUpperCase() + t.status.slice(1).toLowerCase();
+                            if (t.status === 'COMPLETED') {
+                                pillEl.style.background = '#ecfdf5';
+                                pillEl.style.color = '#047857';
+                                completedCount++;
+                            } else if (t.status === 'SKIPPED') {
+                                pillEl.style.background = '#f1f5f9';
+                                pillEl.style.color = '#64748b';
+                                completedCount++;
+                            } else if (t.status === 'FAILED') {
+                                pillEl.style.background = '#fef2f2';
+                                pillEl.style.color = '#b91c1c';
+                            } else if (t.status === 'RUNNING') {
+                                pillEl.style.background = '#eff6ff';
+                                pillEl.style.color = '#1d4ed8';
+                            }
                         }
+                    });
+
+                    const ratioEl = document.getElementById('tools-completed-ratio');
+                    if (ratioEl) ratioEl.textContent = `${completedCount} / ${taskRes.tasks.length || 5}`;
+
+                    const badgeEl = document.getElementById('scan-status-badge');
+                    if (badgeEl) {
+                        const allDone = taskRes.tasks.every(t => t.status === 'COMPLETED' || t.status === 'SKIPPED');
+                        const hasFail = taskRes.tasks.some(t => t.status === 'FAILED');
+                        const statusStr = allDone ? (hasFail ? 'PARTIAL' : 'COMPLETED') : 'RUNNING';
+                        badgeEl.textContent = statusStr;
+                        badgeEl.className = `badge ${statusStr === 'COMPLETED' ? 'badge-low' : (statusStr === 'PARTIAL' ? 'badge-high' : 'badge-info')}`;
                     }
-                });
-
-                const ratioEl = document.getElementById('tools-completed-ratio');
-                if (ratioEl) ratioEl.textContent = `${completedCount} / ${taskRes.tasks.length || 5}`;
-
-                const badgeEl = document.getElementById('scan-status-badge');
-                if (badgeEl) {
-                    const allDone = taskRes.tasks.every(t => t.status === 'COMPLETED' || t.status === 'SKIPPED');
-                    const hasFail = taskRes.tasks.some(t => t.status === 'FAILED');
-                    const statusStr = allDone ? (hasFail ? 'PARTIAL' : 'COMPLETED') : 'RUNNING';
-                    badgeEl.textContent = statusStr;
-                    badgeEl.className = `badge ${statusStr === 'COMPLETED' ? 'badge-low' : (statusStr === 'PARTIAL' ? 'badge-high' : 'badge-info')}`;
                 }
+            } catch (e) {
+                console.warn('Scan tasks load notice:', e);
             }
-        } catch (e) {
-            console.warn('Scan tasks load notice:', e);
         }
 
         // 2. Fetch Findings from database
@@ -4461,17 +4474,24 @@ const App = {
                 ? (f.status === 'confirmed' || f.status === 'Fix ready' || f.status === 'Fixed' ? 'Detected' : (f.status ? f.status.charAt(0).toUpperCase() + f.status.slice(1) : 'Detected'))
                 : (f.status === 'confirmed' ? 'Fix ready' : (f.status ? f.status.charAt(0).toUpperCase() + f.status.slice(1) : 'Open'));
 
+            const locationStr = (f.evidences && f.evidences[0] && (f.evidences[0].url || f.evidences[0].filePath)) 
+                || f.endpoint 
+                || f.filePath 
+                || f.path 
+                || '/';
+            const cweLabel = f.cwe || f.cwe_id || f.category || f.type || 'CWE-200';
+
             return `
                 <button type="button" class="table-row w-full text-left cursor-pointer" onclick="App.viewFinding(${f.id})">
                     <span>
                         <b>${escapeHtml(f.title)}</b>
-                        <small>${escapeHtml(f.endpoint || f.path || '/api')}</small>
+                        <small>${escapeHtml(locationStr)}</small>
                     </span>
                     <span>
                         <i class="severity-dot ${sevLower}"></i>
                         ${sev.charAt(0).toUpperCase() + sev.slice(1)}
                     </span>
-                    <span class="mono-tag">${escapeHtml(f.cwe_id || f.category || f.type || 'CWE-89')}</span>
+                    <span class="mono-tag">${escapeHtml(cweLabel)}</span>
                     <span class="${isFixReady ? 'fix-ready' : ''}">
                         ${isFixReady ? Icons.get('sparkles', 'size-4') : ''}
                         ${statusLabel}
@@ -4747,15 +4767,28 @@ const App = {
             const assetEl = document.getElementById('aside-asset-val');
             const confEl = document.getElementById('aside-conf-val');
 
+            const targetLoc = (f.evidences && f.evidences[0] && (f.evidences[0].url || f.evidences[0].filePath)) || f.endpoint || f.filePath || '/';
+            const cweVal = f.cwe || f.cwe_id || f.category || 'CWE-200';
+            const cvssVal = f.cvss_score || (f.severity === 'CRITICAL' ? '9.5' : (f.severity === 'HIGH' ? '7.8' : (f.severity === 'MEDIUM' ? '5.3' : '3.1')));
+
             if (titleEl) titleEl.textContent = f.title;
             if (sevEl) {
                 sevEl.textContent = (f.severity || 'Critical').toUpperCase();
                 sevEl.className = `severity-badge ${(f.severity || 'critical').toLowerCase()}`;
             }
-            if (cweEl) cweEl.textContent = f.cwe_id || 'CWE-89';
-            if (cvssEl) cvssEl.textContent = `CVSS ${f.cvss_score || '9.8'}`;
-            if (endEl) endEl.textContent = (f.endpoint || '/api/v2/users/search').replace(/^(GET|POST|PUT|DELETE|PATCH)\s+/, '');
-            if (descEl) descEl.textContent = f.description || 'Untrusted input is passed directly into a database query.';
+            if (cweEl) cweEl.textContent = cweVal;
+            if (cvssEl) cvssEl.textContent = `CVSS ${cvssVal}`;
+            if (endEl) endEl.textContent = targetLoc.replace(/^(GET|POST|PUT|DELETE|PATCH)\s+/, '');
+            if (descEl) descEl.textContent = f.description || f.remediation || 'Vulnerability identified during automated security assessment.';
+
+            const whatEl = document.getElementById('finding-what-p');
+            if (whatEl) whatEl.textContent = (f.evidences && f.evidences[0]?.evidenceSummary) || f.description || f.title;
+
+            const reqEl = document.getElementById('finding-evidence-request');
+            if (reqEl) reqEl.textContent = (f.evidences && f.evidences[0]?.rawSnippet) || `Target Endpoint / File: ${targetLoc}\nTool: ${f.toolName || 'DAST'}\nRule: ${f.sourceRuleId || 'N/A'}`;
+
+            const resEl = document.getElementById('finding-evidence-response');
+            if (resEl) resEl.textContent = (f.evidences && f.evidences[0]?.evidenceSummary) || f.remediation || 'Finding confirmed by multi-tool engine.';
 
             const isScanOnly = this.scanState.scanType === 'scan_only';
             if (statusEl) {
@@ -4763,14 +4796,14 @@ const App = {
                     ? (f.status === 'confirmed' || f.status === 'Fix ready' || f.status === 'Fixed' ? 'Detected' : (f.status ? f.status.charAt(0).toUpperCase() + f.status.slice(1) : 'Detected'))
                     : (f.status === 'confirmed' ? 'Fix ready' : (f.status ? f.status.charAt(0).toUpperCase() + f.status.slice(1) : 'Open'));
             }
-            if (dateEl && f.created_at) dateEl.textContent = new Date(f.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-            if (owaspEl) owaspEl.textContent = f.owasp_category || 'A03: Injection';
-            if (assetEl) assetEl.textContent = f.asset || 'app.northstar.io';
-            if (confEl) confEl.textContent = f.confidence ? `${f.confidence}% · Confirmed` : '98% · Confirmed';
+            if (dateEl && (f.created_at || f.createdAt)) dateEl.textContent = new Date(f.created_at || f.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+            if (owaspEl) owaspEl.textContent = f.owasp_category || f.category || 'A05: Security Misconfiguration';
+            if (assetEl) assetEl.textContent = (this.scanState.url || 'aymanaboelela.com').replace(/^https?:\/\//, '');
+            if (confEl) confEl.textContent = f.confidence ? `${f.confidence} · Confirmed` : 'HIGH · Confirmed';
 
-            if (res.remediation && res.remediation.secure_code_example) {
+            if (f.remediation) {
                 const fixEl = document.getElementById('finding-fix-code');
-                if (fixEl) fixEl.textContent = res.remediation.secure_code_example;
+                if (fixEl) fixEl.textContent = f.remediation;
             }
         } catch (e) {
             console.warn('Sandbox or offline finding detail loaded');

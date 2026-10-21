@@ -39,12 +39,52 @@ findingsRouter.get('/list', async (req: Request, res: Response): Promise<void> =
 });
 
 /**
- * GET /api/findings/:id
+ * GET /api/findings/detail or GET /api/findings/:id
  * Retrieve single finding with attached evidence and AI threat intelligence
  */
+findingsRouter.get('/detail', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const findingId = Number(req.query.id || req.query.finding_id);
+    if (!findingId || isNaN(findingId)) {
+      res.status(400).json({ success: false, error: 'Valid finding ID required.' });
+      return;
+    }
+
+    const finding = await prisma.finding.findUnique({
+      where: { id: findingId },
+      include: {
+        evidences: true,
+        aiAnalyses: true,
+        scan: {
+          include: { target: true },
+        },
+      },
+    });
+
+    if (!finding) {
+      res.status(404).json({ success: false, error: 'Finding not found.' });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      finding,
+    });
+  } catch (error) {
+    console.error('Get finding detail error:', error);
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
 findingsRouter.get('/:id', async (req: Request, res: Response): Promise<void> => {
   try {
-    const findingId = Number(req.params.id);
+    const idParam = req.params.id;
+    const findingId = idParam === 'detail' ? Number(req.query.id) : Number(idParam);
+    if (!findingId || isNaN(findingId)) {
+      res.status(400).json({ success: false, error: 'Valid finding ID required.' });
+      return;
+    }
+
     const finding = await prisma.finding.findUnique({
       where: { id: findingId },
       include: {

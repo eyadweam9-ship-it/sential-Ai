@@ -43,9 +43,10 @@ export async function orchestrateScan(scanId: number): Promise<void> {
     } catch {}
 
     // 3. Plan Tasks (ZAP, Semgrep, Gitleaks, Trivy, npm audit)
-    // Check if tasks already exist in database (e.g. from previous attempt)
+    // Check if tasks already exist in database or were previously skipped
     let tasks = await prisma.scanTask.findMany({ where: { scanId } });
-    if (tasks.length === 0) {
+    if (tasks.length === 0 || (tasks.length > 0 && tasks.every(t => t.status === 'SKIPPED' || t.status === 'FAILED'))) {
+      await prisma.scanTask.deleteMany({ where: { scanId } });
       await planScanExecution({
         scanId,
         targetType: target.targetType as any,

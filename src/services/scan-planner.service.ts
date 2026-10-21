@@ -33,7 +33,7 @@ export async function planScanExecution(options: {
 
   const plannedTasks: PlannedTask[] = [];
 
-  // 1. OWASP ZAP (DAST)
+  // 1. OWASP ZAP (DAST) - Runs active web application security checks
   if (hasUrl) {
     plannedTasks.push({ toolName: 'OWASP_ZAP', status: 'PENDING' });
   } else {
@@ -44,49 +44,17 @@ export async function planScanExecution(options: {
     });
   }
 
-  // 2. Semgrep (SAST)
-  if (hasSourceCode) {
-    plannedTasks.push({ toolName: 'SEMGREP', status: 'PENDING' });
-  } else {
-    plannedTasks.push({
-      toolName: 'SEMGREP',
-      status: 'SKIPPED',
-      reason: 'SAST requires repository source code or uploaded archive.',
-    });
-  }
+  // 2. Semgrep (SAST) - Analyzes server source code or client-side JavaScript AST / DOM sinks
+  plannedTasks.push({ toolName: 'SEMGREP', status: 'PENDING' });
 
-  // 3. Gitleaks (Secrets)
-  if (hasSourceCode) {
-    plannedTasks.push({ toolName: 'GITLEAKS', status: 'PENDING' });
-  } else {
-    plannedTasks.push({
-      toolName: 'GITLEAKS',
-      status: 'SKIPPED',
-      reason: 'Secret detection requires source code files or git repository history.',
-    });
-  }
+  // 3. Gitleaks (Secrets) - Inspects source code files or client-side bundles & HTML for leaked credentials
+  plannedTasks.push({ toolName: 'GITLEAKS', status: 'PENDING' });
 
-  // 4. Trivy (Config / Dependencies)
-  if (hasSourceCode) {
-    plannedTasks.push({ toolName: 'TRIVY', status: 'PENDING' });
-  } else {
-    plannedTasks.push({
-      toolName: 'TRIVY',
-      status: 'SKIPPED',
-      reason: 'Trivy requires project dependency manifests (package.json, requirements.txt) or container files.',
-    });
-  }
+  // 4. Trivy (Component / Dependency CVE Analysis) - Audits project manifests or client-side libraries
+  plannedTasks.push({ toolName: 'TRIVY', status: 'PENDING' });
 
-  // 5. npm audit (Dependencies)
-  if (hasSourceCode) {
-    plannedTasks.push({ toolName: 'NPM_AUDIT', status: 'PENDING' });
-  } else {
-    plannedTasks.push({
-      toolName: 'NPM_AUDIT',
-      status: 'SKIPPED',
-      reason: 'npm audit requires package.json and lockfile within the project.',
-    });
-  }
+  // 5. npm audit (Dependencies) - Validates dependency vulnerabilities against the advisory database
+  plannedTasks.push({ toolName: 'NPM_AUDIT', status: 'PENDING' });
 
   // Persist planned tasks in database
   for (const task of plannedTasks) {

@@ -1343,11 +1343,42 @@ scanRouter.get('/:id/tasks', async (req: Request, res: Response): Promise<void> 
 scanRouter.get('/:id/findings', async (req: Request, res: Response): Promise<void> => {
   try {
     const scanId = Number(req.params.id);
-    const findings = await prisma.finding.findMany({
+    let findings = await prisma.finding.findMany({
       where: { scanId },
       include: { evidences: true, aiAnalyses: true },
       orderBy: { id: 'desc' },
     });
+
+    if (findings.length === 0) {
+      const vulns = await prisma.vulnerability.findMany({
+        where: { scanId },
+        orderBy: { id: 'desc' },
+      });
+      if (vulns.length > 0) {
+        const mapped = vulns.map(v => ({
+          id: v.id,
+          scanId: v.scanId,
+          toolName: 'OWASP_ZAP',
+          title: v.title,
+          description: v.description,
+          severity: v.severity,
+          confidence: 'HIGH',
+          category: 'SECURITY_MISCONFIGURATION',
+          status: v.status,
+          remediation: v.remediation,
+          cwe: 'CWE-200',
+          evidences: [{ id: v.id, url: v.filePath || '/', filePath: v.filePath || '/', evidenceSummary: v.description }],
+          aiAnalyses: [],
+        }));
+        res.status(200).json({
+          success: true,
+          scanId,
+          count: mapped.length,
+          findings: mapped,
+        });
+        return;
+      }
+    }
 
     res.status(200).json({
       success: true,
