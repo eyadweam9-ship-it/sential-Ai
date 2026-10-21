@@ -3218,11 +3218,6 @@ const App = {
         `;
     },
 
-            <!-- Admin Review Queue Modal -->
-            ${auth.showAdminModal ? this.renderAdminReviewModal() : ''}
-        `;
-    },
-
     renderAdminReviewModal() {
         const auth = this.scanState.authData;
         const requests = auth.adminRequests || [];
