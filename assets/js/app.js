@@ -4046,9 +4046,11 @@ const App = {
         const mode = this.scanState.scanType || 'scan_only';
         const isScanOnly = mode === 'scan_only';
         const isDev = env === 'development';
+        const hasOptionalCode = Boolean(this.scanState.optionalCodeFile || this.scanState.gitRepoUrl);
+        const isHybrid = !isDev && hasOptionalCode;
         const targetDesc = isDev 
             ? (this.scanState.uploadedFile?.name || 'Local Code Repository (SAST)')
-            : `${(this.scanState.url || 'app.northstar.io').replace(/^https?:\/\//, '')} · ${env.toUpperCase()}`;
+            : `${(this.scanState.url || 'aymanaboelela.com').replace(/^https?:\/\//, '')} · ${env.toUpperCase()}`;
 
         return `
             ${renderPageTitle({
@@ -4152,13 +4154,13 @@ const App = {
             <div class="dashboard-grid">
                 <div class="score-card">
                     <div class="score-ring compact">
-                        <strong>72</strong>
+                        <strong id="dashboard-security-score">72</strong>
                         <span>Security score</span>
                     </div>
                     <div>
-                        <span class="status status-warning">Needs attention</span>
-                        <p class="mt-3 text-sm leading-6 text-slate-500">
-                            Your score is lower than <b class="text-slate-700">62%</b> of similar applications.
+                        <span class="status status-warning" id="dashboard-score-status">Needs attention</span>
+                        <p class="mt-3 text-sm leading-6 text-slate-500" id="dashboard-score-desc">
+                            Vulnerabilities cataloged across assessment targets.
                         </p>
                     </div>
                 </div>
@@ -4169,7 +4171,7 @@ const App = {
                     </div>
                     <div>
                         <span>Critical</span>
-                        <strong id="kpi-critical">2</strong>
+                        <strong id="kpi-critical">0</strong>
                         <small>${isScanOnly ? 'Needs attention' : 'Fix immediately'}</small>
                     </div>
                 </div>
@@ -4180,7 +4182,7 @@ const App = {
                     </div>
                     <div>
                         <span>High</span>
-                        <strong id="kpi-high">5</strong>
+                        <strong id="kpi-high">0</strong>
                         <small>Review within 24h</small>
                     </div>
                 </div>
@@ -4191,8 +4193,8 @@ const App = {
                     </div>
                     <div>
                         <span>Total findings</span>
-                        <strong id="kpi-total">18</strong>
-                        <small>${isScanOnly ? 'Cataloged findings' : '8 fixes available'}</small>
+                        <strong id="kpi-total">0</strong>
+                        <small>${isScanOnly ? 'Cataloged findings' : 'Fixes available'}</small>
                     </div>
                 </div>
             </div>
@@ -4202,7 +4204,7 @@ const App = {
                 <div class="findings-toolbar">
                     <div>
                         <h2>All findings</h2>
-                        <p>18 issues across 142 endpoints</p>
+                        <p id="findings-toolbar-count">Cataloged vulnerabilities</p>
                     </div>
 
                     <div class="toolbar-actions">
@@ -4410,7 +4412,7 @@ const App = {
         // 2. Fetch Findings from database
         try {
             const findingsRes = scanId ? await API.getScanFindings(scanId).catch(() => null) : null;
-            const res = (findingsRes && Array.isArray(findingsRes.findings)) 
+            const res = (findingsRes && Array.isArray(findingsRes.findings) && findingsRes.findings.length > 0) 
                 ? findingsRes 
                 : await API.getFindings().catch(() => null);
 
@@ -4418,6 +4420,8 @@ const App = {
                 this.findingsData = res.findings;
                 const criticalCount = this.findingsData.filter(f => (f.severity || '').toUpperCase() === 'CRITICAL').length;
                 const highCount = this.findingsData.filter(f => (f.severity || '').toUpperCase() === 'HIGH').length;
+                const medCount = this.findingsData.filter(f => (f.severity || '').toUpperCase() === 'MEDIUM').length;
+                const lowCount = this.findingsData.filter(f => (f.severity || '').toUpperCase() === 'LOW').length;
                 const totalCount = this.findingsData.length;
 
                 const cEl = document.getElementById('kpi-critical');
@@ -4426,6 +4430,34 @@ const App = {
                 if (cEl) cEl.textContent = criticalCount;
                 if (hEl) hEl.textContent = highCount;
                 if (tEl) tEl.textContent = totalCount;
+
+                const countEl = document.getElementById('findings-toolbar-count');
+                if (countEl) {
+                    countEl.textContent = `${totalCount} finding${totalCount === 1 ? '' : 's'} cataloged across assessment targets`;
+                }
+
+                // Dynamic Security Score Calculation
+                const scoreValEl = document.getElementById('dashboard-security-score');
+                const scoreStatusEl = document.getElementById('dashboard-score-status');
+                const scoreDescEl = document.getElementById('dashboard-score-desc');
+                if (scoreValEl && scoreStatusEl) {
+                    let calcScore = 100 - (criticalCount * 25 + highCount * 15 + medCount * 8 + lowCount * 3);
+                    calcScore = Math.max(15, Math.min(100, calcScore));
+                    scoreValEl.textContent = calcScore;
+                    if (calcScore >= 90) {
+                        scoreStatusEl.className = 'status status-safe';
+                        scoreStatusEl.textContent = 'Clean & Secure';
+                        if (scoreDescEl) scoreDescEl.textContent = 'Zero critical or high-severity vulnerabilities detected.';
+                    } else if (calcScore >= 70) {
+                        scoreStatusEl.className = 'status status-warning';
+                        scoreStatusEl.textContent = 'Needs attention';
+                        if (scoreDescEl) scoreDescEl.innerHTML = `Identified <b class="text-slate-700">${totalCount} findings</b> requiring security review.`;
+                    } else {
+                        scoreStatusEl.className = 'status status-low';
+                        scoreStatusEl.textContent = 'High risk';
+                        if (scoreDescEl) scoreDescEl.textContent = 'Critical issues identified requiring immediate remediation.';
+                    }
+                }
 
                 if (this.dashboardViewMode === 'sheet') {
                     GoogleSheetView.init(this.findingsData);
@@ -4565,27 +4597,52 @@ const App = {
                      || (this.findingsData && this.findingsData[0])
                      || FIGMA_FINDINGS[0];
 
-        const sev = (finding.severity || finding.sev || 'Critical').toLowerCase();
+        const sev = (finding.severity || finding.sev || 'Medium').toLowerCase();
         const sevClass = sev === 'critical' ? 'critical' : sev === 'high' ? 'high' : sev === 'medium' ? 'medium' : 'low';
-        const sevLabel = (finding.severity || finding.sev || 'Critical');
-        const cwe = finding.cwe_id || finding.type || 'CWE-89';
-        const cvss = finding.cvss || '9.8';
-        const title = finding.title || 'SQL Injection in user search';
-        const desc = finding.description || 'Untrusted input is passed directly into a database query, allowing an attacker to access or modify sensitive data.';
-        const endpoint = finding.endpoint || finding.path || '/api/v2/users/search';
-        const method = finding.method || (endpoint.startsWith('GET') ? 'GET' : 'POST');
-        const cleanEndpoint = endpoint.replace(/^(GET|POST|PUT|DELETE|PATCH|SET-COOKIE)\s+/, '');
-        const whatFound = finding.what_we_found || 'The parameter is concatenated directly into a SQL statement without validation or parameterization. This allows arbitrary SQL commands to be executed.';
-        const reqCode = finding.request_code || `${method} ${cleanEndpoint} HTTP/1.1\nHost: app.northstar.io\nContent-Type: application/json\n\n{\n  "query": "' OR 1=1 --",\n  "limit": 20\n}`;
-        const resCode = finding.response_code || 'The server returned records confirming the vulnerability.';
-        const patchFile = finding.patch_file || 'src/api/users/search.ts';
-        const patchDiff = finding.patch_diff || `- const users = await db.query(\n-   "SELECT * FROM users WHERE name LIKE '%" + query + "%'"\n- );\n+ const users = await db.query(\n+   "SELECT * FROM users WHERE name LIKE $1",\n+   [\`%\${query}%\`]\n+ );`;
-        const owasp = finding.owasp || 'A03: Injection';
-        const dateVal = finding.date || 'June 14, 2025';
-        const assetVal = finding.asset || 'app.northstar.io';
-        const confVal = finding.confidence || '98% · Confirmed';
+        const sevLabel = (finding.severity || finding.sev || 'Medium').toUpperCase();
+        const cwe = finding.cwe || finding.cwe_id || finding.category || finding.type || 'CWE-200';
+        const cvss = finding.cvss || finding.cvss_score || (sev === 'critical' ? '9.8' : (sev === 'high' ? '7.5' : (sev === 'medium' ? '5.3' : '3.1')));
+        const title = finding.title || 'Security Finding';
+        const desc = finding.description || (finding.aiAnalyses && finding.aiAnalyses[0]?.summary) || 'Vulnerability identified during automated security assessment.';
+        
+        const rawLoc = (finding.evidences && finding.evidences[0] && (finding.evidences[0].url || finding.evidences[0].filePath))
+                    || finding.endpoint 
+                    || finding.filePath 
+                    || finding.path 
+                    || (this.scanState.url || 'https://aymanaboelela.com/');
+        const cleanEndpoint = rawLoc.replace(/^(GET|POST|PUT|DELETE|PATCH)\s+/, '');
+        const method = finding.method || (rawLoc.startsWith('GET') ? 'GET' : (rawLoc.startsWith('http') ? 'GET' : 'POST'));
+
+        const whatFound = (finding.aiAnalyses && finding.aiAnalyses[0]?.technicalDetails)
+                       || (finding.evidences && finding.evidences[0]?.evidenceSummary)
+                       || finding.what_we_found
+                       || finding.description
+                       || 'The scanner detected an issue with the application configuration or code.';
+
+        const reqCode = (finding.evidences && finding.evidences[0]?.rawSnippet)
+                     || finding.request_code
+                     || `${method} ${cleanEndpoint} HTTP/1.1\nHost: ${(this.scanState.url || 'aymanaboelela.com').replace(/^https?:\/\//, '')}\nTool: ${finding.toolName || 'Engine'}\nRule: ${finding.sourceRuleId || 'Verified'}`;
+
+        const resCode = (finding.aiAnalyses && finding.aiAnalyses[0]?.evidenceExplanation)
+                     || (finding.evidences && finding.evidences[0]?.evidenceSummary)
+                     || finding.response_code
+                     || finding.remediation
+                     || 'Finding confirmed by multi-tool engine.';
+
+        const remediation = (finding.aiAnalyses && finding.aiAnalyses[0]?.recommendedRemediation)
+                         || finding.remediation
+                         || 'Ensure secure configurations and input sanitization.';
+
+        const patchFile = (finding.evidences && finding.evidences[0]?.filePath) || finding.patch_file || 'src/configuration';
+        const patchDiff = finding.patch_diff || `// Recommended Security Hardening:\n${remediation}`;
+        const owasp = finding.owasp_category || finding.category || finding.owasp || 'A05: Security Misconfiguration';
+        const dateVal = (finding.createdAt || finding.created_at)
+            ? new Date(finding.createdAt || finding.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+            : 'October 21, 2026';
+        const assetVal = (this.scanState.url || 'aymanaboelela.com').replace(/^https?:\/\//, '');
+        const confVal = finding.confidence ? `${finding.confidence} · Confirmed` : 'HIGH · Confirmed';
         const statusVal = isScanOnly 
-            ? (finding.status === 'confirmed' || finding.status === 'Fix ready' || finding.status === 'Fixed' ? 'Detected' : (finding.status || 'Detected')) 
+            ? (finding.status === 'confirmed' || finding.status === 'Fix ready' || finding.status === 'Fixed' ? 'Detected' : (finding.status ? finding.status.charAt(0).toUpperCase() + finding.status.slice(1) : 'Detected')) 
             : (finding.status || 'Open');
 
         return `
@@ -4627,7 +4684,7 @@ const App = {
                         <div class="detail-body">
                             <section class="detail-section">
                                 <h2>What we found</h2>
-                                <p id="finding-what-p">${whatFound}</p>
+                                <p id="finding-what-p">${escapeHtml(whatFound)}</p>
                             </section>
 
                             <section class="detail-section">
@@ -4635,19 +4692,19 @@ const App = {
                                 <div class="impact-grid">
                                     <div>
                                         ${Icons.get('eye', 'size-5')}
-                                        <b>Data exposure</b>
-                                        <p>Attackers may read customer records and credentials.</p>
+                                        <b>Security exposure</b>
+                                        <p>${escapeHtml(desc)}</p>
                                     </div>
                                     <div>
                                         ${Icons.get('warning', 'size-5')}
-                                        <b>Data manipulation</b>
-                                        <p>Records could be changed or permanently deleted.</p>
+                                        <b>Compliance &amp; Best Practices</b>
+                                        <p>Non-compliance with security baselines can expose endpoints to attackers.</p>
                                     </div>
                                 </div>
                             </section>
 
                             <section class="detail-section">
-                                <h2>Affected endpoint</h2>
+                                <h2>Affected endpoint / resource</h2>
                                 <div class="endpoint">
                                     <span>${escapeHtml(method)}</span>
                                     <code id="finding-endpoint-code">${escapeHtml(cleanEndpoint)}</code>
@@ -4656,18 +4713,25 @@ const App = {
                                     </button>
                                 </div>
                             </section>
+
+                            <section class="detail-section">
+                                <h2>Recommended remediation (Guidance only)</h2>
+                                <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:0.875rem 1rem; font-size:13px; line-height:1.6; color:#334155;" id="finding-remediation-box">
+                                    ${escapeHtml(remediation)}
+                                </div>
+                            </section>
                         </div>
                     ` : ''}
 
                     ${tab === 'request' ? `
                         <div class="detail-body">
                             <section class="detail-section">
-                                <h2>Captured request</h2>
+                                <h2>Captured request / Inspection target</h2>
                                 <pre class="code-block"><code id="finding-evidence-request">${escapeHtml(reqCode)}</code></pre>
                             </section>
 
                             <section class="detail-section">
-                                <h2>Server response</h2>
+                                <h2>Scanner finding evidence / Response</h2>
                                 <p id="finding-evidence-response">${escapeHtml(resCode)}</p>
                             </section>
                         </div>
@@ -4791,24 +4855,27 @@ const App = {
             const cweVal = f.cwe || f.cwe_id || f.category || 'CWE-200';
             const cvssVal = f.cvss_score || (f.severity === 'CRITICAL' ? '9.5' : (f.severity === 'HIGH' ? '7.8' : (f.severity === 'MEDIUM' ? '5.3' : '3.1')));
 
-            if (titleEl) titleEl.textContent = f.title;
-            if (sevEl) {
-                sevEl.textContent = (f.severity || 'Critical').toUpperCase();
-                sevEl.className = `severity-badge ${(f.severity || 'critical').toLowerCase()}`;
+            if (titleEl && f.title) titleEl.textContent = f.title;
+            if (sevEl && f.severity) {
+                sevEl.textContent = f.severity.toUpperCase();
+                sevEl.className = `severity-badge ${f.severity.toLowerCase()}`;
             }
             if (cweEl) cweEl.textContent = cweVal;
             if (cvssEl) cvssEl.textContent = `CVSS ${cvssVal}`;
             if (endEl) endEl.textContent = targetLoc.replace(/^(GET|POST|PUT|DELETE|PATCH)\s+/, '');
-            if (descEl) descEl.textContent = f.description || f.remediation || 'Vulnerability identified during automated security assessment.';
+            if (descEl) descEl.textContent = f.description || (f.aiAnalyses && f.aiAnalyses[0]?.summary) || 'Vulnerability identified during automated security assessment.';
 
             const whatEl = document.getElementById('finding-what-p');
-            if (whatEl) whatEl.textContent = (f.evidences && f.evidences[0]?.evidenceSummary) || f.description || f.title;
+            if (whatEl) whatEl.textContent = (f.aiAnalyses && f.aiAnalyses[0]?.technicalDetails) || (f.evidences && f.evidences[0]?.evidenceSummary) || f.description || f.title;
+
+            const remBox = document.getElementById('finding-remediation-box');
+            if (remBox) remBox.textContent = (f.aiAnalyses && f.aiAnalyses[0]?.recommendedRemediation) || f.remediation || 'Ensure secure configurations and input sanitization.';
 
             const reqEl = document.getElementById('finding-evidence-request');
             if (reqEl) reqEl.textContent = (f.evidences && f.evidences[0]?.rawSnippet) || `Target Endpoint / File: ${targetLoc}\nTool: ${f.toolName || 'DAST'}\nRule: ${f.sourceRuleId || 'N/A'}`;
 
             const resEl = document.getElementById('finding-evidence-response');
-            if (resEl) resEl.textContent = (f.evidences && f.evidences[0]?.evidenceSummary) || f.remediation || 'Finding confirmed by multi-tool engine.';
+            if (resEl) resEl.textContent = (f.aiAnalyses && f.aiAnalyses[0]?.evidenceExplanation) || (f.evidences && f.evidences[0]?.evidenceSummary) || f.remediation || 'Finding confirmed by multi-tool engine.';
 
             const isScanOnly = this.scanState.scanType === 'scan_only';
             if (statusEl) {

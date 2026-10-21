@@ -50,7 +50,7 @@ findingsRouter.get('/detail', async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    const finding = await prisma.finding.findUnique({
+    let finding: any = await prisma.finding.findUnique({
       where: { id: findingId },
       include: {
         evidences: true,
@@ -60,6 +60,47 @@ findingsRouter.get('/detail', async (req: Request, res: Response): Promise<void>
         },
       },
     });
+
+    if (!finding) {
+      const dbVuln: any = await prisma.vulnerability.findUnique({
+        where: { id: findingId },
+        include: { scan: { include: { target: true } } },
+      });
+      if (dbVuln) {
+        finding = {
+          id: dbVuln.id,
+          scanId: dbVuln.scanId,
+          toolName: dbVuln.toolName || 'SAST',
+          sourceRuleId: dbVuln.ruleId || 'CODE-RULE',
+          title: dbVuln.title,
+          description: dbVuln.description,
+          severity: dbVuln.severity,
+          confidence: 'HIGH',
+          category: 'CODE_SECURITY',
+          status: dbVuln.status,
+          remediation: dbVuln.remediation || 'Remediation advised.',
+          cwe: dbVuln.cwe_id || 'CWE-89',
+          createdAt: dbVuln.createdAt,
+          evidences: [{
+            id: dbVuln.id,
+            url: null,
+            filePath: dbVuln.filePath,
+            lineStart: dbVuln.lineStart,
+            evidenceSummary: dbVuln.description,
+            rawSnippet: dbVuln.snippet || null,
+          }],
+          aiAnalyses: [{
+            summary: dbVuln.description,
+            technicalDetails: dbVuln.description,
+            impact: 'Application code security vulnerability.',
+            evidenceExplanation: dbVuln.description,
+            severityRationale: `Classified as ${dbVuln.severity}`,
+            recommendedRemediation: dbVuln.remediation || 'Remediation advised.',
+          }],
+          scan: dbVuln.scan,
+        };
+      }
+    }
 
     if (!finding) {
       res.status(404).json({ success: false, error: 'Finding not found.' });
@@ -85,7 +126,7 @@ findingsRouter.get('/:id', async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    const finding = await prisma.finding.findUnique({
+    let finding: any = await prisma.finding.findUnique({
       where: { id: findingId },
       include: {
         evidences: true,
@@ -95,6 +136,47 @@ findingsRouter.get('/:id', async (req: Request, res: Response): Promise<void> =>
         },
       },
     });
+
+    if (!finding) {
+      const dbVuln: any = await prisma.vulnerability.findUnique({
+        where: { id: findingId },
+        include: { scan: { include: { target: true } } },
+      });
+      if (dbVuln) {
+        finding = {
+          id: dbVuln.id,
+          scanId: dbVuln.scanId,
+          toolName: dbVuln.toolName || 'SAST',
+          sourceRuleId: dbVuln.ruleId || 'CODE-RULE',
+          title: dbVuln.title,
+          description: dbVuln.description,
+          severity: dbVuln.severity,
+          confidence: 'HIGH',
+          category: 'CODE_SECURITY',
+          status: dbVuln.status,
+          remediation: dbVuln.remediation || 'Remediation advised.',
+          cwe: dbVuln.cwe_id || 'CWE-89',
+          createdAt: dbVuln.createdAt,
+          evidences: [{
+            id: dbVuln.id,
+            url: null,
+            filePath: dbVuln.filePath,
+            lineStart: dbVuln.lineStart,
+            evidenceSummary: dbVuln.description,
+            rawSnippet: dbVuln.snippet || null,
+          }],
+          aiAnalyses: [{
+            summary: dbVuln.description,
+            technicalDetails: dbVuln.description,
+            impact: 'Application code security vulnerability.',
+            evidenceExplanation: dbVuln.description,
+            severityRationale: `Classified as ${dbVuln.severity}`,
+            recommendedRemediation: dbVuln.remediation || 'Remediation advised.',
+          }],
+          scan: dbVuln.scan,
+        };
+      }
+    }
 
     if (!finding) {
       res.status(404).json({ success: false, error: 'Finding not found.' });
