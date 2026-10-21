@@ -2669,7 +2669,7 @@
 }
 
 /* =========================================================
-   DISCOVERY CENTERED MODAL (SIMPLE & SCROLLABLE / في النص وبسيطة)
+   DISCOVERY CENTERED MODAL (SIMPLE & SCROLLABLE)
    ========================================================= */
 .discovery-modal-overlay {
     position: fixed;
@@ -3683,6 +3683,77 @@
     border-radius: 0.25rem;
     font-family: 'JetBrains Mono', monospace;
     font-weight: 600;
+}
+
+/* =========================================================
+   Boundary Settings List Layout
+   ========================================================= */
+.boundary-settings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.15rem;
+}
+
+.boundary-list-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding-bottom: 0.95rem;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.boundary-list-row:last-of-type {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.boundary-flex-row {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 0.75rem 0.95rem !important;
+    background: #f8fafc;
+    border-radius: 0.65rem;
+    border: 1px solid #edf2f7;
+}
+
+.boundary-row-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.boundary-row-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.boundary-inline-presets {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.boundary-list-note {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.73rem;
+    color: #92400e;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    padding: 0.55rem 0.85rem;
+    border-radius: 0.55rem;
+    line-height: 1.4;
+}
+
+.boundary-list-note b {
+    font-weight: 700;
+    color: #78350f;
 }
 
 

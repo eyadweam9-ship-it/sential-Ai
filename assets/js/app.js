@@ -2846,7 +2846,7 @@ const App = {
                 <input type="text" 
                     id="scope-tag-input-${type}" 
                     class="scope-tag-input" 
-                    placeholder="${list.length === 0 ? placeholder : 'Add more...'}" 
+                    placeholder="${list.length === 0 ? 'Type /path...' : ''}" 
                     autocomplete="off"
                     oninput="App.onScopeInput(event, '${type}')"
                     onkeydown="App.onScopeKeyDown(event, '${type}')"
@@ -3311,13 +3311,13 @@ const App = {
                                             <div>
                                                 <span class="field-label" style="font-size: 0.72rem; margin-bottom: 0.25rem;">Signatory Full Name:</span>
                                                 <div class="input-wrap" style="height: 38px;">
-                                                    <input type="text" id="letter-owner-name" placeholder="e.g. Sarah Jenkins" value="${escapeHtml(auth.writtenLetter.ownerName || '')}">
+                                                    <input type="text" id="letter-owner-name" value="${escapeHtml(auth.writtenLetter.ownerName || '')}">
                                                 </div>
                                             </div>
                                             <div>
                                                 <span class="field-label" style="font-size: 0.72rem; margin-bottom: 0.25rem;">Title / Authorized Role:</span>
                                                 <div class="input-wrap" style="height: 38px;">
-                                                    <input type="text" id="letter-owner-title" placeholder="e.g. Chief Information Security Officer" value="${escapeHtml(auth.writtenLetter.ownerTitle || '')}">
+                                                    <input type="text" id="letter-owner-title" value="${escapeHtml(auth.writtenLetter.ownerTitle || '')}">
                                                 </div>
                                             </div>
                                         </div>
@@ -3386,61 +3386,58 @@ const App = {
                             </span>
                         </label>
                     ` : `
-                        <!-- Included Paths Field with Tags + Autocomplete -->
-                        <div class="scope-tag-field mt-4">
-                            <div class="flex items-center justify-between mb-1.5">
-                                <span class="field-label" style="margin: 0; font-size: 0.76rem; font-weight: 700;">Included Paths</span>
-                                <span class="text-[11px] text-slate-400">Routes allowed for scan</span>
+                        <!-- Clean Settings List Layout -->
+                        <div class="boundary-settings-list mt-5">
+                            
+                            <!-- 1. Included paths -->
+                            <div class="boundary-list-row">
+                                <div class="boundary-row-head">
+                                    <span class="boundary-row-label">Included paths</span>
+                                    <div class="boundary-inline-presets">
+                                        <span class="scope-preset-pill ${(this.scanState.scope.includedPaths || []).includes('/*') ? 'active' : ''}" onclick="App.setScopePreset('included', 'all')">All Paths (/*)</span>
+                                        <span class="scope-preset-pill" onclick="App.setScopePreset('included', '/login')">+ /login</span>
+                                        <span class="scope-preset-pill" onclick="App.setScopePreset('included', '/api/v1')">+ /api/v1</span>
+                                        <span class="scope-preset-pill" onclick="App.setScopePreset('included', '/dashboard')">+ /dashboard</span>
+                                        <span class="scope-preset-pill" onclick="App.setScopePreset('included', '/products')">+ /products</span>
+                                    </div>
+                                </div>
+                                <div id="scope-field-wrap-included">
+                                    ${this.renderScopeTagsHtml('included')}
+                                </div>
                             </div>
-                            <div id="scope-field-wrap-included">
-                                ${this.renderScopeTagsHtml('included')}
-                            </div>
-                            <div class="scope-preset-row">
-                                <span class="scope-preset-lbl">Presets:</span>
-                                <span class="scope-preset-pill ${(this.scanState.scope.includedPaths || []).includes('/*') ? 'active' : ''}" onclick="App.setScopePreset('included', 'all')">All Paths (/*)</span>
-                                <span class="scope-preset-pill" onclick="App.setScopePreset('included', '/login')">+ /login</span>
-                                <span class="scope-preset-pill" onclick="App.setScopePreset('included', '/api/v1')">+ /api/v1</span>
-                                <span class="scope-preset-pill" onclick="App.setScopePreset('included', '/dashboard')">+ /dashboard</span>
-                                <span class="scope-preset-pill" onclick="App.setScopePreset('included', '/products')">+ /products</span>
-                            </div>
-                        </div>
 
-                        <!-- Excluded Paths Field with Tags + Autocomplete -->
-                        <div class="scope-tag-field mt-3">
-                            <div class="flex items-center justify-between mb-1.5">
-                                <span class="field-label" style="margin: 0; font-size: 0.76rem; font-weight: 700;">Excluded Paths</span>
-                                <span class="text-[11px] text-rose-500 font-semibold">Strictly bypassed routes</span>
+                            <!-- 2. Excluded paths -->
+                            <div class="boundary-list-row">
+                                <div class="boundary-row-head">
+                                    <span class="boundary-row-label">Excluded paths</span>
+                                    <div class="boundary-inline-presets">
+                                        <span class="scope-preset-pill danger-preset" onclick="App.setScopePreset('excluded', '/logout')">+ /logout</span>
+                                        <span class="scope-preset-pill danger-preset" onclick="App.setScopePreset('excluded', '/payments')">+ /payments</span>
+                                        <span class="scope-preset-pill danger-preset" onclick="App.setScopePreset('excluded', '/api/delete-account')">+ /api/delete-account</span>
+                                        <span class="scope-preset-pill danger-preset" onclick="App.setScopePreset('excluded', '/admin/critical-operation')">+ /admin/critical</span>
+                                        <span class="scope-preset-pill" onclick="App.setScopePreset('excluded', 'none')">None</span>
+                                    </div>
+                                </div>
+                                <div id="scope-field-wrap-excluded">
+                                    ${this.renderScopeTagsHtml('excluded')}
+                                </div>
                             </div>
-                            <div id="scope-field-wrap-excluded">
-                                ${this.renderScopeTagsHtml('excluded')}
-                            </div>
-                            <div class="scope-preset-row">
-                                <span class="scope-preset-lbl">Sensitive shortcuts:</span>
-                                <span class="scope-preset-pill danger-preset" onclick="App.setScopePreset('excluded', '/logout')">+ /logout</span>
-                                <span class="scope-preset-pill danger-preset" onclick="App.setScopePreset('excluded', '/payments')">+ /payments</span>
-                                <span class="scope-preset-pill danger-preset" onclick="App.setScopePreset('excluded', '/api/delete-account')">+ /api/delete-account</span>
-                                <span class="scope-preset-pill danger-preset" onclick="App.setScopePreset('excluded', '/admin/critical-operation')">+ /admin/critical</span>
-                                <span class="scope-preset-pill" onclick="App.setScopePreset('excluded', 'none')">None</span>
-                            </div>
-                        </div>
 
-                        <!-- Priority Precedence Banner -->
-                        <div class="scope-priority-banner">
-                            <div class="scope-priority-icon">⚡</div>
-                            <div>
-                                <span class="scope-priority-title">Rule Priority: Exclusion overrides Inclusion (الاستثناء أقوى من التضمين)</span>
-                                <p class="scope-priority-copy">Any endpoint in Excluded Paths (e.g. <code>/payments</code>) is strictly bypassed and logged, even if a parent path (e.g. <code>/api/v1</code>) is included.</p>
+                            <!-- 3. Priority Note -->
+                            <div class="boundary-list-note">
+                                <b>Priority:</b> Exclusions strictly override inclusions.
+                            </div>
+
+                            <!-- 4. Safe request rate -->
+                            <div class="boundary-list-row boundary-flex-row">
+                                <div>
+                                    <b class="text-xs text-slate-800">Safe request rate</b>
+                                    <p class="mt-0.5 text-[11px] text-slate-500">Up to 10 requests per second (Safe mode)</p>
+                                </div>
+                                <span class="status status-safe">Recommended</span>
                             </div>
                         </div>
                     `}
-
-                    <div class="mt-4 flex items-center justify-between rounded-xl bg-slate-50 p-3.5 border border-slate-100">
-                        <div>
-                            <b class="text-xs text-slate-800">${isDev ? 'Local analysis engine' : 'Safe request rate'}</b>
-                            <p class="mt-0.5 text-[11px] text-slate-500">${isDev ? 'Zero network latency · Sandbox execution' : 'Up to 10 requests per second (Safe mode)'}</p>
-                        </div>
-                        <span class="status status-safe">Recommended</span>
-                    </div>
 
                     <!-- Authorization & Scope Gate Hero Card -->
                     <div class="hero-gate-card ${isVerified || isDev ? 'cleared' : 'locked'}">
