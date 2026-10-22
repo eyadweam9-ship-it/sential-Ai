@@ -4659,7 +4659,11 @@ const App = {
     },
 
     async triggerRescan() {
-        const targetId = this.scanState.authData?.targetId || 10;
+        const targetId = this.scanState.authData?.targetId || this.scanState.targetId;
+        if (!targetId) {
+            showToast('Target identifier not available for retest.', 'error');
+            return;
+        }
         showToast('Initiating automated security retest & cross-scan delta comparison...', 'info');
         try {
             const res = await API.rescanTarget(targetId);
@@ -4675,7 +4679,11 @@ const App = {
     },
 
     async exportAndDownloadReport() {
-        const scanId = this.scanState.currentScanId || 18;
+        const scanId = this.scanState.currentScanId;
+        if (!scanId) {
+            showToast('Scan session ID is required to export report.', 'error');
+            return;
+        }
         showToast('Generating comprehensive printable executive security report...', 'info');
         try {
             const res = await API.exportScanReport(scanId);

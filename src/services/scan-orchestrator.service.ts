@@ -51,7 +51,16 @@ export async function orchestrateScan(scanId: number): Promise<void> {
     const target = scan.target;
     const isUrl = target.targetType === 'URL' || Boolean(target.url && target.url.startsWith('http'));
     let effectiveSourcePath = target.filePath || undefined;
-    let hasSource = Boolean(target.filePath || target.targetType === 'FILE_ZIP' || !isUrl);
+
+    // Safety guard: Never scan SentinelAI's own backend source code tree ('src')
+    if (effectiveSourcePath) {
+      const normalized = path.normalize(effectiveSourcePath).replace(/\\/g, '/').toLowerCase();
+      if (normalized === 'src' || normalized === './src' || normalized.startsWith('src/') || normalized.endsWith('/src')) {
+        effectiveSourcePath = undefined;
+      }
+    }
+
+    let hasSource = Boolean(effectiveSourcePath || target.targetType === 'FILE_ZIP' || !isUrl);
 
     // If source path points to a ZIP file, unpack it automatically so individual files and lines are exposed
     if (effectiveSourcePath && fs.existsSync(effectiveSourcePath)) {
