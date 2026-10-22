@@ -32,8 +32,8 @@ app.use((req: Request, res: Response, next) => {
   next();
 });
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '1024mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1024mb' }));
 
 // Serve static frontend files
 const rootDir = process.cwd();
@@ -178,7 +178,7 @@ app.use((err: any, req: Request, res: Response, next: any) => {
   });
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log('\n======================================================');
   console.log(`🚀 Vulnerability Scanner Server running on http://localhost:${port}`);
   console.log(`🔐 Admin Login Page: http://localhost:${port}/admin/login`);
@@ -189,3 +189,9 @@ app.listen(port, () => {
   console.log('📦 Database Engine: SQLite (prisma/dev.db)');
   console.log('======================================================\n');
 });
+
+// Configure server timeouts to comfortably support up to 1GB file and folder uploads
+server.timeout = 20 * 60 * 1000;       // 20 minutes socket timeout
+server.keepAliveTimeout = 10 * 60 * 1000;
+server.headersTimeout = 11 * 60 * 1000;
+server.requestTimeout = 20 * 60 * 1000;

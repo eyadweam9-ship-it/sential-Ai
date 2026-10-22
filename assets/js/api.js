@@ -121,7 +121,7 @@ const API = {
             return data;
         } catch (err) {
             if (err.name === 'TypeError' && String(err.message).toLowerCase().includes('fetch')) {
-                throw new Error('Network error or connection reset while uploading file. Ensure file is within 100MB.');
+                throw new Error('Network error or connection reset while uploading file. Ensure file is within 1GB.');
             }
             throw err;
         }

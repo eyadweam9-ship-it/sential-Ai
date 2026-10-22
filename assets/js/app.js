@@ -1329,7 +1329,7 @@ const App = {
                                         <button type="button" class="chatgpt-remove-pill-btn" onclick="App.removeStagedFile()" title="Remove file">&times;</button>
                                     </div>
                                 ` : `
-                                    <span class="text-xs text-slate-400">Attach source code archive for SAST (.zip, .ts, .js, .py, max 50MB)</span>
+                                    <span class="text-xs text-slate-400">Attach source code archive or folder for SAST (.zip, .tar, .js, .php, max 1GB)</span>
                                 `}
                             </div>
                             <div class="flex items-center gap-1.5 flex-shrink-0">
@@ -2227,8 +2227,8 @@ const App = {
                 const ext = dotIdx !== -1 ? f.name.slice(dotIdx).toLowerCase() : '';
                 if (ignoredExts.includes(ext)) continue;
 
-                // Skip individual massive files (>20MB) to protect network transfer buffer
-                if (f.size > 20 * 1024 * 1024) {
+                // Support up to 1GB per individual file
+                if (f.size > 1024 * 1024 * 1024) {
                     skippedOversized++;
                     continue;
                 }
@@ -2237,7 +2237,7 @@ const App = {
                 formData.append('paths', relPath);
                 pathsList.push(relPath);
                 addedCount++;
-                if (addedCount >= 1500) break;
+                if (addedCount >= 4000) break;
             }
 
             if (addedCount === 0) {

@@ -33,7 +33,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB max file size
+  limits: { fileSize: 1024 * 1024 * 1024 }, // 1GB max file size
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     const allowed = ['.zip', '.tar', '.gz', '.tgz', '.js', '.jsx', '.ts', '.tsx', '.py', '.php', '.html', '.json', '.txt', '.vue', '.sql', '.env', '.yaml', '.yml'];
@@ -48,10 +48,10 @@ const upload = multer({
 const folderUpload = multer({
   storage,
   limits: {
-    fileSize: 100 * 1024 * 1024, // 100MB max per file
-    files: 2500,                  // up to 2500 files
-    fields: 5000,                 // up to 5000 fields
-    fieldSize: 50 * 1024 * 1024,
+    fileSize: 1024 * 1024 * 1024, // 1GB max per file
+    files: 5000,                  // up to 5000 files
+    fields: 10000,                // up to 10000 fields
+    fieldSize: 100 * 1024 * 1024,
   },
 });
 
@@ -65,7 +65,7 @@ scanRouter.post('/upload', (req: Request, res: Response): void => {
     if (err) {
       console.error('File upload Multer error:', err);
       const errMsg = err.code === 'LIMIT_FILE_SIZE'
-        ? 'File exceeds the maximum allowed size of 100MB.'
+        ? 'File exceeds the maximum allowed size of 1GB.'
         : (err.message || 'Error uploading file.');
       res.status(400).json({ success: false, error: errMsg });
       return;
@@ -132,13 +132,13 @@ scanRouter.post('/upload', (req: Request, res: Response): void => {
  * Upload entire folder with relative directory paths preserved
  */
 scanRouter.post('/upload-folder', (req: Request, res: Response): void => {
-  folderUpload.array('files', 2500)(req, res, (err: any) => {
+  folderUpload.array('files', 5000)(req, res, (err: any) => {
     if (err) {
       console.error('Folder upload Multer error:', err);
       const errMsg = err.code === 'LIMIT_FILE_SIZE'
-        ? 'One of the files exceeds the allowed 100MB limit.'
+        ? 'One of the files exceeds the allowed 1GB limit.'
         : err.code === 'LIMIT_FILE_COUNT'
-        ? 'The folder contains too many files (max 2500 files).'
+        ? 'The folder contains too many files (max 5000 files).'
         : (err.message || 'Error processing folder upload.');
       res.status(400).json({ success: false, error: errMsg });
       return;
