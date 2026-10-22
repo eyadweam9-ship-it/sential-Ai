@@ -80,12 +80,14 @@ export async function normalizeAndSaveFindings(
         description: raw.evidenceSummary,
         severity: raw.severity,
         confidence,
+        verificationStatus: validation.verificationStatus || raw.verificationStatus || 'UNVERIFIED',
         category: raw.category || 'VULNERABILITY',
         fingerprint,
         status,
         remediation,
         cwe: raw.cwe || null,
         cve: raw.cve || null,
+        relatedFindingsJson: raw.relatedFindings ? JSON.stringify(raw.relatedFindings) : null,
       },
     });
 

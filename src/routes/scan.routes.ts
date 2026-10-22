@@ -1202,21 +1202,36 @@ scanRouter.get('/findings/list', async (req: Request, res: Response): Promise<vo
     let findings: any[] = dbFindings.map((f) => {
       const ev = f.evidences[0];
       const sev = f.severity.toUpperCase();
+      let relatedList: any[] = [];
+      try {
+        if (f.relatedFindingsJson) relatedList = JSON.parse(f.relatedFindingsJson);
+      } catch {}
+
       return {
         id: f.id,
         scanId: f.scanId,
+        fingerprint: f.fingerprint,
         title: f.title,
         endpoint: ev?.filePath || ev?.url || '/api/endpoint',
         filePath: ev?.filePath || null,
         lineStart: ev?.lineStart || null,
         lineEnd: ev?.lineEnd || null,
         rawSnippet: ev?.rawSnippet || null,
-        evidenceSummary: ev?.evidenceSummary || f.description,
+        evidence: ev?.evidenceSummary || f.description || '',
+        evidenceSummary: ev?.evidenceSummary || f.description || '',
+        source_location: {
+          filePath: ev?.filePath || null,
+          lineStart: ev?.lineStart || null,
+          lineEnd: ev?.lineEnd || null,
+          endpoint: ev?.filePath || ev?.url || '/api/endpoint',
+        },
         tool: f.toolName,
         toolName: f.toolName,
         severity: sev,
         sev: sev.charAt(0) + sev.slice(1).toLowerCase(),
-        confidence: f.confidence || 'HIGH',
+        confidence: f.confidence || 'POTENTIAL',
+        verification_status: f.verificationStatus || 'UNVERIFIED',
+        verificationStatus: f.verificationStatus || 'UNVERIFIED',
         findingStatus: f.status || 'CONFIRMED',
         cwe: f.cwe || 'CWE-200',
         cwe_id: f.cwe || 'CWE-200',
@@ -1228,6 +1243,7 @@ scanRouter.get('/findings/list', async (req: Request, res: Response): Promise<vo
         first_detected_at: f.createdAt.toISOString().split('T')[0],
         description: f.description,
         remediation: f.remediation,
+        related_findings: relatedList,
         evidences: f.evidences,
       };
     });
@@ -1670,11 +1686,41 @@ scanRouter.get('/:id/findings', async (req: Request, res: Response): Promise<voi
       }
     }
 
+    const richFindings = findings.map(f => {
+      const ev = f.evidences[0];
+      let relatedList: any[] = [];
+      try {
+        if (f.relatedFindingsJson) relatedList = JSON.parse(f.relatedFindingsJson);
+      } catch {}
+
+      return {
+        ...f,
+        fingerprint: f.fingerprint,
+        evidence: ev?.evidenceSummary || f.description || '',
+        evidenceSummary: ev?.evidenceSummary || f.description || '',
+        rawSnippet: ev?.rawSnippet || null,
+        confidence: f.confidence || 'POTENTIAL',
+        verification_status: f.verificationStatus || 'UNVERIFIED',
+        verificationStatus: f.verificationStatus || 'UNVERIFIED',
+        source_location: {
+          filePath: ev?.filePath || null,
+          lineStart: ev?.lineStart || null,
+          lineEnd: ev?.lineEnd || null,
+          endpoint: ev?.filePath || ev?.url || '/api/endpoint',
+        },
+        endpoint: ev?.filePath || ev?.url || '/api/endpoint',
+        filePath: ev?.filePath || null,
+        lineStart: ev?.lineStart || null,
+        lineEnd: ev?.lineEnd || null,
+        related_findings: relatedList,
+      };
+    });
+
     res.status(200).json({
       success: true,
       scanId,
-      count: findings.length,
-      findings,
+      count: richFindings.length,
+      findings: richFindings,
     });
   } catch (error) {
     console.error('Get scan findings error:', error);

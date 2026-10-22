@@ -1,5 +1,6 @@
 export type SeverityLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
-export type ConfidenceLevel = 'CONFIRMED' | 'HIGH' | 'MEDIUM' | 'LOW' | 'NEEDS_REVIEW' | 'LIKELY_FALSE_POSITIVE';
+export type ConfidenceLevel = 'CONFIRMED' | 'POTENTIAL' | 'INFORMATIONAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'NEEDS_REVIEW' | 'LIKELY_FALSE_POSITIVE';
+export type VerificationStatus = 'VERIFIED' | 'UNVERIFIED' | 'NEEDS_REVIEW';
 
 export interface ScopeRuleSet {
   includedPaths: string[];
@@ -24,6 +25,7 @@ export interface RawToolFinding {
   title: string;
   severity: SeverityLevel;
   confidence: ConfidenceLevel;
+  verificationStatus?: VerificationStatus;
   category: string;
   sourceRuleId?: string;
   targetUrl?: string;
@@ -35,6 +37,7 @@ export interface RawToolFinding {
   remediation?: string;
   cwe?: string;
   cve?: string;
+  relatedFindings?: Array<{ id?: number; tool?: string; title: string }>;
 }
 
 export interface ToolExecutionResult {

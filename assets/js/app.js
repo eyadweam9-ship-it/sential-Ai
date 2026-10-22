@@ -3839,122 +3839,178 @@ const App = {
                     </div>
 
                     <div class="stage-list" id="progress-stage-list">
-                        <div class="stage active" id="prog-stage-OWASP_ZAP">
-                            <span class="stage-marker" id="prog-marker-OWASP_ZAP"><span class="spinner"></span></span>
-                            <div>
-                                <b>OWASP ZAP (DAST)</b>
-                                <p id="prog-desc-OWASP_ZAP">Dynamic vulnerability inspection &amp; security headers</p>
+                        ${isDev ? `
+                            <div class="stage active" id="prog-stage-SEMGREP">
+                                <span class="stage-marker" id="prog-marker-SEMGREP"><span class="spinner"></span></span>
+                                <div>
+                                    <b>Semgrep (SAST Engine)</b>
+                                    <p id="prog-desc-SEMGREP">Static AST code taint &amp; vulnerability pattern analysis</p>
+                                </div>
+                                <span class="status status-running" id="prog-badge-SEMGREP">Running</span>
                             </div>
-                            <span class="status status-running" id="prog-badge-OWASP_ZAP">Running</span>
-                        </div>
 
-                        <div class="stage" id="prog-stage-NUCLEI">
-                            <span class="stage-marker" id="prog-marker-NUCLEI">2</span>
-                            <div>
-                                <b>Nuclei (Template DAST)</b>
-                                <p id="prog-desc-NUCLEI">Fast template-based exploit &amp; misconfiguration checks</p>
+                            <div class="stage" id="prog-stage-CODEQL">
+                                <span class="stage-marker" id="prog-marker-CODEQL">2</span>
+                                <div>
+                                    <b>CodeQL (Data-Flow SAST)</b>
+                                    <p id="prog-desc-CODEQL">Deep inter-procedural taint flows (Source -> Sanitizer -> Sink)</p>
+                                </div>
+                                <span class="status" id="prog-badge-CODEQL" style="color:#64748b;">Pending</span>
                             </div>
-                            <span class="status" id="prog-badge-NUCLEI" style="color:#64748b;">Pending</span>
-                        </div>
 
-                        <div class="stage" id="prog-stage-WPSCAN">
-                            <span class="stage-marker" id="prog-marker-WPSCAN">3</span>
-                            <div>
-                                <b>WPScan (CMS &amp; Frameworks)</b>
-                                <p id="prog-desc-WPSCAN">Auditing WordPress, Joomla, Drupal, and web framework endpoints</p>
+                            <div class="stage" id="prog-stage-GITLEAKS">
+                                <span class="stage-marker" id="prog-marker-GITLEAKS">3</span>
+                                <div>
+                                    <b>Gitleaks (Secrets &amp; Credentials)</b>
+                                    <p id="prog-desc-GITLEAKS">Scanning source files &amp; configurations for passwords &amp; tokens</p>
+                                </div>
+                                <span class="status" id="prog-badge-GITLEAKS" style="color:#64748b;">Pending</span>
                             </div>
-                            <span class="status" id="prog-badge-WPSCAN" style="color:#64748b;">Pending</span>
-                        </div>
 
-                        <div class="stage" id="prog-stage-WHATWEB">
-                            <span class="stage-marker" id="prog-marker-WHATWEB">4</span>
-                            <div>
-                                <b>WhatWeb (Recon &amp; WAF)</b>
-                                <p id="prog-desc-WHATWEB">Fingerprinting technologies, WAF barriers &amp; server stacks</p>
+                            <div class="stage" id="prog-stage-CHECKOV">
+                                <span class="stage-marker" id="prog-marker-CHECKOV">4</span>
+                                <div>
+                                    <b>Checkov (IaC &amp; Posture)</b>
+                                    <p id="prog-desc-CHECKOV">Dockerfile, Kubernetes &amp; container posture audit</p>
+                                </div>
+                                <span class="status" id="prog-badge-CHECKOV" style="color:#64748b;">Pending</span>
                             </div>
-                            <span class="status" id="prog-badge-WHATWEB" style="color:#64748b;">Pending</span>
-                        </div>
 
-                        <div class="stage" id="prog-stage-TESTSSL">
-                            <span class="stage-marker" id="prog-marker-TESTSSL">5</span>
-                            <div>
-                                <b>TestSSL (Transport &amp; Headers)</b>
-                                <p id="prog-desc-TESTSSL">Auditing TLS cipher suites, HSTS, and defense headers</p>
+                            <div class="stage" id="prog-stage-TRIVY">
+                                <span class="stage-marker" id="prog-marker-TRIVY">5</span>
+                                <div>
+                                    <b>Supply Chain (Trivy, OSV &amp; npm audit)</b>
+                                    <p id="prog-desc-TRIVY">Dependency manifests validation &amp; CVE advisory database</p>
+                                </div>
+                                <span class="status" id="prog-badge-TRIVY" style="color:#64748b;">Pending</span>
                             </div>
-                            <span class="status" id="prog-badge-TESTSSL" style="color:#64748b;">Pending</span>
-                        </div>
 
-                        <div class="stage" id="prog-stage-SEMGREP">
-                            <span class="stage-marker" id="prog-marker-SEMGREP">6</span>
-                            <div>
-                                <b>Semgrep (SAST)</b>
-                                <p id="prog-desc-SEMGREP">Static AST code taint &amp; injection pattern analysis</p>
+                            <div class="stage" id="prog-stage-AI">
+                                <span class="stage-marker" id="prog-marker-AI">6</span>
+                                <div>
+                                    <b>SentinelAI Correlation Engine</b>
+                                    <p id="prog-desc-AI">Cross-tool deduplication, evidence validation &amp; AI triage</p>
+                                </div>
+                                <span class="status" id="prog-badge-AI" style="color:#64748b;">Queued</span>
                             </div>
-                            <span class="status" id="prog-badge-SEMGREP" style="color:#64748b;">Pending</span>
-                        </div>
+                        ` : `
+                            <div class="stage active" id="prog-stage-OWASP_ZAP">
+                                <span class="stage-marker" id="prog-marker-OWASP_ZAP"><span class="spinner"></span></span>
+                                <div>
+                                    <b>OWASP ZAP (DAST)</b>
+                                    <p id="prog-desc-OWASP_ZAP">Dynamic vulnerability inspection &amp; security headers</p>
+                                </div>
+                                <span class="status status-running" id="prog-badge-OWASP_ZAP">Running</span>
+                            </div>
 
-                        <div class="stage" id="prog-stage-CODEQL">
-                            <span class="stage-marker" id="prog-marker-CODEQL">7</span>
-                            <div>
-                                <b>CodeQL (Data-Flow SAST)</b>
-                                <p id="prog-desc-CODEQL">Deep taint-tracking analysis (Source -> Sanitizer -> Sink)</p>
+                            <div class="stage" id="prog-stage-NUCLEI">
+                                <span class="stage-marker" id="prog-marker-NUCLEI">2</span>
+                                <div>
+                                    <b>Nuclei (Template DAST)</b>
+                                    <p id="prog-desc-NUCLEI">Fast template-based exploit &amp; misconfiguration checks</p>
+                                </div>
+                                <span class="status" id="prog-badge-NUCLEI" style="color:#64748b;">Pending</span>
                             </div>
-                            <span class="status" id="prog-badge-CODEQL" style="color:#64748b;">Pending</span>
-                        </div>
 
-                        <div class="stage" id="prog-stage-GITLEAKS">
-                            <span class="stage-marker" id="prog-marker-GITLEAKS">8</span>
-                            <div>
-                                <b>Gitleaks (Secrets)</b>
-                                <p id="prog-desc-GITLEAKS">Scanning source files &amp; bundles for exposed API keys &amp; tokens</p>
+                            <div class="stage" id="prog-stage-WPSCAN">
+                                <span class="stage-marker" id="prog-marker-WPSCAN">3</span>
+                                <div>
+                                    <b>WPScan (CMS &amp; Frameworks)</b>
+                                    <p id="prog-desc-WPSCAN">Auditing WordPress, Joomla, Drupal, and web framework endpoints</p>
+                                </div>
+                                <span class="status" id="prog-badge-WPSCAN" style="color:#64748b;">Pending</span>
                             </div>
-                            <span class="status" id="prog-badge-GITLEAKS" style="color:#64748b;">Pending</span>
-                        </div>
 
-                        <div class="stage" id="prog-stage-TRIVY">
-                            <span class="stage-marker" id="prog-marker-TRIVY">9</span>
-                            <div>
-                                <b>Trivy (Dependencies)</b>
-                                <p id="prog-desc-TRIVY">Auditing package manifests &amp; container CVEs</p>
+                            <div class="stage" id="prog-stage-WHATWEB">
+                                <span class="stage-marker" id="prog-marker-WHATWEB">4</span>
+                                <div>
+                                    <b>WhatWeb (Recon &amp; WAF)</b>
+                                    <p id="prog-desc-WHATWEB">Fingerprinting technologies, WAF barriers &amp; server stacks</p>
+                                </div>
+                                <span class="status" id="prog-badge-WHATWEB" style="color:#64748b;">Pending</span>
                             </div>
-                            <span class="status" id="prog-badge-TRIVY" style="color:#64748b;">Pending</span>
-                        </div>
 
-                        <div class="stage" id="prog-stage-OSV_SCANNER">
-                            <span class="stage-marker" id="prog-marker-OSV_SCANNER">10</span>
-                            <div>
-                                <b>OSV-Scanner (Supply Chain)</b>
-                                <p id="prog-desc-OSV_SCANNER">Google OSV database vulnerability intelligence</p>
+                            <div class="stage" id="prog-stage-TESTSSL">
+                                <span class="stage-marker" id="prog-marker-TESTSSL">5</span>
+                                <div>
+                                    <b>TestSSL (Transport &amp; Headers)</b>
+                                    <p id="prog-desc-TESTSSL">Auditing TLS cipher suites, HSTS, and defense headers</p>
+                                </div>
+                                <span class="status" id="prog-badge-TESTSSL" style="color:#64748b;">Pending</span>
                             </div>
-                            <span class="status" id="prog-badge-OSV_SCANNER" style="color:#64748b;">Pending</span>
-                        </div>
 
-                        <div class="stage" id="prog-stage-CHECKOV">
-                            <span class="stage-marker" id="prog-marker-CHECKOV">11</span>
-                            <div>
-                                <b>Checkov (IaC &amp; Posture)</b>
-                                <p id="prog-desc-CHECKOV">Dockerfile, Kubernetes &amp; infrastructure security audit</p>
+                            <div class="stage" id="prog-stage-SEMGREP">
+                                <span class="stage-marker" id="prog-marker-SEMGREP">6</span>
+                                <div>
+                                    <b>Semgrep (SAST)</b>
+                                    <p id="prog-desc-SEMGREP">Static AST code taint &amp; injection pattern analysis</p>
+                                </div>
+                                <span class="status" id="prog-badge-SEMGREP" style="color:#64748b;">Pending</span>
                             </div>
-                            <span class="status" id="prog-badge-CHECKOV" style="color:#64748b;">Pending</span>
-                        </div>
 
-                        <div class="stage" id="prog-stage-NPM_AUDIT">
-                            <span class="stage-marker" id="prog-marker-NPM_AUDIT">12</span>
-                            <div>
-                                <b>npm audit</b>
-                                <p id="prog-desc-NPM_AUDIT">Advisory database validation for npm dependencies</p>
+                            <div class="stage" id="prog-stage-CODEQL">
+                                <span class="stage-marker" id="prog-marker-CODEQL">7</span>
+                                <div>
+                                    <b>CodeQL (Data-Flow SAST)</b>
+                                    <p id="prog-desc-CODEQL">Deep taint-tracking analysis (Source -> Sanitizer -> Sink)</p>
+                                </div>
+                                <span class="status" id="prog-badge-CODEQL" style="color:#64748b;">Pending</span>
                             </div>
-                            <span class="status" id="prog-badge-NPM_AUDIT" style="color:#64748b;">Pending</span>
-                        </div>
 
-                        <div class="stage" id="prog-stage-AI">
-                            <span class="stage-marker" id="prog-marker-AI">13</span>
-                            <div>
-                                <b>AI Threat Intelligence</b>
-                                <p id="prog-desc-AI">Cross-engine correlation, deduplication &amp; risk evaluation</p>
+                            <div class="stage" id="prog-stage-GITLEAKS">
+                                <span class="stage-marker" id="prog-marker-GITLEAKS">8</span>
+                                <div>
+                                    <b>Gitleaks (Secrets)</b>
+                                    <p id="prog-desc-GITLEAKS">Scanning source files &amp; bundles for exposed API keys &amp; tokens</p>
+                                </div>
+                                <span class="status" id="prog-badge-GITLEAKS" style="color:#64748b;">Pending</span>
                             </div>
-                            <span class="status" id="prog-badge-AI" style="color:#64748b;">Queued</span>
-                        </div>
+
+                            <div class="stage" id="prog-stage-TRIVY">
+                                <span class="stage-marker" id="prog-marker-TRIVY">9</span>
+                                <div>
+                                    <b>Trivy (Dependencies)</b>
+                                    <p id="prog-desc-TRIVY">Auditing package manifests &amp; container CVEs</p>
+                                </div>
+                                <span class="status" id="prog-badge-TRIVY" style="color:#64748b;">Pending</span>
+                            </div>
+
+                            <div class="stage" id="prog-stage-OSV_SCANNER">
+                                <span class="stage-marker" id="prog-marker-OSV_SCANNER">10</span>
+                                <div>
+                                    <b>OSV-Scanner (Supply Chain)</b>
+                                    <p id="prog-desc-OSV_SCANNER">Google OSV database vulnerability intelligence</p>
+                                </div>
+                                <span class="status" id="prog-badge-OSV_SCANNER" style="color:#64748b;">Pending</span>
+                            </div>
+
+                            <div class="stage" id="prog-stage-CHECKOV">
+                                <span class="stage-marker" id="prog-marker-CHECKOV">11</span>
+                                <div>
+                                    <b>Checkov (IaC &amp; Posture)</b>
+                                    <p id="prog-desc-CHECKOV">Dockerfile, Kubernetes &amp; infrastructure security audit</p>
+                                </div>
+                                <span class="status" id="prog-badge-CHECKOV" style="color:#64748b;">Pending</span>
+                            </div>
+
+                            <div class="stage" id="prog-stage-NPM_AUDIT">
+                                <span class="stage-marker" id="prog-marker-NPM_AUDIT">12</span>
+                                <div>
+                                    <b>npm audit</b>
+                                    <p id="prog-desc-NPM_AUDIT">Advisory database validation for npm dependencies</p>
+                                </div>
+                                <span class="status" id="prog-badge-NPM_AUDIT" style="color:#64748b;">Pending</span>
+                            </div>
+
+                            <div class="stage" id="prog-stage-AI">
+                                <span class="stage-marker" id="prog-marker-AI">13</span>
+                                <div>
+                                    <b>AI Threat Intelligence</b>
+                                    <p id="prog-desc-AI">Cross-engine correlation, deduplication &amp; risk evaluation</p>
+                                </div>
+                                <span class="status" id="prog-badge-AI" style="color:#64748b;">Queued</span>
+                            </div>
+                        `}
                     </div>
                 </div>
             </div>
@@ -4216,17 +4272,17 @@ const App = {
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom: 1rem;">
                     <div>
                         <div style="display:flex; align-items:center; gap:8px;">
-                            <h2 style="font-size:15px; font-weight:800; color:#0f172a; margin:0;">Multi-Tool Security Assessment Engine</h2>
+                            <h2 style="font-size:15px; font-weight:800; color:#0f172a; margin:0;">${isDev ? 'Source Code & Component Security Engine' : 'Multi-Tool Security Assessment Engine'}</h2>
                             <span id="scan-status-badge" class="badge" style="font-size:10px; padding:2px 8px; border-radius:9999px; background:#eff6ff; color:#2563eb; font-weight:700;">READY</span>
                         </div>
                         <p style="font-size:11px; color:#64748b; margin:3px 0 0 0;">
-                            Unified DAST, SAST, Secret Scanning, Configuration &amp; Dependency Analysis
+                            ${isDev ? 'Static AST Analysis, Secret Detection, Dependency CVEs & IaC Posture' : 'Unified DAST, SAST, Secret Scanning, Configuration & Dependency Analysis'}
                         </p>
                     </div>
                     <div style="display:flex; align-items:center; gap:16px;">
                         <div style="text-align:right;">
                             <span style="font-size:10px; color:#64748b; font-weight:600; text-transform:uppercase;">Tools Completed</span>
-                            <div id="tools-completed-ratio" style="font-size:15px; font-weight:800; color:#0f172a;">— / 12</div>
+                            <div id="tools-completed-ratio" style="font-size:15px; font-weight:800; color:#0f172a;">— / ${isDev ? '7' : '12'}</div>
                         </div>
                         <div style="text-align:right;">
                             <span style="font-size:10px; color:#64748b; font-weight:600; text-transform:uppercase;">Engine Mode</span>
@@ -4235,47 +4291,49 @@ const App = {
                     </div>
                 </div>
 
-                <!-- 12 Tool Matrix Grid -->
+                <!-- Tool Matrix Grid (URL tools omitted in Development Mode) -->
                 <div id="tool-execution-matrix-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px;">
-                    <div class="tool-matrix-tile" id="tile-tool-OWASP_ZAP" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
-                        <div>
-                            <div style="font-size:12px; font-weight:700; color:#1e293b;">OWASP ZAP</div>
-                            <small style="color:#64748b; font-size:10px;">DAST Engine</small>
+                    ${!isDev ? `
+                        <div class="tool-matrix-tile" id="tile-tool-OWASP_ZAP" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <div style="font-size:12px; font-weight:700; color:#1e293b;">OWASP ZAP</div>
+                                <small style="color:#64748b; font-size:10px;">DAST Engine</small>
+                            </div>
+                            <span class="tool-status-pill badge" id="pill-OWASP_ZAP" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
                         </div>
-                        <span class="tool-status-pill badge" id="pill-OWASP_ZAP" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
-                    </div>
 
-                    <div class="tool-matrix-tile" id="tile-tool-NUCLEI" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
-                        <div>
-                            <div style="font-size:12px; font-weight:700; color:#1e293b;">Nuclei</div>
-                            <small style="color:#64748b; font-size:10px;">Template DAST</small>
+                        <div class="tool-matrix-tile" id="tile-tool-NUCLEI" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <div style="font-size:12px; font-weight:700; color:#1e293b;">Nuclei</div>
+                                <small style="color:#64748b; font-size:10px;">Template DAST</small>
+                            </div>
+                            <span class="tool-status-pill badge" id="pill-NUCLEI" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
                         </div>
-                        <span class="tool-status-pill badge" id="pill-NUCLEI" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
-                    </div>
 
-                    <div class="tool-matrix-tile" id="tile-tool-WPSCAN" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
-                        <div>
-                            <div style="font-size:12px; font-weight:700; color:#1e293b;">WPScan</div>
-                            <small style="color:#64748b; font-size:10px;">CMS &amp; Frameworks</small>
+                        <div class="tool-matrix-tile" id="tile-tool-WPSCAN" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <div style="font-size:12px; font-weight:700; color:#1e293b;">WPScan</div>
+                                <small style="color:#64748b; font-size:10px;">CMS &amp; Frameworks</small>
+                            </div>
+                            <span class="tool-status-pill badge" id="pill-WPSCAN" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
                         </div>
-                        <span class="tool-status-pill badge" id="pill-WPSCAN" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
-                    </div>
 
-                    <div class="tool-matrix-tile" id="tile-tool-WHATWEB" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
-                        <div>
-                            <div style="font-size:12px; font-weight:700; color:#1e293b;">WhatWeb</div>
-                            <small style="color:#64748b; font-size:10px;">Recon &amp; WAF</small>
+                        <div class="tool-matrix-tile" id="tile-tool-WHATWEB" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <div style="font-size:12px; font-weight:700; color:#1e293b;">WhatWeb</div>
+                                <small style="color:#64748b; font-size:10px;">Recon &amp; WAF</small>
+                            </div>
+                            <span class="tool-status-pill badge" id="pill-WHATWEB" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
                         </div>
-                        <span class="tool-status-pill badge" id="pill-WHATWEB" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
-                    </div>
 
-                    <div class="tool-matrix-tile" id="tile-tool-TESTSSL" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
-                        <div>
-                            <div style="font-size:12px; font-weight:700; color:#1e293b;">TestSSL</div>
-                            <small style="color:#64748b; font-size:10px;">Transport &amp; TLS</small>
+                        <div class="tool-matrix-tile" id="tile-tool-TESTSSL" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <div style="font-size:12px; font-weight:700; color:#1e293b;">TestSSL</div>
+                                <small style="color:#64748b; font-size:10px;">Transport &amp; TLS</small>
+                            </div>
+                            <span class="tool-status-pill badge" id="pill-TESTSSL" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
                         </div>
-                        <span class="tool-status-pill badge" id="pill-TESTSSL" style="font-size:10px; padding:2px 7px; border-radius:9999px; background:#f1f5f9; color:#475569; font-weight:700;">Pending</span>
-                    </div>
+                    ` : ''}
 
                     <div class="tool-matrix-tile" id="tile-tool-SEMGREP" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
                         <div>

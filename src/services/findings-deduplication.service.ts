@@ -136,14 +136,24 @@ export async function deduplicateScanFindings(scanId: number): Promise<Deduplica
         mergedCount++;
       }
 
-      // Update canonical with combined tools and preserved confidence
+      // Update canonical with combined tools, preserved confidence and linked related findings
       const combinedTools = Array.from(toolNames).join(' & ');
+      const relatedList = duplicates.map(dup => ({
+        id: dup.id,
+        tool: dup.toolName,
+        title: dup.title,
+        sourceRuleId: dup.sourceRuleId,
+        cwe: dup.cwe,
+      }));
+
       await prisma.finding.update({
         where: { id: canonical.id },
         data: {
           toolName: combinedTools,
-          confidence: isNeedsReview ? 'NEEDS_REVIEW' : canonical.confidence,
+          confidence: isNeedsReview ? 'POTENTIAL' : canonical.confidence,
+          verificationStatus: isNeedsReview ? 'NEEDS_REVIEW' : canonical.verificationStatus,
           status: isNeedsReview ? 'NEEDS_REVIEW' : canonical.status,
+          relatedFindingsJson: JSON.stringify(relatedList),
         },
       });
     }
@@ -191,19 +201,35 @@ export async function correlateAndValidateFindings(scanId: number): Promise<numb
     });
 
     let elevatedConfidence = f.confidence;
+    let elevatedVerification = f.verificationStatus || 'UNVERIFIED';
     let attackPathNote = '';
+    let updatedRelatedJson = f.relatedFindingsJson;
 
     if (isCodeQLTaint) {
       elevatedConfidence = 'CONFIRMED';
+      elevatedVerification = 'VERIFIED';
       attackPathNote = `\n\n[Attack Path Traced]: Source Input -> Propagated Variable -> Dangerous Sink (Verified Unsanitized)`;
       correlatedCount++;
     } else if (correlatedPeer) {
       elevatedConfidence = 'CONFIRMED';
+      elevatedVerification = 'VERIFIED';
       attackPathNote = `\n\n[Cross-Engine Correlation]: Confirmed by both ${f.toolName} and ${correlatedPeer.toolName}. Active attack surface maps directly to internal implementation.`;
       correlatedCount++;
+
+      let parsedRelated: any[] = [];
+      try {
+        if (f.relatedFindingsJson) parsedRelated = JSON.parse(f.relatedFindingsJson);
+      } catch {}
+      parsedRelated.push({
+        id: correlatedPeer.id,
+        tool: correlatedPeer.toolName,
+        title: correlatedPeer.title,
+        cwe: correlatedPeer.cwe,
+      });
+      updatedRelatedJson = JSON.stringify(parsedRelated);
     }
 
-    if (elevatedConfidence !== f.confidence || attackPathNote) {
+    if (elevatedConfidence !== f.confidence || attackPathNote || elevatedVerification !== f.verificationStatus) {
       const updatedDesc = f.description && !f.description.includes('[Attack Path') && !f.description.includes('[Cross-Engine')
         ? `${f.description}${attackPathNote}`
         : f.description;
@@ -212,6 +238,8 @@ export async function correlateAndValidateFindings(scanId: number): Promise<numb
         where: { id: f.id },
         data: {
           confidence: elevatedConfidence,
+          verificationStatus: elevatedVerification,
+          relatedFindingsJson: updatedRelatedJson,
           description: updatedDesc,
         },
       });

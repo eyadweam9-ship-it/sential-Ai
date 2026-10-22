@@ -33,89 +33,26 @@ export async function planScanExecution(options: {
     scanProfile = 'URL_BASED_DAST';
   }
 
-  // DAST tools are ONLY applicable when inspecting a live external web URL in Staging/Production.
-  // In Development Mode (or when uploading source code), link tools are strictly bypassed.
-  const liveUrlApplicable = hasUrl && !isDevelopment;
-  const dastSkipReason = isDevelopment
-    ? 'DAST tool skipped: Target is local source code (Development Mode). Live link inspection requires an active HTTP/HTTPS endpoint.'
-    : 'DAST tool skipped: No target URL specified.';
-
   const plannedTasks: PlannedTask[] = [];
 
-  // 1. OWASP ZAP (DAST) - Dynamic vulnerability inspection & HTTP security checks
+  // DAST tools (OWASP ZAP, Nuclei, WPScan, WhatWeb, TestSSL) are ONLY added when inspecting a live URL in Production/Staging.
+  // In Development Mode (or when uploading source code), link tools do NOT run and are NOT added (omitted completely).
+  const liveUrlApplicable = hasUrl && !isDevelopment;
   if (liveUrlApplicable) {
     plannedTasks.push({ toolName: 'OWASP_ZAP', status: 'PENDING' });
-  } else {
-    plannedTasks.push({
-      toolName: 'OWASP_ZAP',
-      status: 'SKIPPED',
-      reason: dastSkipReason,
-    });
-  }
-
-  // 2. Nuclei (DAST) - Template-based vulnerability scanner for live endpoints & misconfigurations
-  if (liveUrlApplicable) {
     plannedTasks.push({ toolName: 'NUCLEI', status: 'PENDING' });
-  } else {
-    plannedTasks.push({
-      toolName: 'NUCLEI',
-      status: 'SKIPPED',
-      reason: dastSkipReason,
-    });
-  }
-
-  // 3. WPScan (CMS & Application Frameworks) - Audits WordPress, Joomla, Drupal, and framework endpoints
-  if (liveUrlApplicable) {
     plannedTasks.push({ toolName: 'WPSCAN', status: 'PENDING' });
-  } else {
-    plannedTasks.push({
-      toolName: 'WPSCAN',
-      status: 'SKIPPED',
-      reason: dastSkipReason,
-    });
-  }
-
-  // 4. WhatWeb (Reconnaissance & WAF) - Identifies technologies, WAFs, and information disclosures
-  if (liveUrlApplicable) {
     plannedTasks.push({ toolName: 'WHATWEB', status: 'PENDING' });
-  } else {
-    plannedTasks.push({
-      toolName: 'WHATWEB',
-      status: 'SKIPPED',
-      reason: dastSkipReason,
-    });
-  }
-
-  // 5. TestSSL (Transport & Security Headers) - Audits TLS encryption, HSTS, and defense headers
-  if (liveUrlApplicable) {
     plannedTasks.push({ toolName: 'TESTSSL', status: 'PENDING' });
-  } else {
-    plannedTasks.push({
-      toolName: 'TESTSSL',
-      status: 'SKIPPED',
-      reason: dastSkipReason,
-    });
   }
 
-  // 6. Semgrep (SAST) - Static AST code taint & pattern analysis on source code & client-side scripts
+  // Source Code, Secret, Dependency, and IaC tools (Applicable to code repositories and hybrid targets)
   plannedTasks.push({ toolName: 'SEMGREP', status: 'PENDING' });
-
-  // 7. CodeQL (SAST) - Advanced data-flow & taint-tracking analysis (Source -> Sanitizer -> Sink)
   plannedTasks.push({ toolName: 'CODEQL', status: 'PENDING' });
-
-  // 8. Gitleaks (Secrets) - Scans source code, repositories & web bundles for exposed API keys and tokens
   plannedTasks.push({ toolName: 'GITLEAKS', status: 'PENDING' });
-
-  // 9. Trivy (Component / Dependency CVE Analysis) - Audits package manifests & container configurations
   plannedTasks.push({ toolName: 'TRIVY', status: 'PENDING' });
-
-  // 10. OSV-Scanner (Supply Chain Intelligence) - Validates dependencies against Google OSV advisory database
   plannedTasks.push({ toolName: 'OSV_SCANNER', status: 'PENDING' });
-
-  // 11. Checkov (IaC & Security Posture) - Scans Dockerfile, Kubernetes manifests & infrastructure configuration
   plannedTasks.push({ toolName: 'CHECKOV', status: 'PENDING' });
-
-  // 12. npm audit (Dependencies) - Validates npm dependency tree against known vulnerability advisories
   plannedTasks.push({ toolName: 'NPM_AUDIT', status: 'PENDING' });
 
   // Persist planned tasks in database

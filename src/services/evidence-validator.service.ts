@@ -2,8 +2,9 @@ import { RawToolFinding } from '../tools/security-tool.interface';
 
 export interface FindingValidationResult {
   verdict: 'VALID' | 'NEEDS_REVIEW' | 'DROP_FALSE_POSITIVE';
-  confidence: 'CONFIRMED' | 'HIGH' | 'MEDIUM' | 'NEEDS_REVIEW' | 'LIKELY_FALSE_POSITIVE';
-  status: 'CONFIRMED' | 'NEEDS_REVIEW' | 'FALSE_POSITIVE';
+  confidence: 'CONFIRMED' | 'POTENTIAL' | 'INFORMATIONAL' | 'HIGH' | 'MEDIUM' | 'NEEDS_REVIEW' | 'LIKELY_FALSE_POSITIVE';
+  verificationStatus: 'VERIFIED' | 'UNVERIFIED' | 'NEEDS_REVIEW';
+  status: 'CONFIRMED' | 'NEEDS_REVIEW' | 'FALSE_POSITIVE' | 'OPEN';
   reason?: string;
   adjustedTitle?: string;
   adjustedRemediation?: string;
@@ -12,6 +13,7 @@ export interface FindingValidationResult {
 /**
  * 5-Stage Evidence Validation & False Positive Elimination Engine
  * Evaluates raw finding claims against technical code evidence, AST context, and syntax validity.
+ * Distinguishes Confirmed vulnerabilities from Potential and Informational configuration baselines.
  */
 export function validateFindingEvidence(finding: RawToolFinding): FindingValidationResult {
   const cwe = (finding.cwe || '').toUpperCase();
@@ -37,6 +39,7 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
       return {
         verdict: 'DROP_FALSE_POSITIVE',
         confidence: 'LIKELY_FALSE_POSITIVE',
+        verificationStatus: 'UNVERIFIED',
         status: 'FALSE_POSITIVE',
         reason: 'Discarded False Positive: Evidence matches a DOM CSS selector (querySelector), not a database SQL query.',
       };
@@ -47,6 +50,7 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
       return {
         verdict: 'DROP_FALSE_POSITIVE',
         confidence: 'LIKELY_FALSE_POSITIVE',
+        verificationStatus: 'UNVERIFIED',
         status: 'FALSE_POSITIVE',
         reason: 'Discarded False Positive: Evidence is ES Module import/export syntax.',
       };
@@ -60,6 +64,7 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
       return {
         verdict: 'DROP_FALSE_POSITIVE',
         confidence: 'LIKELY_FALSE_POSITIVE',
+        verificationStatus: 'UNVERIFIED',
         status: 'FALSE_POSITIVE',
         reason: 'Discarded False Positive: Evidence is HTML markup concatenation, not an SQL statement.',
       };
@@ -68,12 +73,12 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
     // D. English conversational words ("from", "where", "select option") without real SQL grammar
     const hasSqlVerbs = /\b(?:SELECT\s+[\w\*\s,\(\)\.`'"]+\s+FROM|INSERT\s+INTO\s+[\w\.`'"]+|UPDATE\s+[\w\.`'"]+\s+SET|DELETE\s+FROM\s+[\w\.`'"]+|UNION\s+SELECT)\b/i.test(snippet);
     if (!hasSqlVerbs) {
-      // Check if there is an explicit DB query sink
       const hasDbSink = /\b(?:db|pool|client|connection|sequelize|prisma|pdo|mysqli?)\s*\.(?:query|execute|raw|\$queryRaw)\s*\(/i.test(snippet);
       if (!hasDbSink) {
         return {
           verdict: 'DROP_FALSE_POSITIVE',
           confidence: 'LIKELY_FALSE_POSITIVE',
+          verificationStatus: 'UNVERIFIED',
           status: 'FALSE_POSITIVE',
           reason: 'Discarded False Positive: Code line contains generic words without SQL syntax or database sink.',
         };
@@ -85,6 +90,7 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
       return {
         verdict: 'DROP_FALSE_POSITIVE',
         confidence: 'LIKELY_FALSE_POSITIVE',
+        verificationStatus: 'UNVERIFIED',
         status: 'FALSE_POSITIVE',
         reason: 'Safe Pattern: Query is properly parameterized with bind parameters.',
       };
@@ -93,6 +99,7 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
     return {
       verdict: 'VALID',
       confidence: 'CONFIRMED',
+      verificationStatus: 'VERIFIED',
       status: 'CONFIRMED',
     };
   }
@@ -101,9 +108,8 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
   // 2. DOM Cross-Site Scripting (XSS) Validation (CWE-79)
   // =========================================================================
   if (cwe === 'CWE-79' || category === 'CROSS_SITE_SCRIPTING' || title.includes('xss')) {
-    // A. Static HTML assignment to innerHTML / outerHTML (e.g. el.innerHTML = '<span ...>انتهت الصلاحية</span>')
+    // A. Static HTML assignment to innerHTML / outerHTML
     if (/\.(?:innerHTML|outerHTML)\s*=\s*/i.test(snippet)) {
-      // Check if RHS is a static string literal without variables or concatenation
       const rhs = snippet.replace(/.*?\.(?:innerHTML|outerHTML)\s*=\s*/i, '').trim().replace(/;$/, '');
       const isStaticString =
         (/^['"][^'"]*['"]$/.test(rhs)) ||
@@ -114,6 +120,7 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
         return {
           verdict: 'DROP_FALSE_POSITIVE',
           confidence: 'LIKELY_FALSE_POSITIVE',
+          verificationStatus: 'UNVERIFIED',
           status: 'FALSE_POSITIVE',
           reason: 'Discarded False Positive: innerHTML is assigned a purely static literal string without dynamic user input.',
         };
@@ -128,6 +135,7 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
         return {
           verdict: 'DROP_FALSE_POSITIVE',
           confidence: 'LIKELY_FALSE_POSITIVE',
+          verificationStatus: 'UNVERIFIED',
           status: 'FALSE_POSITIVE',
           reason: 'Safe Pattern: innerHTML sink is sanitized with DOMPurify / escaping function.',
         };
@@ -138,7 +146,8 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
     if (/document\.write(?:ln)?\s*\(\s*['"][^'"]*['"]\s*\)/i.test(snippet) && !snippet.includes('+') && !snippet.includes('${')) {
       return {
         verdict: 'NEEDS_REVIEW',
-        confidence: 'NEEDS_REVIEW',
+        confidence: 'POTENTIAL',
+        verificationStatus: 'NEEDS_REVIEW',
         status: 'NEEDS_REVIEW',
         reason: 'document.write used with static argument. Code modernization advised, but immediate exploitation is unlikely.',
       };
@@ -146,7 +155,8 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
 
     return {
       verdict: 'VALID',
-      confidence: 'HIGH',
+      confidence: 'CONFIRMED',
+      verificationStatus: 'VERIFIED',
       status: 'CONFIRMED',
     };
   }
@@ -155,7 +165,7 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
   // 3. Email & PII Disclosure Validation (CWE-200 / CWE-359)
   // =========================================================================
   if (cwe === 'CWE-200' || cwe === 'CWE-359' || title.includes('email') || category.includes('EXPOSURE') || category.includes('PII')) {
-    // A. Form inputs & placeholders (e.g. <input type="email" name="email" value="<?= htmlspecialchars($_POST['email']) ?>">)
+    // A. Form inputs & placeholders
     if (
       snippetLower.includes('<input') ||
       snippetLower.includes('type="email"') ||
@@ -172,6 +182,7 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
       return {
         verdict: 'DROP_FALSE_POSITIVE',
         confidence: 'LIKELY_FALSE_POSITIVE',
+        verificationStatus: 'UNVERIFIED',
         status: 'FALSE_POSITIVE',
         reason: 'Discarded False Positive: HTML form input field, placeholder, or input sanitization, not a leaked email.',
       };
@@ -191,12 +202,13 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
       return {
         verdict: 'DROP_FALSE_POSITIVE',
         confidence: 'LIKELY_FALSE_POSITIVE',
+        verificationStatus: 'UNVERIFIED',
         status: 'FALSE_POSITIVE',
         reason: 'Discarded False Positive: Email address uses standard RFC documentation placeholder domain (example.com).',
       };
     }
 
-    // C. Installer, Setup, or Seed script context (e.g. $adminEmail in install.php or seed.ts)
+    // C. Installer, Setup, or Seed script context
     if (
       filePath.includes('install') ||
       filePath.includes('setup') ||
@@ -207,7 +219,8 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
     ) {
       return {
         verdict: 'NEEDS_REVIEW',
-        confidence: 'NEEDS_REVIEW',
+        confidence: 'POTENTIAL',
+        verificationStatus: 'NEEDS_REVIEW',
         status: 'NEEDS_REVIEW',
         reason: 'Hardcoded administrative email detected in an installer or setup script. Review whether the installation script remains exposed in production environments.',
         adjustedTitle: 'Administrative Email Disclosed in Installation Script',
@@ -217,7 +230,8 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
 
     return {
       verdict: 'VALID',
-      confidence: 'HIGH',
+      confidence: 'CONFIRMED',
+      verificationStatus: 'VERIFIED',
       status: 'CONFIRMED',
     };
   }
@@ -239,6 +253,7 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
       return {
         verdict: 'DROP_FALSE_POSITIVE',
         confidence: 'LIKELY_FALSE_POSITIVE',
+        verificationStatus: 'UNVERIFIED',
         status: 'FALSE_POSITIVE',
         reason: 'Discarded False Positive: Input parameter or type declaration, not a hardcoded secret.',
       };
@@ -249,6 +264,7 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
       return {
         verdict: 'DROP_FALSE_POSITIVE',
         confidence: 'LIKELY_FALSE_POSITIVE',
+        verificationStatus: 'UNVERIFIED',
         status: 'FALSE_POSITIVE',
         reason: 'Safe Pattern: Password is initialized to an empty string.',
       };
@@ -263,7 +279,8 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
     ) {
       return {
         verdict: 'NEEDS_REVIEW',
-        confidence: 'NEEDS_REVIEW',
+        confidence: 'POTENTIAL',
+        verificationStatus: 'NEEDS_REVIEW',
         status: 'NEEDS_REVIEW',
         reason: 'Template placeholder credential detected. Verify that default placeholder has been replaced before deployment.',
       };
@@ -277,7 +294,8 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
     ) {
       return {
         verdict: 'NEEDS_REVIEW',
-        confidence: 'NEEDS_REVIEW',
+        confidence: 'POTENTIAL',
+        verificationStatus: 'NEEDS_REVIEW',
         status: 'NEEDS_REVIEW',
         reason: 'Initial setup credentials in installation/seed script. Verify that installation scripts are removed after provisioning.',
       };
@@ -286,14 +304,47 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
     return {
       verdict: 'VALID',
       confidence: 'CONFIRMED',
+      verificationStatus: 'VERIFIED',
       status: 'CONFIRMED',
     };
   }
 
-  // Default: pass through as Valid
+  // =========================================================================
+  // 5. Security Headers, TLS & Technology Banners (CWE-16 / CWE-693 / CWE-1021)
+  // =========================================================================
+  if (
+    title.includes('header') ||
+    title.includes('permissions-policy') ||
+    title.includes('referrer-policy') ||
+    title.includes('x-content-type-options') ||
+    title.includes('strict-transport-security') ||
+    title.includes('content security policy') ||
+    title.includes('x-frame-options') ||
+    title.includes('clickjacking') ||
+    title.includes('banner') ||
+    title.includes('cookie missing') ||
+    category === 'SECURITY_MISCONFIGURATION' ||
+    category === 'INSECURE_COMMUNICATION' ||
+    cwe === 'CWE-16' ||
+    cwe === 'CWE-693' ||
+    cwe === 'CWE-1021'
+  ) {
+    // SentinelAI Core Rule: Distinguish Informational baseline recommendations from active attacks.
+    // The mere absence of a security header does NOT constitute proof of an exploitable active attack.
+    return {
+      verdict: 'VALID',
+      confidence: 'INFORMATIONAL',
+      verificationStatus: 'UNVERIFIED',
+      status: 'OPEN',
+      reason: 'Defense-in-depth security baseline recommendation. The absence of this header alone does not indicate an active vulnerability or immediate exploitation.',
+    };
+  }
+
+  // Default: pass through as Potential
   return {
     verdict: 'VALID',
-    confidence: (finding.confidence as any) || 'HIGH',
-    status: 'CONFIRMED',
+    confidence: (finding.confidence as any) || 'POTENTIAL',
+    verificationStatus: 'UNVERIFIED',
+    status: 'OPEN',
   };
 }
