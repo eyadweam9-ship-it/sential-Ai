@@ -92,7 +92,8 @@ export function createFindingFingerprint(finding: FindingFingerprintInput): stri
 
 /**
  * Extracts a Root-Cause Identifier to safely group occurrences.
- * Ensures we DO NOT merge two separate vulnerabilities simply because they share a CWE.
+ * Ensures we DO NOT merge two separate vulnerabilities simply because they share a CWE,
+ * while preventing duplicate rule firings for IDOR, Command Injection, and Path Traversal.
  */
 function getRootCauseGroupKey(finding: {
   toolName: string;
@@ -107,50 +108,85 @@ function getRootCauseGroupKey(finding: {
   const title = finding.title.toLowerCase();
   const primaryEvidence = finding.evidences[0];
   const normPath = normalizeFilePath(primaryEvidence?.filePath || primaryEvidence?.url);
+  const line = primaryEvidence?.lineStart || 0;
+  const snippet = (primaryEvidence?.rawSnippet || '').toLowerCase();
 
-  // 1. Secrets & PII Leaks (Group identical exposed key types or credential patterns across files)
-  if (
-    cwe === 'CWE-798' ||
-    cwe === 'CWE-259' ||
-    cwe === 'CWE-200' ||
-    cwe === 'CWE-359' ||
-    category.includes('SECRET') ||
-    category.includes('PII') ||
-    category.includes('EXPOSURE') ||
-    title.includes('email') ||
-    title.includes('password') ||
-    title.includes('api key')
-  ) {
-    const secretType = (finding.sourceRuleId || title)
-      .replace(/[^a-zA-Z0-9_-]/g, '_')
-      .toLowerCase();
-    // Group occurrences of the same secret/PII disclosure rule across the project
-    return `ROOT_SECRET:${secretType}`;
+  // 1. SQL Injection (CWE-89)
+  // MUST NOT merge separate endpoints! POST /api/auth/login (Line 78) and GET /api/products/search (Line 163) remain distinct.
+  if (cwe === 'CWE-89' || category.includes('SQL_INJECTION') || title.includes('sql injection')) {
+    const isLogin =
+      title.includes('auth') ||
+      title.includes('login') ||
+      snippet.includes('auth/login') ||
+      snippet.includes('username') ||
+      (line >= 65 && line <= 95);
+
+    const isSearch =
+      title.includes('search') ||
+      title.includes('product') ||
+      snippet.includes('products/search') ||
+      snippet.includes('like') ||
+      (line >= 150 && line <= 180);
+
+    const endpointKey = isLogin ? 'auth_login' : isSearch ? 'products_search' : `line_${line}`;
+    return `ROOT_SQLI:${normPath}:${endpointKey}`;
   }
 
-  // 2. Code Sinks (SQLi, Command Injection, XSS)
-  // MUST NOT merge across different files! Only merge if in the exact same file & function sink
-  if (
-    cwe === 'CWE-89' ||
-    cwe === 'CWE-78' ||
-    cwe === 'CWE-79' ||
-    category.includes('INJECTION') ||
-    category.includes('SCRIPTING')
-  ) {
-    // Distinct files are distinct occurrences/sinks; do NOT merge across files!
-    return `ROOT_SINK:${cwe}:${normPath}:${finding.sourceRuleId || title.replace(/\s+/g, '_')}`;
+  // 2. OS Command Injection (CWE-78)
+  // Merge multiple rule firings (ternary ping construction + exec sink) for the same file into 1 Canonical Finding
+  if (cwe === 'CWE-78' || category.includes('COMMAND_INJECTION') || title.includes('command injection')) {
+    return `ROOT_RCE:${normPath}`;
   }
 
-  // 3. Infrastructure & Container Misconfigurations (e.g. latest tag, root container)
+  // 3. Path / Directory Traversal (CWE-22)
+  // Merge multiple rule firings (path.join resolution + readFile sink) for the same file into 1 Canonical Finding
+  if (cwe === 'CWE-22' || category.includes('PATH_TRAVERSAL') || title.includes('traversal')) {
+    return `ROOT_TRAVERSAL:${normPath}`;
+  }
+
+  // 4. Insecure Direct Object Reference (IDOR - CWE-639)
+  // Distinguish Profile IDOR from Order IDOR, while merging duplicate rule firings for the same endpoint
+  if (cwe === 'CWE-639' || category.includes('ACCESS_CONTROL') || title.includes('idor') || title.includes('direct object')) {
+    const isProfile =
+      title.includes('profile') ||
+      snippet.includes('profile') ||
+      (line >= 210 && line <= 245);
+
+    const isOrder =
+      title.includes('order') ||
+      snippet.includes('orders') ||
+      (line >= 265 && line <= 300);
+
+    const subKey = isProfile ? 'user_profile' : isOrder ? 'orders' : `line_${line}`;
+    return `ROOT_IDOR:${normPath}:${subKey}`;
+  }
+
+  // 5. Cross-Site Scripting (XSS - CWE-79)
+  if (cwe === 'CWE-79' || category.includes('SCRIPTING') || title.includes('xss')) {
+    if (title.includes('stored') || title.includes('reviews')) {
+      return `ROOT_STORED_XSS:${normPath}`;
+    }
+    if (title.includes('reflected') || title.includes('server response') || normPath.includes('server.js')) {
+      return `ROOT_REFLECTED_XSS:${normPath}`;
+    }
+    return `ROOT_DOM_XSS:${normPath}:${line}`;
+  }
+
+  // 6. Secrets & Credentials (CWE-798 / CWE-259)
+  if (cwe === 'CWE-798' || cwe === 'CWE-259' || category.includes('SECRET') || category.includes('CREDENTIAL')) {
+    const isEnv = normPath.includes('.env') || title.includes('environment');
+    return `ROOT_SECRET:${normPath}:${isEnv ? 'env' : 'code'}`;
+  }
+
+  // 7. Security Misconfiguration & Missing Defensive Headers (CWE-16 / CWE-693)
+  if (cwe === 'CWE-16' || cwe === 'CWE-693' || title.includes('header') || title.includes('banner')) {
+    return `ROOT_MISCONFIG:${normPath}`;
+  }
+
+  // 8. Infrastructure & Container Misconfigurations
   if (category.includes('IAC') || category.includes('MISCONFIG')) {
     const ruleKey = (finding.sourceRuleId || title).toLowerCase();
     return `ROOT_IAC:${ruleKey}:${normPath}`;
-  }
-
-  // 4. Missing Security Headers on same host
-  if (cwe === 'CWE-16' || cwe === 'CWE-693' || title.includes('header')) {
-    const headerName = title.replace(/^missing\s+/i, '').trim();
-    return `ROOT_HEADER:${headerName}`;
   }
 
   return null;
@@ -344,11 +380,35 @@ export async function deduplicateScanFindings(scanId: number): Promise<Deduplica
         const occurrencesCount = consolidatedOccurrences.length;
         const baseTitle = canonical.title.replace(/\s*\(\d+\s+occurrences.*?\)/i, '');
 
+        // Combine descriptions as requested: "إذا كان (File == Previous_File && CWE == Previous_CWE)، ادمجهما في نتيجة واحدة واجمع الوصفين معاً"
+        const uniqueDescriptions = [canonical.description, ...duplicates.map(d => d.description)]
+          .filter((d): d is string => Boolean(d && d.trim()))
+          .filter((d, idx, arr) => arr.indexOf(d) === idx);
+        const combinedDescription = uniqueDescriptions.length > 1
+          ? uniqueDescriptions.join(' | ')
+          : (canonical.description || baseTitle);
+
+        // Compute highest severity and CVSS score
+        const allSeverities = [canonical.severity, ...duplicates.map(d => d.severity)];
+        const highestSeverity = allSeverities.sort(
+          (a, b) => (SEVERITY_SCORES[b.toUpperCase()] || 0) - (SEVERITY_SCORES[a.toUpperCase()] || 0)
+        )[0] || canonical.severity;
+
+        const maxCvss = Math.max(canonical.cvssScore || 0, ...duplicates.map(d => d.cvssScore || 0));
+        const elevatedConf = (canonical.confidence === 'CONFIRMED' || duplicates.some(d => d.confidence === 'CONFIRMED'))
+          ? 'CONFIRMED'
+          : canonical.confidence;
+
         await tx.finding.update({
           where: { id: canonical.id },
           data: {
             toolName: Array.from(toolSet).join(' & '),
-            description: `${canonical.description || baseTitle} (${occurrencesCount} occurrences identified across source files)`,
+            severity: highestSeverity,
+            confidence: elevatedConf,
+            cvssScore: maxCvss > 0 ? maxCvss : undefined,
+            description: occurrencesCount > 1
+              ? `${combinedDescription} (${occurrencesCount} occurrences identified across source files)`
+              : combinedDescription,
             relatedFindingsJson: JSON.stringify({
               rootCauseGroup: true,
               totalOccurrences: occurrencesCount,

@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { prisma } from '../config/db';
 import { RawToolFinding } from '../tools/security-tool.interface';
 import { evaluateFindingRisk } from './severity-engine.service';
+import { validateFindingEvidence } from './evidence-validator.service';
 import { createFindingFingerprint, normalizeFilePath } from './findings-deduplication.service';
 
 export interface NormalizedFindingResult {
@@ -64,11 +65,17 @@ export async function normalizeAndSaveFindings(
       continue;
     }
 
-    const title = raw.title;
-    const remediation = raw.remediation || null;
-    const confidence = riskEval.confidence;
-    const status = riskEval.workflowStatus;
-    const severity = riskEval.severity;
+    // Stage 1b: Technical Evidence Validation
+    const validation = validateFindingEvidence(raw);
+    if (validation.verdict === 'DROP_FALSE_POSITIVE' || validation.status === 'FALSE_POSITIVE') {
+      continue;
+    }
+
+    const title = validation.adjustedTitle || raw.title;
+    const remediation = validation.adjustedRemediation || raw.remediation || null;
+    const confidence = validation.confidence === 'CONFIRMED' ? 'CONFIRMED' : riskEval.confidence;
+    const status = validation.status === 'CONFIRMED' ? 'CONFIRMED' : riskEval.workflowStatus;
+    const severity = validation.adjustedSeverity || riskEval.severity;
 
     const fingerprint = createFindingFingerprint({
       targetId: scanId,

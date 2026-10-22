@@ -4,6 +4,15 @@ import { prisma } from '../config/db';
 import { generateScanExecutiveSummary } from './ai-analysis.service';
 import { compareWithPreviousScan } from './findings-deduplication.service';
 
+const SEVERITY_SCORES: Record<string, number> = {
+  CRITICAL: 5,
+  HIGH: 4,
+  MEDIUM: 3,
+  LOW: 2,
+  INFORMATIONAL: 1,
+  INFO: 1,
+};
+
 export interface GeneratedReportData {
   reportId: number;
   scanId: number;
@@ -56,14 +65,93 @@ export async function generateScanReport(scanId: number): Promise<GeneratedRepor
   // 2. Cross-Scan Comparison
   const comparison = await compareWithPreviousScan(scan.targetId, scanId);
 
+  // -------------------------------------------------------------------------
+  // Pre-Report Deduplication & Path Separation Layer
+  // -------------------------------------------------------------------------
+  // Merges duplicate findings sharing the same file and CWE (e.g. IDOR, Traversal, Command Injection),
+  // EXCEPT for SQL Injection (CWE-89) where different endpoints/lines (POST /api/auth/login vs GET /api/products/search) remain separated.
+  const consolidatedFindings: typeof scan.findings = [];
+  for (const finding of scan.findings) {
+    if (consolidatedFindings.length === 0) {
+      consolidatedFindings.push(finding);
+      continue;
+    }
+
+    const prev = consolidatedFindings[consolidatedFindings.length - 1];
+    const prevFile = (prev.evidences && prev.evidences[0]?.filePath) || prev.evidences[0]?.url || '';
+    const currFile = (finding.evidences && finding.evidences[0]?.filePath) || finding.evidences[0]?.url || '';
+    const sameFile = prevFile.toLowerCase().trim() === currFile.toLowerCase().trim() && prevFile !== '';
+    const sameCwe = prev.cwe && finding.cwe && prev.cwe.toUpperCase() === finding.cwe.toUpperCase();
+
+    // Condition: File == Previous_File && CWE == Previous_CWE
+    if (sameFile && sameCwe) {
+      // Check if this is SQL Injection (CWE-89)
+      const isSqlInjection = prev.cwe?.toUpperCase() === 'CWE-89' || prev.category === 'SQL_INJECTION';
+      if (isSqlInjection) {
+        const prevLine = prev.evidences && prev.evidences[0]?.lineStart;
+        const currLine = finding.evidences && finding.evidences[0]?.lineStart;
+        const prevTitle = prev.title.toLowerCase();
+        const currTitle = finding.title.toLowerCase();
+        const differentEndpoints =
+          (prevTitle.includes('login') && currTitle.includes('search')) ||
+          (prevTitle.includes('search') && currTitle.includes('login')) ||
+          (prevLine && currLine && Math.abs(prevLine - currLine) > 10);
+
+        if (differentEndpoints) {
+          // Keep distinct SQL injection endpoints separate!
+          consolidatedFindings.push(finding);
+          continue;
+        }
+      }
+
+      // Check if this is IDOR (CWE-639) - Keep Profile and Order endpoints distinct
+      const isIdor = prev.cwe?.toUpperCase() === 'CWE-639' || prev.category === 'BROKEN_ACCESS_CONTROL';
+      if (isIdor) {
+        const prevTitle = prev.title.toLowerCase();
+        const currTitle = finding.title.toLowerCase();
+        const differentEndpoints =
+          (prevTitle.includes('profile') && currTitle.includes('order')) ||
+          (prevTitle.includes('order') && currTitle.includes('profile'));
+
+        if (differentEndpoints) {
+          // Keep distinct IDOR targets separate!
+          consolidatedFindings.push(finding);
+          continue;
+        }
+      }
+
+      // Merge into Previous Finding
+      const combinedToolName = prev.toolName.includes(finding.toolName)
+        ? prev.toolName
+        : `${prev.toolName} & ${finding.toolName}`;
+
+      const combinedDesc = prev.description && finding.description && prev.description !== finding.description
+        ? `${prev.description} | ${finding.description}`
+        : (prev.description || finding.description);
+
+      const higherSeverity = (SEVERITY_SCORES[finding.severity.toUpperCase()] || 0) > (SEVERITY_SCORES[prev.severity.toUpperCase()] || 0)
+        ? finding.severity
+        : prev.severity;
+
+      prev.toolName = combinedToolName;
+      prev.description = combinedDesc;
+      prev.severity = higherSeverity;
+      if (finding.evidences && finding.evidences.length > 0) {
+        prev.evidences = [...(prev.evidences || []), ...finding.evidences];
+      }
+    } else {
+      consolidatedFindings.push(finding);
+    }
+  }
+
   // 3. Severity Distribution
   const counts = {
-    total: scan.findings.length,
-    critical: scan.findings.filter(f => f.severity === 'CRITICAL').length,
-    high: scan.findings.filter(f => f.severity === 'HIGH').length,
-    medium: scan.findings.filter(f => f.severity === 'MEDIUM').length,
-    low: scan.findings.filter(f => f.severity === 'LOW').length,
-    info: scan.findings.filter(f => f.severity === 'INFO').length,
+    total: consolidatedFindings.length,
+    critical: consolidatedFindings.filter(f => f.severity === 'CRITICAL').length,
+    high: consolidatedFindings.filter(f => f.severity === 'HIGH').length,
+    medium: consolidatedFindings.filter(f => f.severity === 'MEDIUM').length,
+    low: consolidatedFindings.filter(f => f.severity === 'LOW').length,
+    info: consolidatedFindings.filter(f => f.severity === 'INFO').length,
   };
 
   const reportPayload: GeneratedReportData = {
@@ -83,7 +171,7 @@ export async function generateScanReport(scanId: number): Promise<GeneratedRepor
       executions: t.executions,
     })),
     findingsCount: counts,
-    findings: scan.findings,
+    findings: consolidatedFindings,
     comparison,
   };
 

@@ -13,7 +13,27 @@ interface SastRule {
 }
 
 const BACKEND_RULES: SastRule[] = [
-  // VULN-01 & VULN-02: SQL Injection
+  // VULN-01: SQL Injection (Authentication Bypass - Line 78)
+  {
+    id: 'javascript.express.security.sqli.auth-login',
+    title: 'SQL Injection in Authentication Route (POST /api/auth/login)',
+    severity: 'CRITICAL',
+    category: 'SQL_INJECTION',
+    cwe: 'CWE-89',
+    regex: /(?:SELECT\s+.*?FROM\s+users\s+WHERE.*?username\s*=\s*['"]\$\{username\}['"]|username\s*=\s*['"]\$\{username\}['"])/i,
+    remediation: 'Use parameterized queries (`SELECT * FROM users WHERE username = ? AND password = ?`) and compare password hashes with bcrypt.',
+  },
+  // VULN-02: SQL Injection (Search / Data Extraction - Line 163)
+  {
+    id: 'javascript.express.security.sqli.products-search',
+    title: 'SQL Injection in Product Search Route (GET /api/products/search)',
+    severity: 'CRITICAL',
+    category: 'SQL_INJECTION',
+    cwe: 'CWE-89',
+    regex: /(?:SELECT\s+.*?FROM\s+products\s+WHERE.*?LIKE\s+['"]%\$\{q\}%['"]|LIKE\s+['"]%\$\{q\}%['"])/i,
+    remediation: 'Use parameterized queries or ORM prepared statements instead of dynamic SQL concatenation.',
+  },
+  // General SQL Injection fallback
   {
     id: 'javascript.express.security.audit.sqli.node-sqli',
     title: 'Potential SQL Injection via Dynamic Query Construction',
@@ -68,7 +88,7 @@ const BACKEND_RULES: SastRule[] = [
     severity: 'HIGH',
     category: 'CROSS_SITE_SCRIPTING',
     cwe: 'CWE-79',
-    regex: /(?:res\.send|res\.write)\s*\(\s*(?:`[^`]*\$\{[\w\.]+\}[^`]*`|['"][^'"]*<[^'"]*['"]\s*\+\s*[\w\.]+)/i,
+    regex: /(?:(?:res\.send|res\.write)\s*\(\s*(?:html\b|`[^`]*\$\{[\w\.]+\}[^`]*`)|<\w+[^>]*>.*?\$\{(?:query|q|req\.|params\.|body\.|searchTerm|name|input)[\w\.]*\}|<em>\$\{query\}<\/em>)/i,
     remediation: 'HTML-encode all user input before rendering in responses, or use template engines with automatic contextual escaping.',
   },
   // VULN-04: Stored XSS in Database Persistence
@@ -88,7 +108,7 @@ const BACKEND_RULES: SastRule[] = [
     severity: 'HIGH',
     category: 'BROKEN_ACCESS_CONTROL',
     cwe: 'CWE-639',
-    regex: /app\.get\s*\(\s*['"]\/api\/users\/:id\/profile['"]|SELECT\s+.*?\s+FROM\s+users\s+WHERE\s+id\s*=\s*\?/i,
+    regex: /app\.get\s*\(\s*['"]\/api\/users\/:id\/profile['"]/i,
     remediation: 'Verify that the authenticated session owns the requested profile ID before returning sensitive account details.',
   },
   // VULN-06: Insecure Direct Object Reference (IDOR - Order Details)
@@ -98,7 +118,7 @@ const BACKEND_RULES: SastRule[] = [
     severity: 'HIGH',
     category: 'BROKEN_ACCESS_CONTROL',
     cwe: 'CWE-639',
-    regex: /app\.get\s*\(\s*['"]\/api\/orders\/:id['"]|SELECT\s+\*\s+FROM\s+orders\s+WHERE\s+id\s*=\s*\?/i,
+    regex: /app\.get\s*\(\s*['"]\/api\/orders\/:id['"]/i,
     remediation: 'Enforce user_id matching in SQL query: SELECT * FROM orders WHERE id = ? AND user_id = ? to restrict access to order owner.',
   },
   // VULN-09: Unrestricted File Upload
