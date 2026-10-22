@@ -9,6 +9,23 @@ export interface CodebaseStats {
 
 export function countFilesAndLines(dirPath: string): CodebaseStats {
   const stats: CodebaseStats = { files: 0, lines: 0, extensions: {} };
+  if (!dirPath || !fs.existsSync(dirPath)) return stats;
+
+  try {
+    const stat = fs.statSync(dirPath);
+    if (stat.isFile()) {
+      const ext = path.extname(dirPath).toLowerCase() || path.basename(dirPath);
+      stats.files = 1;
+      stats.extensions[ext] = 1;
+      try {
+        const content = fs.readFileSync(dirPath, 'utf8');
+        stats.lines = content.split('\n').length;
+      } catch {}
+      return stats;
+    }
+  } catch {
+    return stats;
+  }
 
   function walk(currentDir: string, depth = 0) {
     if (depth > 12 || !fs.existsSync(currentDir)) return;

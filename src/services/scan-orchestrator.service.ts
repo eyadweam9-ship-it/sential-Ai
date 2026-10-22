@@ -57,12 +57,31 @@ export async function orchestrateScan(scanId: number): Promise<void> {
     if (effectiveSourcePath && fs.existsSync(effectiveSourcePath)) {
       try {
         const stat = fs.statSync(effectiveSourcePath);
-        if (!stat.isDirectory() && (effectiveSourcePath.endsWith('.zip') || stat.size > 0)) {
-          const zip = new AdmZip(effectiveSourcePath);
-          const extractDir = path.join(process.cwd(), 'uploads', 'extracted', `scan-${scanId}-${Date.now()}`);
-          fs.mkdirSync(extractDir, { recursive: true });
-          zip.extractAllTo(extractDir, true);
-          effectiveSourcePath = extractDir;
+        if (!stat.isDirectory()) {
+          const lower = effectiveSourcePath.toLowerCase();
+          const isZip = lower.endsWith('.zip') || (() => {
+            try {
+              const buf = Buffer.alloc(4);
+              const fd = fs.openSync(effectiveSourcePath, 'r');
+              fs.readSync(fd, buf, 0, 4, 0);
+              fs.closeSync(fd);
+              return buf.toString('hex') === '504b0304';
+            } catch {
+              return false;
+            }
+          })();
+
+          if (isZip) {
+            const zip = new AdmZip(effectiveSourcePath);
+            const extractDir = path.join(process.cwd(), 'uploads', 'extracted', `scan-${scanId}-${Date.now()}`);
+            fs.mkdirSync(extractDir, { recursive: true });
+            zip.extractAllTo(extractDir, true);
+            effectiveSourcePath = extractDir;
+            hasSource = true;
+          } else {
+            hasSource = true;
+          }
+        } else {
           hasSource = true;
         }
       } catch (zipErr) {

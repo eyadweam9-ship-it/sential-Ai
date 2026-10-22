@@ -5147,6 +5147,12 @@ const App = {
         if (title.includes('sql') || cwe.includes('89')) {
             return "If left unpatched, attackers can manipulate backend database queries to bypass login authentication, extract complete customer databases, alter financial records, or execute administrative commands directly on the database host.";
         }
+        if (title.includes('password') || title.includes('passwd') || title.includes('credential')) {
+            return "If left unpatched, hardcoded plaintext passwords allow anyone with access to the source code, repository logs, or decompiled bundles to log in directly with elevated privileges, bypassing multi-factor authentication and compromising underlying data stores.";
+        }
+        if (title.includes('email') || cwe.includes('359')) {
+            return "If left unpatched, exposed administrative or personal email addresses facilitate targeted spear-phishing attacks, account takeover attempts via credential stuffing, and unauthorized intelligence gathering on internal staff.";
+        }
         if (title.includes('secret') || title.includes('key') || title.includes('token') || cwe.includes('798')) {
             return "If left unpatched, exposed private API tokens, cloud keys, or credentials can be harvested by scrapers to gain direct administrative access to production cloud infrastructure and third-party APIs.";
         }

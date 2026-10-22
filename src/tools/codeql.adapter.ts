@@ -198,15 +198,23 @@ export class CodeqlAdapter implements SecurityToolAdapter {
     if (out.length >= maxFiles) return;
 
     try {
+      const stat = fs.statSync(dir);
+      if (stat.isFile()) {
+        const content = fs.readFileSync(dir, 'utf8');
+        out.push({ path: dir, content });
+        return;
+      }
+
       const entries = fs.readdirSync(dir, { withFileTypes: true });
       for (const ent of entries) {
         if (out.length >= maxFiles) break;
-        if (ent.name.startsWith('.') || ent.name === 'node_modules' || ent.name === 'dist' || ent.name === 'storage') continue;
+        if (ent.name.startsWith('.') && !ent.name.startsWith('.env')) continue;
+        if (ent.name === 'node_modules' || ent.name === 'dist' || ent.name === 'storage' || ent.name === 'build') continue;
 
         const full = path.join(dir, ent.name);
         if (ent.isDirectory()) {
           this.collectSourceFiles(full, out, maxFiles);
-        } else if (/\.(js|ts|jsx|tsx|py|go|php)$/i.test(ent.name)) {
+        } else if (/\.(js|ts|jsx|tsx|py|go|php|json|sql|env)$/i.test(ent.name) || ent.name.startsWith('.env')) {
           const content = fs.readFileSync(full, 'utf8');
           out.push({ path: full, content });
         }

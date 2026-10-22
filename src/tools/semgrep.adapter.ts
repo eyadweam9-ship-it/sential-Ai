@@ -94,6 +94,42 @@ const BACKEND_RULES: SastRule[] = [
     regex: /(?:httpOnly\s*:\s*false|secure\s*:\s*false)/i,
     remediation: 'Set httpOnly: true, secure: true, and sameSite: "lax" or "strict" for all session cookies.',
   },
+  {
+    id: 'generic.auth.hardcoded-password',
+    title: 'Hardcoded Plaintext Password in Code',
+    severity: 'CRITICAL',
+    category: 'HARDCODED_CREDENTIAL',
+    cwe: 'CWE-798',
+    regex: /(?:password|passwd|pwd|pass|client_secret|db_password|admin_password)\s*[:=]\s*['"][^'"\r\n\s]{3,128}['"]/i,
+    remediation: 'Never store plaintext passwords in source code. Extract credentials into secure environment variables or vault.',
+  },
+  {
+    id: 'generic.auth.hardcoded-email-credentials',
+    title: 'Hardcoded Administrative or User Email in Configuration',
+    severity: 'MEDIUM',
+    category: 'INFORMATION_EXPOSURE',
+    cwe: 'CWE-200',
+    regex: /(?:email|user_email|admin_email|smtp_user|account_email)\s*[:=]\s*['"][a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+['"]/i,
+    remediation: 'Avoid hardcoding internal or administrative email addresses in source files.',
+  },
+  {
+    id: 'generic.auth.smtp-credentials',
+    title: 'Hardcoded SMTP / Mail Server Password',
+    severity: 'HIGH',
+    category: 'HARDCODED_CREDENTIAL',
+    cwe: 'CWE-798',
+    regex: /(?:smtp_pass(?:word)?|mail_password|mail_pass|smtp_auth)\s*[:=]\s*['"][^'"\r\n\s]{3,128}['"]/i,
+    remediation: 'Store mail server credentials in protected environment variables.',
+  },
+  {
+    id: 'generic.auth.credentials-pair',
+    title: 'Hardcoded Authentication Credentials Pair (Username & Password)',
+    severity: 'CRITICAL',
+    category: 'HARDCODED_CREDENTIAL',
+    cwe: 'CWE-798',
+    regex: /(?:username|user|email)\s*[:=]\s*['"][^'"]+['"]\s*[,;\n\r]\s*(?:password|pass|pwd)\s*[:=]\s*['"][^'"]+['"]/i,
+    remediation: 'Remove static user credentials. Utilize environment variables and secure database password hashing.',
+  },
 ];
 
 const DOM_SAST_RULES: SastRule[] = [
@@ -171,7 +207,12 @@ export class SemgrepAdapter implements SecurityToolAdapter {
       // 2. If source files or directory exist, scan code files
       const sourceDir = input.sourcePath || (input.targetType === 'FILE_ZIP' ? input.targetUrl : null);
       if (sourceDir && fs.existsSync(sourceDir)) {
-        this.scanDirectory(sourceDir, findings);
+        const stat = fs.statSync(sourceDir);
+        if (stat.isDirectory()) {
+          this.scanDirectory(sourceDir, findings, 0, sourceDir);
+        } else if (stat.isFile()) {
+          this.scanFile(sourceDir, findings, path.dirname(sourceDir));
+        }
       }
 
       const resultPath = path.join(outputDir, `scan-${input.scanId}-semgrep.json`);
@@ -306,21 +347,31 @@ export class SemgrepAdapter implements SecurityToolAdapter {
     if (depth > 12 || !fs.existsSync(dirPath)) return;
     const root = baseDir || dirPath;
 
-    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(dirPath, entry.name);
-      if (entry.isDirectory()) {
-        if (['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.system_generated'].includes(entry.name)) {
-          continue;
-        }
-        this.scanDirectory(fullPath, findings, depth + 1, root);
-      } else if (entry.isFile()) {
-        const ext = path.extname(entry.name).toLowerCase();
-        if (['.js', '.jsx', '.ts', '.tsx', '.py', '.php', '.java', '.go', '.html', '.htm', '.vue', '.sql', '.env', '.json', '.rb', '.cs', '.c', '.cpp', '.sh'].includes(ext)) {
-          this.scanFile(fullPath, findings, root);
+    try {
+      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dirPath, entry.name);
+        if (entry.isDirectory()) {
+          if (['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.system_generated'].includes(entry.name)) {
+            continue;
+          }
+          this.scanDirectory(fullPath, findings, depth + 1, root);
+        } else if (entry.isFile()) {
+          const nameLower = entry.name.toLowerCase();
+          const ext = path.extname(nameLower);
+          const isTargetFile =
+            nameLower.startsWith('.env') ||
+            ['.js', '.jsx', '.ts', '.tsx', '.py', '.php', '.java', '.go', '.html', '.htm',
+             '.vue', '.sql', '.json', '.yml', '.yaml', '.properties', '.ini', '.conf',
+             '.cfg', '.toml', '.txt', '.sh', '.bash', '.rb', '.cs', '.c', '.cpp'].includes(ext) ||
+            ['dockerfile', 'makefile', 'gemfile', 'procfile'].includes(nameLower);
+
+          if (isTargetFile) {
+            this.scanFile(fullPath, findings, root);
+          }
         }
       }
-    }
+    } catch {}
   }
 
   private scanFile(filePath: string, findings: RawToolFinding[], baseDir?: string): void {
