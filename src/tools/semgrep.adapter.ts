@@ -19,7 +19,7 @@ const BACKEND_RULES: SastRule[] = [
     severity: 'HIGH',
     category: 'SQL_INJECTION',
     cwe: 'CWE-89',
-    regex: /(?:SELECT|INSERT|UPDATE|DELETE|FROM|WHERE).*?(\+\s*[\w\.]+|\$\{[\w\.]+?\})/i,
+    regex: /\b(?:SELECT\s+[\w\*\s,\(\)\.`'"]+\s+FROM|INSERT\s+INTO\s+[\w\.`'"]+|UPDATE\s+[\w\.`'"]+\s+SET|DELETE\s+FROM\s+[\w\.`'"]+)\b.*?(?:\+\s*[\$\w\.]+|\$\{[\$\w\.]+?\})/i,
     remediation: 'Use parameterized queries or ORM prepared statements instead of string concatenation.',
   },
   {
@@ -148,7 +148,7 @@ const DOM_SAST_RULES: SastRule[] = [
     severity: 'HIGH',
     category: 'CROSS_SITE_SCRIPTING',
     cwe: 'CWE-79',
-    regex: /\.(?:innerHTML|outerHTML)\s*=\s*/i,
+    regex: /\.(?:innerHTML|outerHTML)\s*=\s*(?:.*?\+\s*[\$\w\.]+|`[^`]*\$\{[\$\w\.]+?\}[^`]*`|\b(?:location|document|searchParams|query|url|param|window\.name)\b)/i,
     remediation: 'Use textContent, innerText, or DOMPurify.sanitize() when rendering untrusted strings into the DOM.',
   },
   {
@@ -322,7 +322,47 @@ export class SemgrepAdapter implements SecurityToolAdapter {
 
       for (const rule of rules) {
         const ruleKey = `${rule.id}:${sourcePath}`;
-        if (!triggeredRules.has(ruleKey) && rule.regex.test(line)) {
+        if (triggeredRules.has(ruleKey)) continue;
+
+        // Specific pre-filter guards against notorious False Positives
+        if (rule.category === 'SQL_INJECTION') {
+          if (
+            line.includes('querySelector') ||
+            line.includes('querySelectorAll') ||
+            line.includes('getElementsBy') ||
+            line.includes('classList') ||
+            line.includes('setAttribute') ||
+            /^\s*(?:import|export)\s/i.test(line)
+          ) {
+            continue;
+          }
+        }
+
+        if (rule.id.includes('dom-xss-innerhtml')) {
+          // If assigned a static string literal or empty string, skip!
+          const rhs = line.replace(/.*?\.(?:innerHTML|outerHTML)\s*=\s*/i, '').trim().replace(/;$/, '');
+          const isStaticLiteral =
+            (/^['"][^'"]*['"]$/.test(rhs)) ||
+            (rhs === '""' || rhs === "''") ||
+            (/^`[^`]*`$/.test(rhs) && !rhs.includes('${'));
+          if (isStaticLiteral) continue;
+        }
+
+        if (rule.category === 'INFORMATION_EXPOSURE' || rule.id.includes('email')) {
+          // If HTML input form field or placeholder, skip!
+          if (
+            line.includes('<input') ||
+            line.includes('placeholder=') ||
+            line.includes('type="email"') ||
+            line.includes("type='email'") ||
+            line.includes('htmlspecialchars') ||
+            line.includes('filter_var')
+          ) {
+            continue;
+          }
+        }
+
+        if (rule.regex.test(line)) {
           triggeredRules.add(ruleKey);
           findings.push({
             title: rule.title,

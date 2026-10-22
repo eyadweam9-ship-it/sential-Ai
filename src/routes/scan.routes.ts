@@ -1059,7 +1059,7 @@ scanRouter.get('/progress', async (req: Request, res: Response): Promise<void> =
       orderBy: { id: 'asc' },
     }) : [];
 
-    const findings = scan ? await prisma.finding.findMany({ where: { scanId: scan.id } }) : [];
+    const findings = scan ? await prisma.finding.findMany({ where: { scanId: scan.id, status: { not: 'FALSE_POSITIVE' } } }) : [];
     const criticalCount = findings.filter(f => f.severity === 'CRITICAL').length;
     const highCount = findings.filter(f => f.severity === 'HIGH').length;
     const mediumCount = findings.filter(f => f.severity === 'MEDIUM').length;
@@ -1243,7 +1243,10 @@ scanRouter.get('/findings/list', async (req: Request, res: Response): Promise<vo
 
     // 1. Fetch from prisma.finding strictly for this targetScanId
     const dbFindings = await prisma.finding.findMany({
-      where: { scanId: targetScanId },
+      where: {
+        scanId: targetScanId,
+        status: { not: 'FALSE_POSITIVE' },
+      },
       include: { evidences: true, aiAnalyses: true },
       orderBy: { id: 'desc' },
     });
@@ -1265,11 +1268,13 @@ scanRouter.get('/findings/list', async (req: Request, res: Response): Promise<vo
         toolName: f.toolName,
         severity: sev,
         sev: sev.charAt(0) + sev.slice(1).toLowerCase(),
+        confidence: f.confidence || 'HIGH',
+        findingStatus: f.status || 'CONFIRMED',
         cwe: f.cwe || 'CWE-200',
         cwe_id: f.cwe || 'CWE-200',
         cvss_score: sev === 'CRITICAL' ? 9.8 : sev === 'HIGH' ? 7.5 : sev === 'MEDIUM' ? 5.3 : 3.1,
         cvss: sev === 'CRITICAL' ? '9.8' : sev === 'HIGH' ? '7.5' : sev === 'MEDIUM' ? '5.3' : '3.1',
-        status: isScanOnly ? 'Detected' : 'Open',
+        status: f.status === 'NEEDS_REVIEW' ? 'Needs Review' : (isScanOnly ? 'Detected' : 'Open'),
         category: f.category || (isDev ? 'Static Code Analysis (SAST)' : 'Web Application Security'),
         parameter: 'input',
         first_detected_at: f.createdAt.toISOString().split('T')[0],
@@ -1578,17 +1583,18 @@ scanRouter.get('/reports/assessment', async (req: Request, res: Response): Promi
     }
 
     const isScanOnly = (scan?.scanMode || 'scan_only') === 'scan_only';
-    const totalFindings = (scan?.findings?.length || 0) + (scan?.vulnerabilities?.length || 0);
+    const activeFindingsList = (scan?.findings || []).filter(f => f.status !== 'FALSE_POSITIVE' && f.confidence !== 'LIKELY_FALSE_POSITIVE');
+    const totalFindings = activeFindingsList.length > 0 ? activeFindingsList.length : (scan?.vulnerabilities?.length || 0);
 
     let criticalCount = 0;
     let highCount = 0;
     let medCount = 0;
     let lowCount = 0;
-    if (scan?.findings && scan.findings.length > 0) {
-      criticalCount = scan.findings.filter((f) => f.severity.toUpperCase() === 'CRITICAL').length;
-      highCount = scan.findings.filter((f) => f.severity.toUpperCase() === 'HIGH').length;
-      medCount = scan.findings.filter((f) => f.severity.toUpperCase() === 'MEDIUM').length;
-      lowCount = scan.findings.filter((f) => f.severity.toUpperCase() === 'LOW').length;
+    if (activeFindingsList.length > 0) {
+      criticalCount = activeFindingsList.filter((f) => f.severity.toUpperCase() === 'CRITICAL').length;
+      highCount = activeFindingsList.filter((f) => f.severity.toUpperCase() === 'HIGH').length;
+      medCount = activeFindingsList.filter((f) => f.severity.toUpperCase() === 'MEDIUM').length;
+      lowCount = activeFindingsList.filter((f) => f.severity.toUpperCase() === 'LOW').length;
     } else if (scan?.vulnerabilities && scan.vulnerabilities.length > 0) {
       criticalCount = scan.vulnerabilities.filter((v) => v.severity.toUpperCase() === 'CRITICAL').length;
       highCount = scan.vulnerabilities.filter((v) => v.severity.toUpperCase() === 'HIGH').length;
@@ -1680,7 +1686,7 @@ scanRouter.get('/:id/findings', async (req: Request, res: Response): Promise<voi
   try {
     const scanId = Number(req.params.id);
     let findings = await prisma.finding.findMany({
-      where: { scanId },
+      where: { scanId, status: { not: 'FALSE_POSITIVE' } },
       include: { evidences: true, aiAnalyses: true },
       orderBy: { id: 'desc' },
     });

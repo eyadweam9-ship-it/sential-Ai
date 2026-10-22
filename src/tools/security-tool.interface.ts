@@ -1,5 +1,5 @@
 export type SeverityLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
-export type ConfidenceLevel = 'CONFIRMED' | 'HIGH' | 'MEDIUM' | 'LOW';
+export type ConfidenceLevel = 'CONFIRMED' | 'HIGH' | 'MEDIUM' | 'LOW' | 'NEEDS_REVIEW' | 'LIKELY_FALSE_POSITIVE';
 
 export interface ScopeRuleSet {
   includedPaths: string[];

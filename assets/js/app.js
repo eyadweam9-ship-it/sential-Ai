@@ -4728,11 +4728,15 @@ const App = {
                 || f.path 
                 || '/';
             const cweLabel = f.cwe || f.cwe_id || f.category || f.type || 'CWE-200';
+            const isNeedsReview = f.confidence === 'NEEDS_REVIEW' || f.status === 'Needs Review' || f.findingStatus === 'NEEDS_REVIEW';
+            const confBadge = isNeedsReview
+                ? `<span class="badge" style="font-size:10px; padding:1px 6px; border-radius:9999px; background:#fef3c7; color:#d97706; font-weight:700; margin-left:6px; vertical-align:middle;">⚠️ Needs Review</span>`
+                : `<span class="badge" style="font-size:10px; padding:1px 6px; border-radius:9999px; background:#ecfdf5; color:#059669; font-weight:700; margin-left:6px; vertical-align:middle;">✓ Confirmed</span>`;
 
             return `
                 <button type="button" class="table-row w-full text-left cursor-pointer" onclick="App.viewFinding(${f.id})">
                     <span>
-                        <b>${escapeHtml(f.title)}</b>
+                        <b>${escapeHtml(f.title)}${confBadge}</b>
                         <small>${escapeHtml(locationStr)}</small>
                     </span>
                     <span>
@@ -4850,7 +4854,8 @@ const App = {
             ? new Date(finding.createdAt || finding.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
             : 'October 21, 2026';
         const assetVal = (this.scanState.url || 'aymanaboelela.com').replace(/^https?:\/\//, '');
-        const confVal = finding.confidence ? `${finding.confidence} · Confirmed` : 'HIGH · Confirmed';
+        const isAsideNeedsReview = finding.confidence === 'NEEDS_REVIEW' || finding.status === 'Needs Review' || finding.status === 'NEEDS_REVIEW' || finding.findingStatus === 'NEEDS_REVIEW';
+        const confVal = isAsideNeedsReview ? 'NEEDS_REVIEW · Requires Review' : (finding.confidence ? `${finding.confidence} · Confirmed` : 'HIGH · Confirmed');
         const statusVal = isScanOnly 
             ? (finding.status === 'confirmed' || finding.status === 'Fix ready' || finding.status === 'Fixed' ? 'Detected' : (finding.status ? finding.status.charAt(0).toUpperCase() + finding.status.slice(1) : 'Detected')) 
             : (finding.status || 'Open');

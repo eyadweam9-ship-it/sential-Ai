@@ -321,7 +321,17 @@ export class GitleaksAdapter implements SecurityToolAdapter {
             lower === 'undefined' ||
             lower === 'null' ||
             lower === 'false' ||
-            lower === 'true'
+            lower === 'true' ||
+            line.includes('<input') ||
+            line.includes('placeholder=') ||
+            line.includes('type="email"') ||
+            line.includes("type='email'") ||
+            line.includes('htmlspecialchars') ||
+            line.includes('filter_var') ||
+            lower.includes('@example.') ||
+            lower.includes('@test.') ||
+            lower.includes('@domain.') ||
+            lower.includes('@localhost')
           ) {
             continue;
           }

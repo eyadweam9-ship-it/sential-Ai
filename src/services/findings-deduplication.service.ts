@@ -19,6 +19,41 @@ export interface CrossScanComparison {
   recurrentFindings: any[];
 }
 
+const SEVERITY_SCORES: Record<string, number> = {
+  CRITICAL: 5,
+  HIGH: 4,
+  MEDIUM: 3,
+  LOW: 2,
+  INFO: 1,
+};
+
+function getSemanticCategoryGroup(category?: string | null, title?: string | null, cwe?: string | null): string {
+  const cat = (category || '').toUpperCase();
+  const tit = (title || '').toUpperCase();
+  const c = (cwe || '').toUpperCase();
+
+  if (c === 'CWE-89' || cat.includes('SQL') || tit.includes('SQL')) return 'SQL_INJECTION';
+  if (c === 'CWE-79' || cat.includes('XSS') || tit.includes('XSS') || tit.includes('SCRIPTING')) return 'XSS';
+  if (
+    c === 'CWE-200' ||
+    c === 'CWE-359' ||
+    c === 'CWE-798' ||
+    c === 'CWE-259' ||
+    cat.includes('SECRET') ||
+    cat.includes('PII') ||
+    cat.includes('EXPOSURE') ||
+    tit.includes('EMAIL') ||
+    tit.includes('PASSWORD') ||
+    tit.includes('CREDENTIAL') ||
+    tit.includes('SECRET') ||
+    tit.includes('KEY')
+  ) {
+    return 'SECRET_PII';
+  }
+  if (cat.includes('MISCONFIG') || tit.includes('HEADER') || tit.includes('COOKIE') || tit.includes('BANNER')) return 'MISCONFIGURATION';
+  return cat || 'GENERAL';
+}
+
 export async function deduplicateScanFindings(scanId: number): Promise<DeduplicationSummary> {
   const allFindings = await prisma.finding.findMany({
     where: { scanId },
@@ -30,6 +65,7 @@ export async function deduplicateScanFindings(scanId: number): Promise<Deduplica
   const seenFingerprints = new Map<string, typeof allFindings[0]>();
   let mergedCount = 0;
 
+  // 1. Exact Fingerprint Deduplication
   for (const f of allFindings) {
     if (!seenFingerprints.has(f.fingerprint)) {
       seenFingerprints.set(f.fingerprint, f);
@@ -47,12 +83,80 @@ export async function deduplicateScanFindings(scanId: number): Promise<Deduplica
     }
   }
 
-  // Cross-Engine Correlation & Attack Path Verification
+  // 2. Cross-Rule & Cross-Tool Semantic Deduplication on Identical Location/Line
+  // Collapses overlapping multi-tool findings (e.g. 4 email warnings on install.php line 27) into 1 canonical finding
+  const remainingFindings = await prisma.finding.findMany({
+    where: { scanId },
+    include: { evidences: true },
+    orderBy: { id: 'asc' },
+  });
+
+  const semanticGroups = new Map<string, typeof remainingFindings>();
+  for (const f of remainingFindings) {
+    const loc = (f.evidences[0]?.filePath || f.evidences[0]?.url || 'global').trim().toLowerCase();
+    const line = f.evidences[0]?.lineStart || 0;
+    const group = getSemanticCategoryGroup(f.category, f.title, f.cwe);
+
+    if (loc !== 'global' && line > 0) {
+      const key = `${loc}:${line}:${group}`;
+      if (!semanticGroups.has(key)) {
+        semanticGroups.set(key, []);
+      }
+      semanticGroups.get(key)!.push(f);
+    }
+  }
+
+  for (const [, group] of semanticGroups) {
+    if (group.length > 1) {
+      // Sort to find the highest severity finding as canonical
+      group.sort((a, b) => (SEVERITY_SCORES[b.severity.toUpperCase()] || 0) - (SEVERITY_SCORES[a.severity.toUpperCase()] || 0));
+      const canonical = group[0];
+      const duplicates = group.slice(1);
+
+      // Collect all tool names
+      const toolNames = new Set<string>([canonical.toolName]);
+      let isNeedsReview = canonical.confidence === 'NEEDS_REVIEW' || canonical.status === 'NEEDS_REVIEW';
+
+      for (const dup of duplicates) {
+        toolNames.add(dup.toolName);
+        if (dup.confidence === 'NEEDS_REVIEW' || dup.status === 'NEEDS_REVIEW') {
+          isNeedsReview = true;
+        }
+
+        // Re-link evidences to canonical
+        for (const ev of dup.evidences) {
+          await prisma.findingEvidence.update({
+            where: { id: ev.id },
+            data: { findingId: canonical.id },
+          });
+        }
+
+        // Remove duplicate finding
+        await prisma.finding.delete({ where: { id: dup.id } });
+        mergedCount++;
+      }
+
+      // Update canonical with combined tools and preserved confidence
+      const combinedTools = Array.from(toolNames).join(' & ');
+      await prisma.finding.update({
+        where: { id: canonical.id },
+        data: {
+          toolName: combinedTools,
+          confidence: isNeedsReview ? 'NEEDS_REVIEW' : canonical.confidence,
+          status: isNeedsReview ? 'NEEDS_REVIEW' : canonical.status,
+        },
+      });
+    }
+  }
+
+  // 3. Cross-Engine Correlation & Attack Path Verification
   const correlatedFindings = await correlateAndValidateFindings(scanId);
+
+  const finalFindings = await prisma.finding.count({ where: { scanId } });
 
   return {
     totalBefore,
-    totalUnique: seenFingerprints.size,
+    totalUnique: finalFindings,
     mergedDuplicates: mergedCount,
     correlatedFindings,
   };

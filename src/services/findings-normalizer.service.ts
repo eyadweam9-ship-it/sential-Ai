@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { prisma } from '../config/db';
 import { RawToolFinding } from '../tools/security-tool.interface';
+import { validateFindingEvidence } from './evidence-validator.service';
 
 export interface NormalizedFindingResult {
   id: number;
@@ -29,11 +30,12 @@ export function generateFindingFingerprint(finding: RawToolFinding): string {
 
 export function sanitizeEvidence(text?: string): string {
   if (!text) return '';
-  // Redact potential high entropy keys, passwords and tokens
+  // Redact potential high entropy keys, passwords, tokens and mask email addresses
   let sanitized = text
-    .replace(/(?:password|secret|token|apiKey|auth)\s*[:=]\s*['"]?[a-zA-Z0-9_\-\.]{8,}['"]?/gi, '$1=***REDACTED***')
+    .replace(/((?:password|secret|token|apiKey|auth))\s*[:=]\s*['"]?[a-zA-Z0-9_\-\.]{8,}['"]?/gi, '$1=***REDACTED***')
     .replace(/(AKIA[0-9A-Z]{16})/g, '$1 [REDACTED]')
-    .replace(/(ghp_[A-Za-z0-9]{36})/g, 'ghp_********************************');
+    .replace(/(ghp_[A-Za-z0-9]{36})/g, 'ghp_********************************')
+    .replace(/\b([a-zA-Z0-9._%+-]{1,3})[a-zA-Z0-9._%+-]*@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/g, '$1***@$2');
 
   if (sanitized.length > 2000) {
     sanitized = sanitized.slice(0, 1997) + '...';
@@ -49,7 +51,26 @@ export async function normalizeAndSaveFindings(
   const saved: NormalizedFindingResult[] = [];
 
   for (const raw of rawFindings) {
-    const fingerprint = generateFindingFingerprint(raw);
+    // Stage 2: Evidence Validation & False Positive Filtering
+    const validation = validateFindingEvidence(raw);
+    if (validation.verdict === 'DROP_FALSE_POSITIVE') {
+      // Discard verified false positives so they never pollute the findings register or distort risk scores
+      continue;
+    }
+
+    const title = validation.adjustedTitle || raw.title;
+    const remediation = validation.adjustedRemediation || raw.remediation || null;
+    const confidence = validation.confidence || raw.confidence || 'MEDIUM';
+    const status = validation.status || 'OPEN';
+
+    const normalizedRaw: RawToolFinding = {
+      ...raw,
+      title,
+      remediation: remediation || undefined,
+      confidence,
+    };
+
+    const fingerprint = generateFindingFingerprint(normalizedRaw);
 
     // Create Unified Finding Record
     const findingRecord = await prisma.finding.create({
@@ -57,14 +78,14 @@ export async function normalizeAndSaveFindings(
         scanId,
         toolName,
         sourceRuleId: raw.sourceRuleId || null,
-        title: raw.title,
+        title,
         description: raw.evidenceSummary,
         severity: raw.severity,
-        confidence: raw.confidence || 'MEDIUM',
+        confidence,
         category: raw.category || 'VULNERABILITY',
         fingerprint,
-        status: 'OPEN',
-        remediation: raw.remediation || null,
+        status,
+        remediation,
         cwe: raw.cwe || null,
         cve: raw.cve || null,
       },
@@ -87,11 +108,11 @@ export async function normalizeAndSaveFindings(
     await prisma.vulnerability.create({
       data: {
         scanId,
-        title: raw.title,
+        title,
         description: raw.evidenceSummary,
         severity: raw.severity,
-        status: 'OPEN',
-        remediation: raw.remediation || null,
+        status,
+        remediation,
         filePath: raw.filePath || raw.targetUrl || null,
       },
     }).catch(() => null);
