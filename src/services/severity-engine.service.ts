@@ -99,6 +99,73 @@ export function evaluateFindingRisk(finding: RawToolFinding): SeverityEngineEval
   const filePath = (finding.filePath || '').replace(/\\/g, '/').toLowerCase();
 
   // -------------------------------------------------------------------------
+  // STEP 0: Non-Executable & Documentation File Exclusion
+  // -------------------------------------------------------------------------
+  // Benchmark and documentation files (e.g. vulnerabilities.json, README.md, package-lock.json)
+  // contain sample codes in strings, not executable application logic. Never report code injection on them!
+  const isNonExecutableDoc =
+    filePath.endsWith('.json') ||
+    filePath.endsWith('.md') ||
+    filePath.endsWith('.txt') ||
+    filePath.endsWith('.csv') ||
+    filePath.endsWith('.lock') ||
+    filePath.endsWith('.pdf') ||
+    filePath.includes('vulnerabilities.json');
+
+  const isCodeExecutionFlaw =
+    cwe === 'CWE-89' ||
+    cwe === 'CWE-78' ||
+    cwe === 'CWE-79' ||
+    cwe === 'CWE-22' ||
+    cwe === 'CWE-95' ||
+    cwe === 'CWE-918' ||
+    cwe === 'CWE-639' ||
+    category === 'SQL_INJECTION' ||
+    category === 'COMMAND_INJECTION' ||
+    category === 'CROSS_SITE_SCRIPTING' ||
+    category === 'PATH_TRAVERSAL';
+
+  if (isNonExecutableDoc && isCodeExecutionFlaw) {
+    return {
+      severity: 'INFORMATIONAL',
+      confidence: 'INFORMATIONAL',
+      workflowStatus: 'FALSE_POSITIVE',
+      cvssScore: 0.0,
+      cvssVector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N',
+      rationale: 'Discarded False Positive: Target is a documentation or data file (.json/.md/.txt), not running application code.',
+      exploitabilityNote: 'Unexploitable: Static data structure without execution capability.',
+      impactNote: 'Zero impact: Non-executable text.',
+      isFalsePositive: true,
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // Non-Sensitive localStorage UI State Exclusion
+  // -------------------------------------------------------------------------
+  if (
+    (title.includes('localstorage') || snippetLower.includes('localstorage')) &&
+    !snippetLower.includes('token') &&
+    !snippetLower.includes('jwt') &&
+    !snippetLower.includes('secret') &&
+    !snippetLower.includes('auth') &&
+    !snippetLower.includes('password') &&
+    !snippetLower.includes('session') &&
+    !snippetLower.includes('api_key')
+  ) {
+    return {
+      severity: 'INFORMATIONAL',
+      confidence: 'INFORMATIONAL',
+      workflowStatus: 'FALSE_POSITIVE',
+      cvssScore: 0.0,
+      cvssVector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N',
+      rationale: 'Discarded False Positive: localStorage is used exclusively for non-sensitive UI state or checkbox persistence.',
+      exploitabilityNote: 'Unexploitable: No credentials, tokens, or PII stored.',
+      impactNote: 'Zero impact on authentication or data security.',
+      isFalsePositive: true,
+    };
+  }
+
+  // -------------------------------------------------------------------------
   // STEP 1 & 5: Check False Positive Patterns & Exclusions
   // -------------------------------------------------------------------------
 

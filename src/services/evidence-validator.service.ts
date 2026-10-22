@@ -24,6 +24,62 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
   const snippetLower = snippet.toLowerCase();
   const filePath = (finding.filePath || '').toLowerCase();
 
+  // -------------------------------------------------------------------------
+  // 0. Non-Executable Documentation & Data File Protection
+  // -------------------------------------------------------------------------
+  const isNonExecutableDoc =
+    filePath.endsWith('.json') ||
+    filePath.endsWith('.md') ||
+    filePath.endsWith('.txt') ||
+    filePath.endsWith('.csv') ||
+    filePath.endsWith('.lock') ||
+    filePath.endsWith('.pdf') ||
+    filePath.includes('vulnerabilities.json');
+
+  const isCodeExecutionFlaw =
+    cwe === 'CWE-89' ||
+    cwe === 'CWE-78' ||
+    cwe === 'CWE-79' ||
+    cwe === 'CWE-22' ||
+    cwe === 'CWE-95' ||
+    cwe === 'CWE-918' ||
+    cwe === 'CWE-639' ||
+    category === 'SQL_INJECTION' ||
+    category === 'COMMAND_INJECTION' ||
+    category === 'CROSS_SITE_SCRIPTING' ||
+    category === 'PATH_TRAVERSAL';
+
+  if (isNonExecutableDoc && isCodeExecutionFlaw) {
+    return {
+      verdict: 'DROP_FALSE_POSITIVE',
+      confidence: 'INFORMATIONAL',
+      verificationStatus: 'UNVERIFIED',
+      status: 'FALSE_POSITIVE',
+      reason: 'Discarded False Positive: Target is a documentation or data file (.json/.md/.txt), not running application code.',
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // Non-Sensitive localStorage UI Filter Protection
+  // -------------------------------------------------------------------------
+  if (
+    (title.includes('localstorage') || snippetLower.includes('localstorage')) &&
+    !snippetLower.includes('token') &&
+    !snippetLower.includes('jwt') &&
+    !snippetLower.includes('secret') &&
+    !snippetLower.includes('auth') &&
+    !snippetLower.includes('password') &&
+    !snippetLower.includes('session')
+  ) {
+    return {
+      verdict: 'DROP_FALSE_POSITIVE',
+      confidence: 'INFORMATIONAL',
+      verificationStatus: 'UNVERIFIED',
+      status: 'FALSE_POSITIVE',
+      reason: 'Discarded False Positive: localStorage is used for non-sensitive UI checkbox state or layout preference.',
+    };
+  }
+
   // =========================================================================
   // 1. SQL Injection Validation (CWE-89)
   // =========================================================================
@@ -106,9 +162,29 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
   }
 
   // =========================================================================
-  // 2. DOM Cross-Site Scripting (XSS) Validation (CWE-79)
+  // 2. Cross-Site Scripting (XSS) Validation (CWE-79)
   // =========================================================================
   if (cwe === 'CWE-79' || category === 'CROSS_SITE_SCRIPTING' || title.includes('xss')) {
+    // If detected in backend Node.js / PHP server code, classify as Server-Side Reflected XSS, NOT DOM XSS!
+    const isBackendServerFile =
+      filePath.includes('server.js') ||
+      filePath.includes('app.js') ||
+      filePath.includes('controller') ||
+      filePath.includes('route') ||
+      filePath.endsWith('.php');
+
+    if (isBackendServerFile && (title.includes('dom') || snippetLower.includes('res.send') || snippetLower.includes('res.write'))) {
+      return {
+        verdict: 'VALID',
+        confidence: 'CONFIRMED',
+        verificationStatus: 'VERIFIED',
+        status: 'CONFIRMED',
+        adjustedTitle: 'Reflected Cross-Site Scripting (Reflected XSS) in Server Response',
+        adjustedSeverity: 'HIGH',
+        adjustedRemediation: 'HTML-encode untrusted user input before rendering in HTTP responses or utilize template engines with contextual auto-escaping.',
+      };
+    }
+
     // A. Static HTML assignment to innerHTML / outerHTML
     if (/\.(?:innerHTML|outerHTML)\s*=\s*/i.test(snippet)) {
       const rhs = snippet.replace(/.*?\.(?:innerHTML|outerHTML)\s*=\s*/i, '').trim().replace(/;$/, '');

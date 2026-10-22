@@ -201,8 +201,8 @@ export async function classifyProjectFiles(dirPath: string): Promise<ProjectClas
               category = 'SOURCE_CODE';
               language = EXT_LANG_MAP[ext];
             }
-            // 6. Media / Documents
-            else if (['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.pdf', '.docx', '.xlsx', '.mp4'].includes(ext)) {
+            // 6. Media / Documents & Data Files
+            else if (['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.pdf', '.docx', '.xlsx', '.mp4', '.json', '.md', '.txt', '.csv', '.lock'].includes(ext)) {
               category = 'MEDIA_DOCUMENT';
             }
 
