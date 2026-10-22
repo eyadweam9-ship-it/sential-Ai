@@ -47,12 +47,7 @@ const upload = multer({
 
 const folderUpload = multer({
   storage,
-  limits: {
-    fileSize: 1024 * 1024 * 1024, // 1GB max per file
-    files: 5000,                  // up to 5000 files
-    fields: 10000,                // up to 10000 fields
-    fieldSize: 100 * 1024 * 1024,
-  },
+  limits: { fileSize: 1024 * 1024 * 1024, files: 1000 },
 });
 
 /**
@@ -60,154 +55,130 @@ const folderUpload = multer({
  * Development Environment: Upload project code archive (ZIP or source file) for SAST static scan
  * Automatically unzips archives so tools can scan individual files and lines.
  */
-scanRouter.post('/upload', (req: Request, res: Response): void => {
-  upload.single('file')(req, res, (err: any) => {
-    if (err) {
-      console.error('File upload Multer error:', err);
-      const errMsg = err.code === 'LIMIT_FILE_SIZE'
-        ? 'File exceeds the maximum allowed size of 1GB.'
-        : (err.message || 'Error uploading file.');
-      res.status(400).json({ success: false, error: errMsg });
+scanRouter.post('/upload', upload.single('file'), (req: Request, res: Response): void => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ success: false, error: 'No file was uploaded.' });
       return;
     }
 
-    try {
-      if (!req.file) {
-        res.status(400).json({ success: false, error: 'No file was uploaded.' });
-        return;
+    const { originalname, filename, size, path: filePath } = req.file;
+    const ext = path.extname(originalname).toLowerCase();
+
+    let finalStagedPath = filePath;
+    let filesCount = 1;
+    let totalLines = 0;
+
+    // Automatically unpack ZIP archives into target extraction directory
+    if (ext === '.zip' || req.file.mimetype.includes('zip') || req.file.mimetype.includes('octet-stream')) {
+      try {
+        const zip = new AdmZip(filePath);
+        const extractDir = path.join(uploadDir, 'extracted', `${Date.now()}-${originalname.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/\.zip$/i, '')}`);
+        fs.mkdirSync(extractDir, { recursive: true });
+        zip.extractAllTo(extractDir, true);
+        finalStagedPath = extractDir;
+
+        const stats = countFilesAndLines(extractDir);
+        filesCount = stats.files;
+        totalLines = stats.lines;
+      } catch (zipErr) {
+        console.warn('ZIP extraction notice:', (zipErr as Error).message);
       }
-
-      const { originalname, filename, size, path: filePath } = req.file;
-      const ext = path.extname(originalname).toLowerCase();
-
-      let finalStagedPath = filePath;
-      let filesCount = 1;
-      let totalLines = 0;
-
-      // Automatically unpack ZIP archives into target extraction directory
-      if (ext === '.zip' || req.file.mimetype.includes('zip') || req.file.mimetype.includes('octet-stream')) {
-        try {
-          const zip = new AdmZip(filePath);
-          const extractDir = path.join(uploadDir, 'extracted', `${Date.now()}-${originalname.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/\.zip$/i, '')}`);
-          fs.mkdirSync(extractDir, { recursive: true });
-          zip.extractAllTo(extractDir, true);
-          finalStagedPath = extractDir;
-
-          const stats = countFilesAndLines(extractDir);
-          filesCount = stats.files;
-          totalLines = stats.lines;
-        } catch (zipErr) {
-          console.warn('ZIP extraction notice:', (zipErr as Error).message);
-        }
-      } else {
-        // Single code file
-        try {
-          const content = fs.readFileSync(filePath, 'utf8');
-          totalLines = content.split('\n').length;
-        } catch {}
-      }
-
-      res.status(200).json({
-        success: true,
-        message: `Project file uploaded and staged successfully (${filesCount} file(s), ${totalLines.toLocaleString()} lines of code indexed).`,
-        file: {
-          originalName: originalname,
-          storedName: filename,
-          size,
-          path: finalStagedPath,
-          fileType: ext,
-          filesCount,
-          totalLines,
-        },
-      });
-    } catch (error) {
-      console.error('File upload error:', error);
-      res.status(500).json({ success: false, error: (error as Error).message });
+    } else {
+      // Single code file
+      try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        totalLines = content.split('\n').length;
+      } catch {}
     }
-  });
+
+    res.status(200).json({
+      success: true,
+      message: `Project file uploaded and staged successfully (${filesCount} file(s), ${totalLines.toLocaleString()} lines of code indexed).`,
+      file: {
+        originalName: originalname,
+        storedName: filename,
+        size,
+        path: finalStagedPath,
+        fileType: ext,
+        filesCount,
+        totalLines,
+      },
+    });
+  } catch (error) {
+    console.error('File upload error:', error);
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
 });
 
 /**
  * POST /api/scans/upload-folder
  * Upload entire folder with relative directory paths preserved
  */
-scanRouter.post('/upload-folder', (req: Request, res: Response): void => {
-  folderUpload.array('files', 5000)(req, res, (err: any) => {
-    if (err) {
-      console.error('Folder upload Multer error:', err);
-      const errMsg = err.code === 'LIMIT_FILE_SIZE'
-        ? 'One of the files exceeds the allowed 1GB limit.'
-        : err.code === 'LIMIT_FILE_COUNT'
-        ? 'The folder contains too many files (max 5000 files).'
-        : (err.message || 'Error processing folder upload.');
-      res.status(400).json({ success: false, error: errMsg });
+scanRouter.post('/upload-folder', folderUpload.array('files', 1000), (req: Request, res: Response): void => {
+  try {
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      res.status(400).json({ success: false, error: 'No files were uploaded.' });
       return;
     }
 
-    try {
-      const files = req.files as Express.Multer.File[];
-      if (!files || files.length === 0) {
-        res.status(400).json({ success: false, error: 'No files were uploaded.' });
-        return;
-      }
+    const folderName = (req.body.folderName || 'project_source').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const extractDir = path.join(uploadDir, 'extracted', `${Date.now()}-${folderName}`);
+    fs.mkdirSync(extractDir, { recursive: true });
 
-      const folderName = (req.body.folderName || 'project_source').replace(/[^a-zA-Z0-9_-]/g, '_');
-      const extractDir = path.join(uploadDir, 'extracted', `${Date.now()}-${folderName}`);
-      fs.mkdirSync(extractDir, { recursive: true });
-
-      let pathsList: string[] = [];
-      if (req.body.pathsJson) {
-        try {
-          pathsList = JSON.parse(req.body.pathsJson);
-        } catch {}
-      } else if (req.body.paths) {
-        pathsList = Array.isArray(req.body.paths) ? req.body.paths : [req.body.paths];
-      }
-
-      let savedCount = 0;
-      for (let i = 0; i < files.length; i++) {
-        const f = files[i];
-        let relPath = pathsList[i] || f.originalname;
-
-        // Strip leading folderName/ if present
-        if (relPath.startsWith(`${folderName}/`) || relPath.startsWith(`${folderName}\\`)) {
-          relPath = relPath.slice(folderName.length + 1);
-        }
-
-        // Security: Prevent directory traversal outside extractDir
-        const safeRelPath = path.normalize(relPath).replace(/^(\.\.[\/\\])+/, '');
-        const targetPath = path.join(extractDir, safeRelPath);
-        const targetParent = path.dirname(targetPath);
-        if (!fs.existsSync(targetParent)) {
-          fs.mkdirSync(targetParent, { recursive: true });
-        }
-
-        fs.copyFileSync(f.path, targetPath);
-        try { fs.unlinkSync(f.path); } catch {} // remove temp multer file
-        savedCount++;
-      }
-
-      // Fast and safe indexing using existing file counter
-      const stats = countFilesAndLines(extractDir);
-
-      res.status(200).json({
-        success: true,
-        message: `Folder "${folderName}" uploaded successfully (${stats.files} files, ${stats.lines.toLocaleString()} lines of code indexed).`,
-        file: {
-          originalName: folderName,
-          storedName: path.basename(extractDir),
-          size: files.reduce((acc, f) => acc + f.size, 0),
-          path: extractDir,
-          fileType: 'folder',
-          filesCount: stats.files || savedCount,
-          totalLines: stats.lines || 0,
-        },
-      });
-    } catch (error) {
-      console.error('Folder upload error:', error);
-      res.status(500).json({ success: false, error: (error as Error).message });
+    let pathsList: string[] = [];
+    if (req.body.paths) {
+      pathsList = Array.isArray(req.body.paths) ? req.body.paths : [req.body.paths];
     }
-  });
+
+    let savedCount = 0;
+    let totalLines = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      let relPath = pathsList[i] || f.originalname;
+
+      // Strip leading folderName/ if present
+      if (relPath.startsWith(`${folderName}/`) || relPath.startsWith(`${folderName}\\`)) {
+        relPath = relPath.slice(folderName.length + 1);
+      }
+
+      // Security: Prevent directory traversal outside extractDir
+      const safeRelPath = path.normalize(relPath).replace(/^(\.\.[\/\\])+/, '');
+      const targetPath = path.join(extractDir, safeRelPath);
+      const targetParent = path.dirname(targetPath);
+      if (!fs.existsSync(targetParent)) {
+        fs.mkdirSync(targetParent, { recursive: true });
+      }
+
+      fs.copyFileSync(f.path, targetPath);
+      try { fs.unlinkSync(f.path); } catch {} // remove temp multer file
+
+      savedCount++;
+      try {
+        const content = fs.readFileSync(targetPath, 'utf8');
+        totalLines += content.split('\n').length;
+      } catch {}
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Folder "${folderName}" uploaded successfully (${savedCount} files, ${totalLines.toLocaleString()} lines of code indexed).`,
+      file: {
+        originalName: folderName,
+        storedName: path.basename(extractDir),
+        size: files.reduce((acc, f) => acc + f.size, 0),
+        path: extractDir,
+        fileType: 'folder',
+        filesCount: savedCount,
+        totalLines,
+      },
+    });
+  } catch (error) {
+    console.error('Folder upload error:', error);
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
 });
 
 /**

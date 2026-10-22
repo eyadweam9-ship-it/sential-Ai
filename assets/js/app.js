@@ -2187,69 +2187,39 @@ const App = {
 
         const first = files[0];
         const folderName = first.webkitRelativePath ? first.webkitRelativePath.split('/')[0] : 'project_source';
-        await this.uploadFolderFilesList(Array.from(files), folderName);
-        try { event.target.value = ''; } catch {}
-    },
-
-    async uploadFolderFilesList(files, folderName) {
         this.scanState.isUploading = true;
-        showToast(`Preparing folder "${folderName}" for line-by-line static analysis...`, 'info');
+        showToast(`Analyzing folder "${folderName}"...`, 'info');
 
         try {
             const formData = new FormData();
             formData.append('folderName', folderName);
 
-            const ignoredDirs = [
-                'node_modules', '.git', 'vendor', '.venv', 'venv', 'env', '__pycache__',
-                '.idea', '.vscode', 'dist', 'build', '.next', 'coverage', '.system_generated'
-            ];
-            const ignoredExts = [
-                '.mp4', '.mov', '.avi', '.mkv', '.iso', '.dmg', '.bin', '.mp3', '.wav',
-                '.zip', '.tar', '.gz', '.tgz', '.exe', '.dll', '.so', '.woff', '.woff2'
-            ];
-
-            const pathsList = [];
             let addedCount = 0;
-            let skippedOversized = 0;
-
             for (let i = 0; i < files.length; i++) {
                 const f = files[i];
-                const relPath = f._relPath || f.webkitRelativePath || f.name;
-
-                // Check directory exclusion
-                const isIgnoredDir = ignoredDirs.some(dir =>
-                    relPath.includes(`${dir}/`) || relPath.includes(`${dir}\\`)
-                );
-                if (isIgnoredDir) continue;
-
-                // Check file extension exclusion
-                const dotIdx = f.name.lastIndexOf('.');
-                const ext = dotIdx !== -1 ? f.name.slice(dotIdx).toLowerCase() : '';
-                if (ignoredExts.includes(ext)) continue;
-
-                // Support up to 1GB per individual file
-                if (f.size > 1024 * 1024 * 1024) {
-                    skippedOversized++;
+                const relPath = f.webkitRelativePath || f.name;
+                // Exclude massive binary/cache directories
+                if (relPath.includes('node_modules/') || relPath.includes('node_modules\\') ||
+                    relPath.includes('/.git/') || relPath.includes('\\.git\\') ||
+                    relPath.includes('/dist/') || relPath.includes('\\dist\\') ||
+                    relPath.includes('/.next/') || relPath.includes('\\.next\\') ||
+                    relPath.includes('/build/') || relPath.includes('\\build\\') ||
+                    relPath.includes('/coverage/') || relPath.includes('\\coverage\\')) {
                     continue;
                 }
-
                 formData.append('files', f);
                 formData.append('paths', relPath);
-                pathsList.push(relPath);
                 addedCount++;
-                if (addedCount >= 4000) break;
+                if (addedCount >= 600) break; // reasonable max source files
             }
 
             if (addedCount === 0) {
-                showToast('No source code files found in selected folder. (Heavy packages and binaries are filtered out).', 'error');
+                showToast('No source code files found in selected folder.', 'error');
                 this.scanState.isUploading = false;
                 return;
             }
 
-            formData.append('pathsJson', JSON.stringify(pathsList));
-
-            const skipMsg = skippedOversized > 0 ? ` (skipped ${skippedOversized} heavy media/archive files)` : '';
-            showToast(`Uploading ${addedCount} source files from "${folderName}"${skipMsg}...`, 'info');
+            showToast(`Uploading ${addedCount} source files from "${folderName}" for line-by-line audit...`, 'info');
             const res = await API.uploadFolder(formData);
 
             if (res.file) {
@@ -2261,7 +2231,7 @@ const App = {
                     filesCount: res.file.filesCount || addedCount,
                     totalLines: res.file.totalLines || 0
                 };
-                showToast(`Project folder "${folderName}" staged: ${this.scanState.uploadedFile.filesCount} files (${(this.scanState.uploadedFile.totalLines || 0).toLocaleString()} lines) ready for scan!`, 'success');
+                showToast(`Project folder "${folderName}" uploaded: ${this.scanState.uploadedFile.filesCount} files (${(this.scanState.uploadedFile.totalLines || 0).toLocaleString()} lines) indexed for deep SAST!`, 'success');
             }
         } catch (err) {
             console.error('Folder upload error:', err);
@@ -2293,70 +2263,9 @@ const App = {
         e.preventDefault();
         e.stopPropagation();
         e.currentTarget.classList.remove('dragover');
-
-        // Check if user dropped a directory
-        const items = e.dataTransfer?.items;
-        if (items && items.length > 0) {
-            const firstItem = items[0];
-            const entry = firstItem.webkitGetAsEntry ? firstItem.webkitGetAsEntry() : null;
-            if (entry && entry.isDirectory) {
-                await this.processDroppedDirectoryEntry(entry);
-                return;
-            }
-        }
-
         const file = e.dataTransfer?.files?.[0];
         if (!file) return;
         await this.uploadSelectedFile(file);
-    },
-
-    async processDroppedDirectoryEntry(entry) {
-        const folderName = entry.name || 'dropped_folder';
-        this.scanState.isUploading = true;
-        showToast(`Reading files from dropped folder "${folderName}"...`, 'info');
-
-        const collectedFiles = [];
-        const ignoredDirs = [
-            'node_modules', '.git', 'vendor', '.venv', 'venv', 'env', '__pycache__',
-            '.idea', '.vscode', 'dist', 'build', '.next', 'coverage', '.system_generated'
-        ];
-
-        async function readDir(dirEntry, currentPath) {
-            const reader = dirEntry.createReader();
-            const getEntries = () => new Promise(resolve => reader.readEntries(resolve, () => resolve([])));
-            let entries = await getEntries();
-            while (entries.length > 0) {
-                for (const item of entries) {
-                    if (ignoredDirs.includes(item.name)) continue;
-                    if (item.isDirectory) {
-                        await readDir(item, `${currentPath}/${item.name}`);
-                    } else if (item.isFile) {
-                        const fileObj = await new Promise(resolve => item.file(resolve, () => resolve(null)));
-                        if (fileObj) {
-                            fileObj._relPath = `${currentPath}/${item.name}`.replace(/^\/+/, '');
-                            collectedFiles.push(fileObj);
-                        }
-                    }
-                    if (collectedFiles.length >= 1500) return;
-                }
-                entries = await getEntries();
-            }
-        }
-
-        try {
-            await readDir(entry, folderName);
-            if (collectedFiles.length === 0) {
-                showToast('No source code files found in dropped folder.', 'error');
-                this.scanState.isUploading = false;
-                return;
-            }
-            await this.uploadFolderFilesList(collectedFiles, folderName);
-        } catch (err) {
-            console.error('Dropped folder error:', err);
-            showToast(err.message || 'Failed to process dropped folder', 'error');
-            this.scanState.isUploading = false;
-            this.render();
-        }
     },
 
     async uploadSelectedFile(file, customName) {

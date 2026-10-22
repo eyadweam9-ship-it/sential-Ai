@@ -20,20 +20,8 @@ import { reportsRouter } from './routes/reports.routes';
 const app = express();
 const port = process.env.PORT || 3000;
 
-// CORS headers to ensure browsers never fail with opaque fetch errors
-app.use((req: Request, res: Response, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
-    return;
-  }
-  next();
-});
-
-app.use(express.json({ limit: '1024mb' }));
-app.use(express.urlencoded({ extended: true, limit: '1024mb' }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Serve static frontend files
 const rootDir = process.cwd();
@@ -168,17 +156,7 @@ app.post('/api/scans/start', async (req: Request, res: Response) => {
   }
 });
 
-// Global error-handling middleware to catch uncaught route/multer exceptions
-app.use((err: any, req: Request, res: Response, next: any) => {
-  console.error('Express uncaught route error:', err);
-  if (res.headersSent) return next(err);
-  res.status(err.status || 500).json({
-    success: false,
-    error: err.message || 'Internal Server Error',
-  });
-});
-
-const server = app.listen(port, () => {
+app.listen(port, () => {
   console.log('\n======================================================');
   console.log(`🚀 Vulnerability Scanner Server running on http://localhost:${port}`);
   console.log(`🔐 Admin Login Page: http://localhost:${port}/admin/login`);
@@ -189,9 +167,3 @@ const server = app.listen(port, () => {
   console.log('📦 Database Engine: SQLite (prisma/dev.db)');
   console.log('======================================================\n');
 });
-
-// Configure server timeouts to comfortably support up to 1GB file and folder uploads
-server.timeout = 20 * 60 * 1000;       // 20 minutes socket timeout
-server.keepAliveTimeout = 10 * 60 * 1000;
-server.headersTimeout = 11 * 60 * 1000;
-server.requestTimeout = 20 * 60 * 1000;
