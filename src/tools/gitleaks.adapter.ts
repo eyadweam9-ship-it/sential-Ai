@@ -308,6 +308,36 @@ export class GitleaksAdapter implements SecurityToolAdapter {
       const line = lines[i];
       if (line.length > 2000) continue; // Skip minified mega-lines to avoid catastrophic regex backtracking
 
+      // A. Correlate adjacent Email + Password variable declarations (within 5 lines)
+      const emailVarMatch = line.match(/(?:email|user_email|admin_email|login_email|account_email)\s*[:=]\s*['"]([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)['"]/i);
+      if (emailVarMatch && !line.includes('<input') && !line.includes('placeholder')) {
+        const emailVal = emailVarMatch[1];
+        if (!emailVal.includes('@example.') && !emailVal.includes('@test.') && !emailVal.includes('@domain.') && !emailVal.includes('@localhost')) {
+          for (let j = i + 1; j < Math.min(i + 6, maxLines); j++) {
+            const nextLine = lines[j];
+            const passVarMatch = nextLine.match(/(?:password|passwd|pwd|pass|admin_pass|secret_pass)\s*[:=]\s*['"]([^'"\r\n\s]{3,128})['"]/i);
+            if (passVarMatch && !nextLine.includes('<input') && !nextLine.includes('placeholder')) {
+              const passVal = passVarMatch[1];
+              findings.push({
+                title: 'Hardcoded Account Authentication Credentials (Email & Password Pair)',
+                severity: 'CRITICAL',
+                confidence: 'CONFIRMED',
+                category: 'HARDCODED_SECRET',
+                sourceRuleId: 'gitleaks.correlated-credentials-pair',
+                filePath: sourceLocation,
+                lineStart: i + 1,
+                lineEnd: j + 1,
+                evidenceSummary: `Exposed Credentials: Email: "${emailVal}" | Password: "${passVal}" (Lines ${i + 1}-${j + 1})`,
+                rawSnippet: `${line.trim()}\n${nextLine.trim()}`.slice(0, 240),
+                remediation: 'Immediately revoke and rotate these exposed credentials. Do not commit plaintext credentials to source control.',
+                cwe: 'CWE-798',
+              });
+              break;
+            }
+          }
+        }
+      }
+
       for (const rule of GITLEAKS_RULES) {
         const match = line.match(rule.regex);
         if (match) {
@@ -335,7 +365,25 @@ export class GitleaksAdapter implements SecurityToolAdapter {
           ) {
             continue;
           }
-          const masked = rule.mask(secretMatch);
+
+          // If auth credentials pair matched on the same line, clearly show both Email/Username and Password
+          if (rule.id === 'gitleaks.auth-credentials-pair' && match[1] && match[2]) {
+            findings.push({
+              title: rule.title,
+              severity: rule.severity,
+              confidence: 'CONFIRMED',
+              category: rule.category,
+              sourceRuleId: rule.id,
+              filePath: sourceLocation,
+              lineStart: i + 1,
+              lineEnd: i + 1,
+              evidenceSummary: `Exposed Credentials: Email/User: "${match[1]}" | Password: "${match[2]}"`,
+              rawSnippet: line.trim().slice(0, 200),
+              remediation: rule.remediation || 'Immediately revoke and rotate the exposed credential.',
+              cwe: rule.cwe || 'CWE-798',
+            });
+            continue;
+          }
 
           findings.push({
             title: rule.title,
@@ -346,8 +394,10 @@ export class GitleaksAdapter implements SecurityToolAdapter {
             filePath: sourceLocation,
             lineStart: i + 1,
             lineEnd: i + 1,
-            evidenceSummary: `Detected in ${label} at line ${i + 1}: ${masked}`,
-            rawSnippet: line.replace(secretMatch, masked).trim().slice(0, 160),
+            evidenceSummary: rule.category === 'HARDCODED_SECRET'
+              ? `Disclosed credential in ${label} at line ${i + 1}: ${secretMatch}`
+              : `Detected in ${label} at line ${i + 1}: ${secretMatch}`,
+            rawSnippet: line.trim().slice(0, 200),
             remediation: rule.remediation || 'Immediately revoke and rotate the exposed credential. Store secrets strictly in backend environment variables or a secrets manager.',
             cwe: rule.cwe || 'CWE-798',
           });

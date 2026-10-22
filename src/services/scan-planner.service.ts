@@ -19,10 +19,13 @@ export async function planScanExecution(options: {
   hasUrl: boolean;
   hasSourceCode: boolean;
 }): Promise<ScanPlan> {
-  const { scanId, hasUrl, hasSourceCode } = options;
+  const { scanId, targetType, environment, hasUrl, hasSourceCode } = options;
+  const isDevelopment = (environment || '').toUpperCase() === 'DEVELOPMENT' || targetType === 'FILE_ZIP';
 
   let scanProfile: 'URL_BASED_DAST' | 'PURE_SAST' | 'HYBRID_DAST_SAST' = 'URL_BASED_DAST';
-  if (hasUrl && hasSourceCode) {
+  if (isDevelopment) {
+    scanProfile = 'PURE_SAST';
+  } else if (hasUrl && hasSourceCode) {
     scanProfile = 'HYBRID_DAST_SAST';
   } else if (!hasUrl && hasSourceCode) {
     scanProfile = 'PURE_SAST';
@@ -30,60 +33,67 @@ export async function planScanExecution(options: {
     scanProfile = 'URL_BASED_DAST';
   }
 
+  // DAST tools are ONLY applicable when inspecting a live external web URL in Staging/Production.
+  // In Development Mode (or when uploading source code), link tools are strictly bypassed.
+  const liveUrlApplicable = hasUrl && !isDevelopment;
+  const dastSkipReason = isDevelopment
+    ? 'DAST tool skipped: Target is local source code (Development Mode). Live link inspection requires an active HTTP/HTTPS endpoint.'
+    : 'DAST tool skipped: No target URL specified.';
+
   const plannedTasks: PlannedTask[] = [];
 
   // 1. OWASP ZAP (DAST) - Dynamic vulnerability inspection & HTTP security checks
-  if (hasUrl) {
+  if (liveUrlApplicable) {
     plannedTasks.push({ toolName: 'OWASP_ZAP', status: 'PENDING' });
   } else {
     plannedTasks.push({
       toolName: 'OWASP_ZAP',
       status: 'SKIPPED',
-      reason: 'DAST requires an active target URL. Source code only provided.',
+      reason: dastSkipReason,
     });
   }
 
   // 2. Nuclei (DAST) - Template-based vulnerability scanner for live endpoints & misconfigurations
-  if (hasUrl) {
+  if (liveUrlApplicable) {
     plannedTasks.push({ toolName: 'NUCLEI', status: 'PENDING' });
   } else {
     plannedTasks.push({
       toolName: 'NUCLEI',
       status: 'SKIPPED',
-      reason: 'Nuclei template scanning requires an active HTTP/HTTPS endpoint.',
+      reason: dastSkipReason,
     });
   }
 
   // 3. WPScan (CMS & Application Frameworks) - Audits WordPress, Joomla, Drupal, and framework endpoints
-  if (hasUrl) {
+  if (liveUrlApplicable) {
     plannedTasks.push({ toolName: 'WPSCAN', status: 'PENDING' });
   } else {
     plannedTasks.push({
       toolName: 'WPSCAN',
       status: 'SKIPPED',
-      reason: 'CMS scanning requires an active target URL.',
+      reason: dastSkipReason,
     });
   }
 
   // 4. WhatWeb (Reconnaissance & WAF) - Identifies technologies, WAFs, and information disclosures
-  if (hasUrl) {
+  if (liveUrlApplicable) {
     plannedTasks.push({ toolName: 'WHATWEB', status: 'PENDING' });
   } else {
     plannedTasks.push({
       toolName: 'WHATWEB',
       status: 'SKIPPED',
-      reason: 'Technology fingerprinting requires an active target URL.',
+      reason: dastSkipReason,
     });
   }
 
   // 5. TestSSL (Transport & Security Headers) - Audits TLS encryption, HSTS, and defense headers
-  if (hasUrl) {
+  if (liveUrlApplicable) {
     plannedTasks.push({ toolName: 'TESTSSL', status: 'PENDING' });
   } else {
     plannedTasks.push({
       toolName: 'TESTSSL',
       status: 'SKIPPED',
-      reason: 'TLS inspection requires an active HTTP/HTTPS endpoint.',
+      reason: dastSkipReason,
     });
   }
 

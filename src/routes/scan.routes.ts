@@ -815,58 +815,6 @@ scanRouter.post(['/create', '/start'], async (req: Request, res: Response): Prom
       });
     }
 
-    // 10. For URL DAST modes only, seed baseline if database is empty; in Development SAST, findings are 100% discovered live from uploaded files
-    const existingCount = await prisma.vulnerability.count({ where: { scanId: scan.id } });
-    if (existingCount === 0 && !isDevelopment) {
-      let templateFindings: any[] = [];
-      if (scanProfile === 'HYBRID_DAST_SAST') {
-        // Hybrid combines DAST web findings with real SAST
-        templateFindings = [...WEB_FINDINGS.slice(0, 3)];
-      } else {
-        templateFindings = WEB_FINDINGS;
-      }
-
-      // Parse scope rules for strict boundary enforcement
-      let parsedScope: ScopeRule = { includedPaths: ['/*'], excludedPaths: [] };
-      try {
-        if (typeof scope === 'string' && scope.startsWith('{')) {
-          const sObj = JSON.parse(scope);
-          parsedScope = {
-            includedPaths: Array.isArray(sObj.includedPaths) ? sObj.includedPaths : (sObj.includedPaths ? String(sObj.includedPaths).split(',') : ['/*']),
-            excludedPaths: Array.isArray(sObj.excludedPaths) ? sObj.excludedPaths : (sObj.excludedPaths ? String(sObj.excludedPaths).split(',') : []),
-          };
-        } else if (typeof scope === 'object' && scope !== null) {
-          parsedScope = {
-            includedPaths: Array.isArray(scope.includedPaths) ? scope.includedPaths : ['/*'],
-            excludedPaths: Array.isArray(scope.excludedPaths) ? scope.excludedPaths : [],
-          };
-        }
-      } catch {}
-
-      for (const t of templateFindings) {
-        // Absolute Rule: Exclusion strictly overrides Inclusion!
-        if (t.endpoint && !isDevelopment) {
-          const evalRes = evaluateScope(t.endpoint, parsedScope);
-          if (!evalRes.allowed) {
-            console.log(`[Scope Gate] Skipped finding on excluded path: ${t.endpoint} (${evalRes.reason})`);
-            continue;
-          }
-        }
-
-        await prisma.vulnerability.create({
-          data: {
-            scanId: scan.id,
-            title: t.title,
-            description: t.description,
-            severity: t.severity,
-            status: isScanOnly ? 'OPEN' : t.status,
-            remediation: t.remediation,
-            filePath: t.filePath,
-          },
-        });
-      }
-    }
-
     // Trigger multi-tool background orchestration
     orchestrateScan(scan.id).catch((err) => {
       console.error(`[Scan #${scan.id}] Background orchestration error:`, err);

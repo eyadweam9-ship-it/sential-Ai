@@ -10,7 +10,7 @@ import { analyzeFindingWithAI, generateScanExecutiveSummary } from './ai-analysi
 import { generateScanReport } from './report.service';
 import { extractSourcesFromTarget } from './source-extractor.service';
 import { ToolInput } from '../tools/security-tool.interface';
-import { countFilesAndLines } from '../utils/file-counter';
+import { classifyProjectFiles, ProjectClassificationReport } from './file-classifier.service';
 
 export const activeScanState = new Map<number, { activeTool: string; activeMessage: string; progress: number }>();
 
@@ -98,17 +98,38 @@ export async function orchestrateScan(scanId: number): Promise<void> {
       }
     }
 
-    // Index files and calculate real lines of code
+    // 2. Intelligent File Classification & Inventory Layer
+    const isDev = (target.environment || '').toUpperCase() === 'DEVELOPMENT' || target.targetType === 'FILE_ZIP' || (!isUrl && hasSource);
+
+    let classification: ProjectClassificationReport | null = null;
     let totalSourceFiles = 0;
     let totalSourceLines = 0;
+
     if (effectiveSourcePath && fs.existsSync(effectiveSourcePath)) {
-      const stats = countFilesAndLines(effectiveSourcePath);
-      totalSourceFiles = stats.files;
-      totalSourceLines = stats.lines;
-      console.log(`[ScanOrchestrator] Auditing ${totalSourceFiles} source files (${totalSourceLines.toLocaleString()} lines of code) in ${effectiveSourcePath}`);
+      classification = await classifyProjectFiles(effectiveSourcePath);
+      totalSourceFiles = classification.totalFilesIndexed;
+      totalSourceLines = classification.totalLinesOfCode;
+      console.log(`[ScanOrchestrator] Auditing ${totalSourceFiles} classified source files (${totalSourceLines.toLocaleString()} lines of code) in ${effectiveSourcePath}`);
+
+      // Handle suspicious binaries or webshells discovered by the File Classifier
+      if (classification.suspiciousFiles.length > 0) {
+        for (const sus of classification.suspiciousFiles) {
+          await normalizeAndSaveFindings(scanId, 'FILE_INSPECTOR', [{
+            title: 'Potentially Malicious / Hidden Binary Artifact in Web Repository',
+            severity: 'HIGH',
+            confidence: 'CONFIRMED',
+            category: 'MALICIOUS_ARTIFACT',
+            sourceRuleId: 'file-inspector.hidden-executable',
+            filePath: sus.path,
+            evidenceSummary: sus.reason,
+            remediation: 'Inspect and remove unexpected compiled binaries or camouflaged scripts from web assets.',
+            cwe: 'CWE-506',
+          }]);
+        }
+      }
     }
 
-    // 2. Parse Scope, Boundaries & Optional Authenticated Session Credentials
+    // 3. Parse Scope, Boundaries & Optional Authenticated Session Credentials
     let parsedScope = { includedPaths: ['/*'], excludedPaths: [] as string[] };
     let sessionCookie: string | undefined;
     let authHeader: string | undefined;
@@ -123,16 +144,16 @@ export async function orchestrateScan(scanId: number): Promise<void> {
       }
     } catch {}
 
-    // 3. Proactive Source Extraction from Target URL (Source Maps, .git, and Backup Archives)
-    if (isUrl && !hasSource) {
+    // 4. Proactive Source Extraction from Target URL (Source Maps, .git, and Backup Archives)
+    if (isUrl && !isDev && !hasSource) {
       try {
         const extractRes = await extractSourcesFromTarget(target.url, scanId);
         if (extractRes.extractedDir && extractRes.extractedFilesCount > 0) {
           effectiveSourcePath = extractRes.extractedDir;
           hasSource = true;
-          const stats = countFilesAndLines(effectiveSourcePath);
-          totalSourceFiles = stats.files;
-          totalSourceLines = stats.lines;
+          classification = await classifyProjectFiles(effectiveSourcePath);
+          totalSourceFiles = classification.totalFilesIndexed;
+          totalSourceLines = classification.totalLinesOfCode;
           console.log(`[ScanOrchestrator] Successfully extracted ${extractRes.extractedFilesCount} source files from target URL for SAST auditing.`);
         }
         if (extractRes.findings && extractRes.findings.length > 0) {
@@ -143,7 +164,7 @@ export async function orchestrateScan(scanId: number): Promise<void> {
       }
     }
 
-    // 4. Plan Tasks (ZAP, Nuclei, WPScan, WhatWeb, TestSSL, Semgrep, CodeQL, Gitleaks, Trivy, OSV, Checkov, npm audit)
+    // 5. Plan Tasks
     let tasks = await prisma.scanTask.findMany({ where: { scanId } });
     if (tasks.length === 0 || (tasks.length > 0 && tasks.every(t => t.status === 'SKIPPED' || t.status === 'FAILED'))) {
       await prisma.scanTask.deleteMany({ where: { scanId } });
@@ -151,15 +172,34 @@ export async function orchestrateScan(scanId: number): Promise<void> {
         scanId,
         targetType: target.targetType as any,
         environment: target.environment,
-        hasUrl: isUrl,
+        hasUrl: isUrl && !isDev,
         hasSourceCode: hasSource,
       });
       tasks = await prisma.scanTask.findMany({ where: { scanId } });
     }
 
-    const eligibleTasks = tasks.filter(t => t.status === 'PENDING' || t.status === 'QUEUED');
+    // In Development Mode: Enforce strict bypassing of link/URL DAST tools
+    if (isDev) {
+      const dastTools = ['OWASP_ZAP', 'NUCLEI', 'WPSCAN', 'WHATWEB', 'TESTSSL'];
+      await prisma.scanTask.updateMany({
+        where: {
+          scanId,
+          toolName: { in: dastTools },
+        },
+        data: {
+          status: 'SKIPPED',
+          errorMessage: 'DAST tool skipped: Target is local source code (Development Mode). Live link inspection requires an active HTTP/HTTPS endpoint.',
+        },
+      });
+    }
 
-    // Rate limit configuration based on environment
+    const eligibleTasks = await prisma.scanTask.findMany({
+      where: {
+        scanId,
+        status: { in: ['PENDING', 'QUEUED'] },
+      },
+    });
+
     const isProd = target.environment.toUpperCase() === 'PRODUCTION';
     const rateLimitRps = isProd ? 10 : 25;
 
@@ -237,9 +277,9 @@ export async function orchestrateScan(scanId: number): Promise<void> {
       }
     }
 
-    // 5. Realistic Phased Execution Tied to Actual Scanning
-    if (!isUrl && hasSource) {
-      // PURE SAST (DEVELOPMENT CODE SCAN):
+    // 6. Phased Execution
+    if (isDev) {
+      // PURE SAST (DEVELOPMENT SOURCE CODE SCAN):
       // Step A: Semgrep Static AST Pattern & Line-by-Line Scan
       await updateScanProgress(
         scanId,
@@ -248,7 +288,7 @@ export async function orchestrateScan(scanId: number): Promise<void> {
         `Semgrep: Indexing ${totalSourceFiles} source files (${totalSourceLines.toLocaleString()} lines) & inspecting AST syntax...`
       );
       await executeTool('SEMGREP');
-      await sleep(2200);
+      await sleep(1500);
 
       // Step B: CodeQL Inter-Procedural Taint Tracking
       await updateScanProgress(
@@ -258,7 +298,7 @@ export async function orchestrateScan(scanId: number): Promise<void> {
         `CodeQL: Tracing inter-procedural taint flows (Source -> Sanitizer -> Sink) across ${totalSourceFiles} files...`
       );
       await executeTool('CODEQL');
-      await sleep(2400);
+      await sleep(1500);
 
       // Step C: Gitleaks High-Entropy Secret Hunter
       await updateScanProgress(
@@ -268,33 +308,47 @@ export async function orchestrateScan(scanId: number): Promise<void> {
         `Gitleaks: Scanning ${totalSourceLines.toLocaleString()} lines for exposed API keys, private tokens & credentials...`
       );
       await executeTool('GITLEAKS');
-      await sleep(2000);
+      await sleep(1500);
 
       // Step D: Checkov Infrastructure & Configuration Posture
-      await updateScanProgress(
-        scanId,
-        78,
-        'Checkov',
-        `Checkov: Auditing Dockerfiles, manifests, and container security postures...`
-      );
-      await executeTool('CHECKOV');
-      await sleep(1800);
+      if (classification && classification.iacFiles.length === 0) {
+        await prisma.scanTask.updateMany({
+          where: { scanId, toolName: 'CHECKOV' },
+          data: { status: 'SKIPPED', errorMessage: 'No IaC manifests (Dockerfile, Kubernetes, Terraform) detected in repository.' },
+        });
+      } else {
+        await updateScanProgress(
+          scanId,
+          78,
+          'Checkov',
+          `Checkov: Auditing Dockerfiles, manifests, and container security postures...`
+        );
+        await executeTool('CHECKOV');
+        await sleep(1200);
+      }
 
       // Step E: Supply Chain & Dependencies (Trivy, OSV, npm audit)
-      await updateScanProgress(
-        scanId,
-        88,
-        'Trivy & OSV-Scanner',
-        `Supply Chain: Verifying dependency manifests against Google OSV and National Vulnerability Databases...`
-      );
-      await Promise.all([
-        executeTool('TRIVY'),
-        executeTool('OSV_SCANNER'),
-        executeTool('NPM_AUDIT'),
-      ]);
-      await sleep(2000);
+      if (classification && classification.manifests.length === 0) {
+        await prisma.scanTask.updateMany({
+          where: { scanId, toolName: { in: ['TRIVY', 'OSV_SCANNER', 'NPM_AUDIT'] } },
+          data: { status: 'SKIPPED', errorMessage: 'No dependency manifests found in repository.' },
+        });
+      } else {
+        await updateScanProgress(
+          scanId,
+          88,
+          'Trivy & OSV-Scanner',
+          `Supply Chain: Verifying dependency manifests against Google OSV and National Vulnerability Databases...`
+        );
+        await Promise.all([
+          executeTool('TRIVY'),
+          executeTool('OSV_SCANNER'),
+          executeTool('NPM_AUDIT'),
+        ]);
+        await sleep(1500);
+      }
     } else {
-      // DAST / HYBRID PIPELINE:
+      // DAST / HYBRID PIPELINE (STAGING / PRODUCTION URL SCAN):
       const phases = [
         ['OWASP_ZAP', 'NUCLEI'],
         ['WPSCAN', 'WHATWEB', 'TESTSSL'],
@@ -319,7 +373,7 @@ export async function orchestrateScan(scanId: number): Promise<void> {
       }
     }
 
-    // 6. Findings Deduplication
+    // 7. Findings Deduplication & Normalization
     await updateScanProgress(
       scanId,
       94,
@@ -333,16 +387,16 @@ export async function orchestrateScan(scanId: number): Promise<void> {
     await deduplicateScanFindings(scanId);
     await sleep(1200);
 
-    // 7. AI Intelligence on findings
+    // 8. AI Intelligence on findings
     const findings = await prisma.finding.findMany({ where: { scanId } });
     for (const f of findings.slice(0, 10)) {
       await analyzeFindingWithAI(scanId, f.id).catch(() => null);
     }
 
-    // 8. Generate Final Security Assessment Report
+    // 9. Generate Final Security Assessment Report
     await generateScanReport(scanId);
 
-    // 9. Determine final Scan Status
+    // 10. Determine final Scan Status
     const allTasks = await prisma.scanTask.findMany({ where: { scanId } });
     const executedTasks = allTasks.filter(t => t.status !== 'SKIPPED');
     const hasFailures = executedTasks.some(t => t.status === 'FAILED' || t.status === 'TIMED_OUT');
@@ -360,18 +414,15 @@ export async function orchestrateScan(scanId: number): Promise<void> {
       data: {
         status: finalStatus,
         progress: 100,
-        endedAt: new Date(),
         finishedAt: new Date(),
-        summaryJson: JSON.stringify({
-          activeTool: 'All Tools',
-          activeMessage: `Assessment complete. ${findings.length} verified findings recorded across ${totalSourceFiles ? `${totalSourceFiles} source files` : 'all routes'}.`,
-        }),
+        endedAt: new Date(),
       },
     });
 
+    activeScanState.delete(scanId);
     console.log(`[ScanOrchestrator] Scan #${scanId} completed with status: ${finalStatus}. Total findings: ${findings.length}`);
   } catch (error) {
-    console.error(`[ScanOrchestrator] Scan #${scanId} orchestration error:`, error);
+    console.error(`[ScanOrchestrator] Fatal error during scan #${scanId}:`, error);
     await prisma.scan.update({
       where: { id: scanId },
       data: {
@@ -379,6 +430,7 @@ export async function orchestrateScan(scanId: number): Promise<void> {
         progress: 100,
         endedAt: new Date(),
       },
-    }).catch(() => null);
+    });
+    activeScanState.delete(scanId);
   }
 }

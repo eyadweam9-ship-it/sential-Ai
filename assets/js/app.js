@@ -3276,27 +3276,17 @@ const App = {
                     </div>
 
                     ${isDev ? `
-                        <div class="verification-option ${verifyMethod === 0 ? 'selected' : ''}" onclick="App.selectVerifyMethod(0)">
-                            <span class="radio"><i></i></span>
+                        <div class="verification-option selected" style="border-color:#2563eb; background:#f0f7ff; cursor:default;">
+                            <span class="radio" style="background:#2563eb; border-color:#2563eb;"><i style="opacity:1; background:#ffffff;"></i></span>
                             <div>
-                                <b>OWASP Top 10 SAST Standard</b>
-                                <p>Comprehensive scan for SQLi, XSS, insecure deserialization, and secrets.</p>
-                            </div>
-                        </div>
-
-                        <div class="verification-option ${verifyMethod === 1 ? 'selected' : ''}" onclick="App.selectVerifyMethod(1)">
-                            <span class="radio"><i></i></span>
-                            <div>
-                                <b>Secrets &amp; Hardcoded Credentials</b>
-                                <p>Deep entropy scanner for API keys, AWS tokens, and private keys.</p>
-                            </div>
-                        </div>
-
-                        <div class="verification-option ${verifyMethod === 2 ? 'selected' : ''}" onclick="App.selectVerifyMethod(2)">
-                            <span class="radio"><i></i></span>
-                            <div>
-                                <b>Dependency &amp; SBOM Audit</b>
-                                <p>Analyze package.json, requirements.txt, and third-party CVEs.</p>
+                                <b style="color:#1e3a8a; font-size:13px;">Unified Comprehensive Engine (Full Project Scan)</b>
+                                <p style="color:#475569; font-size:11px; margin-top:3px;">Scans all files and lines comprehensively across all security domains with zero artificial restrictions.</p>
+                                <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;">
+                                    <span class="badge" style="background:#dbeafe; color:#1e40af; font-size:10px; font-weight:700; padding:3px 8px; border-radius:9999px;">✓ SAST (Semgrep &amp; CodeQL)</span>
+                                    <span class="badge" style="background:#dbeafe; color:#1e40af; font-size:10px; font-weight:700; padding:3px 8px; border-radius:9999px;">✓ Secrets &amp; Credentials (Gitleaks)</span>
+                                    <span class="badge" style="background:#dbeafe; color:#1e40af; font-size:10px; font-weight:700; padding:3px 8px; border-radius:9999px;">✓ Supply Chain (OSV, Trivy, npm audit)</span>
+                                    <span class="badge" style="background:#dbeafe; color:#1e40af; font-size:10px; font-weight:700; padding:3px 8px; border-radius:9999px;">✓ Infrastructure &amp; IaC (Checkov)</span>
+                                </div>
                             </div>
                         </div>
                     ` : `
@@ -4542,8 +4532,8 @@ const App = {
         if (!scanId) {
             try {
                 const hist = await API.getScanHistory().catch(() => null);
-                if (hist && hist.scans && hist.scans.length > 0) {
-                    scanId = hist.scans[0].id;
+                if (hist && Array.isArray(hist.history) && hist.history.length > 0) {
+                    scanId = hist.history[0].id;
                     this.scanState.currentScanId = scanId;
                 }
             } catch (e) {}
@@ -5539,8 +5529,8 @@ const App = {
         if (!scanId) {
             try {
                 const hist = await API.getScanHistory().catch(() => null);
-                if (hist && hist.scans && hist.scans.length > 0) {
-                    scanId = hist.scans[0].id;
+                if (hist && Array.isArray(hist.history) && hist.history.length > 0) {
+                    scanId = hist.history[0].id;
                     this.scanState.currentScanId = scanId;
                 }
             } catch (e) {}
