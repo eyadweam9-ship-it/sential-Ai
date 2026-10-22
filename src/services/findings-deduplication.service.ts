@@ -1,9 +1,20 @@
+import crypto from 'crypto';
 import { prisma } from '../config/db';
+
+export interface FindingFingerprintInput {
+  targetId: string | number;
+  ruleId: string;
+  filePath?: string | null;
+  startLine?: number | null;
+  sink?: string | null;
+  normalizedEvidence?: string | null;
+}
 
 export interface DeduplicationSummary {
   totalBefore: number;
   totalUnique: number;
   mergedDuplicates: number;
+  totalOccurrences: number;
   correlatedFindings: number;
 }
 
@@ -24,228 +35,355 @@ const SEVERITY_SCORES: Record<string, number> = {
   HIGH: 4,
   MEDIUM: 3,
   LOW: 2,
+  INFORMATIONAL: 1,
   INFO: 1,
 };
 
-function getSemanticCategoryGroup(category?: string | null, title?: string | null, cwe?: string | null): string {
-  const cat = (category || '').toUpperCase();
-  const tit = (title || '').toUpperCase();
-  const c = (cwe || '').toUpperCase();
-
-  if (c === 'CWE-89' || cat.includes('SQL') || tit.includes('SQL')) return 'SQL_INJECTION';
-  if (c === 'CWE-79' || cat.includes('XSS') || tit.includes('XSS') || tit.includes('SCRIPTING')) return 'XSS';
-  if (
-    c === 'CWE-200' ||
-    c === 'CWE-359' ||
-    c === 'CWE-798' ||
-    c === 'CWE-259' ||
-    cat.includes('SECRET') ||
-    cat.includes('PII') ||
-    cat.includes('EXPOSURE') ||
-    tit.includes('EMAIL') ||
-    tit.includes('PASSWORD') ||
-    tit.includes('CREDENTIAL') ||
-    tit.includes('SECRET') ||
-    tit.includes('KEY')
-  ) {
-    return 'SECRET_PII';
-  }
-  if (cat.includes('MISCONFIG') || tit.includes('HEADER') || tit.includes('COOKIE') || tit.includes('BANNER')) return 'MISCONFIGURATION';
-  return cat || 'GENERAL';
+/**
+ * Normalizes file paths across OS environments.
+ * Converts Windows backslashes to forward slashes, removes leading relative tokens, and trims.
+ */
+export function normalizeFilePath(filePath?: string | null): string {
+  if (!filePath) return 'global';
+  return filePath
+    .replace(/\\/g, '/')
+    .replace(/^\.\//, '')
+    .trim()
+    .toLowerCase();
 }
 
+/**
+ * Generates a deterministic, collision-resistant Canonical Fingerprint.
+ * 
+ * Rules:
+ * 1. File path is strictly normalized (Unix slashes, lowercase, relative).
+ * 2. Uses detection ruleId rather than human-readable title.
+ * 3. Never hashes raw plaintext passwords or private keys (redacts secrets first).
+ * 4. Combines target, rule, normalized path, line number, and sanitized sink context.
+ */
+export function createFindingFingerprint(finding: FindingFingerprintInput): string {
+  const normPath = normalizeFilePath(finding.filePath);
+  const ruleId = (finding.ruleId || 'GENERIC_RULE').trim();
+
+  // Redact secrets before hashing to avoid storing or deriving plaintext credentials
+  let safeSink = (finding.sink || '').trim();
+  safeSink = safeSink
+    .replace(/(password|passwd|pwd|secret|token|api[_-]?key|auth)\s*[:=]\s*['"][^'"]+['"]/gi, '$1="[REDACTED]"')
+    .replace(/(AKIA[0-9A-Z]{16})/g, '[REDACTED_AWS_KEY]')
+    .replace(/(ghp_[A-Za-z0-9]{36})/g, '[REDACTED_GITHUB_TOKEN]');
+  const sinkHash = safeSink ? crypto.createHash('sha256').update(safeSink).digest('hex').substring(0, 16) : '';
+
+  let safeEvidence = (finding.normalizedEvidence || '').trim();
+  safeEvidence = safeEvidence
+    .replace(/(AKIA[0-9A-Z]{16})/g, '[REDACTED_AWS_KEY]')
+    .replace(/(ghp_[A-Za-z0-9]{36})/g, '[REDACTED_GITHUB_TOKEN]');
+
+  const canonical = [
+    String(finding.targetId),
+    ruleId,
+    normPath,
+    finding.startLine ?? 0,
+    sinkHash,
+    safeEvidence.substring(0, 80),
+  ].join('|');
+
+  return crypto.createHash('sha256').update(canonical).digest('hex');
+}
+
+/**
+ * Extracts a Root-Cause Identifier to safely group occurrences.
+ * Ensures we DO NOT merge two separate vulnerabilities simply because they share a CWE.
+ */
+function getRootCauseGroupKey(finding: {
+  toolName: string;
+  category?: string | null;
+  cwe?: string | null;
+  title: string;
+  sourceRuleId?: string | null;
+  evidences: Array<{ filePath?: string | null; url?: string | null; lineStart?: number | null; rawSnippet?: string | null }>;
+}): string | null {
+  const cwe = (finding.cwe || '').toUpperCase();
+  const category = (finding.category || '').toUpperCase();
+  const title = finding.title.toLowerCase();
+  const primaryEvidence = finding.evidences[0];
+  const normPath = normalizeFilePath(primaryEvidence?.filePath || primaryEvidence?.url);
+
+  // 1. Secrets & PII Leaks (Group identical exposed key types or credential patterns across files)
+  if (
+    cwe === 'CWE-798' ||
+    cwe === 'CWE-259' ||
+    cwe === 'CWE-200' ||
+    cwe === 'CWE-359' ||
+    category.includes('SECRET') ||
+    category.includes('PII') ||
+    category.includes('EXPOSURE') ||
+    title.includes('email') ||
+    title.includes('password') ||
+    title.includes('api key')
+  ) {
+    const secretType = (finding.sourceRuleId || title)
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      .toLowerCase();
+    // Group occurrences of the same secret/PII disclosure rule across the project
+    return `ROOT_SECRET:${secretType}`;
+  }
+
+  // 2. Code Sinks (SQLi, Command Injection, XSS)
+  // MUST NOT merge across different files! Only merge if in the exact same file & function sink
+  if (
+    cwe === 'CWE-89' ||
+    cwe === 'CWE-78' ||
+    cwe === 'CWE-79' ||
+    category.includes('INJECTION') ||
+    category.includes('SCRIPTING')
+  ) {
+    // Distinct files are distinct occurrences/sinks; do NOT merge across files!
+    return `ROOT_SINK:${cwe}:${normPath}:${finding.sourceRuleId || title.replace(/\s+/g, '_')}`;
+  }
+
+  // 3. Infrastructure & Container Misconfigurations (e.g. latest tag, root container)
+  if (category.includes('IAC') || category.includes('MISCONFIG')) {
+    const ruleKey = (finding.sourceRuleId || title).toLowerCase();
+    return `ROOT_IAC:${ruleKey}:${normPath}`;
+  }
+
+  // 4. Missing Security Headers on same host
+  if (cwe === 'CWE-16' || cwe === 'CWE-693' || title.includes('header')) {
+    const headerName = title.replace(/^missing\s+/i, '').trim();
+    return `ROOT_HEADER:${headerName}`;
+  }
+
+  return null;
+}
+
+/**
+ * Two-Stage Deduplication Engine
+ *
+ * Stage 1: Exact Duplicate Removal
+ *   Merges identical findings (same file, line, rule, scanner) into 1 Canonical Finding,
+ *   populating FindingOccurrence and FindingEvidence records.
+ *
+ * Stage 2: Root-Cause Grouping
+ *   Groups separate occurrences of the SAME root cause (e.g. repeated leaked secret)
+ *   under one Canonical Finding with all occurrences preserved, without conflating distinct CWE issues.
+ */
 export async function deduplicateScanFindings(scanId: number): Promise<DeduplicationSummary> {
   const allFindings = await prisma.finding.findMany({
     where: { scanId },
-    include: { evidences: true },
+    include: {
+      evidences: true,
+      occurrences: true,
+    },
     orderBy: { id: 'asc' },
   });
 
   const totalBefore = allFindings.length;
-  const seenFingerprints = new Map<string, typeof allFindings[0]>();
   let mergedCount = 0;
 
-  // 1. Exact Fingerprint Deduplication
+  // =========================================================================
+  // STAGE 1: Exact Duplicate Removal
+  // =========================================================================
+  const seenFingerprints = new Map<string, typeof allFindings[0]>();
+
   for (const f of allFindings) {
-    if (!seenFingerprints.has(f.fingerprint)) {
-      seenFingerprints.set(f.fingerprint, f);
-    } else {
-      // Merge: attach evidence to the canonical finding and remove duplicate finding record
-      const canonical = seenFingerprints.get(f.fingerprint)!;
-      for (const ev of f.evidences) {
-        await prisma.findingEvidence.update({
-          where: { id: ev.id },
-          data: { findingId: canonical.id },
-        });
+    // Compute fresh normalized fingerprint
+    const fp = createFindingFingerprint({
+      targetId: scanId,
+      ruleId: f.sourceRuleId || f.title,
+      filePath: f.evidences[0]?.filePath || f.evidences[0]?.url,
+      startLine: f.evidences[0]?.lineStart,
+      sink: f.evidences[0]?.rawSnippet,
+      normalizedEvidence: f.evidences[0]?.evidenceSummary,
+    });
+
+    if (!seenFingerprints.has(fp)) {
+      seenFingerprints.set(fp, f);
+
+      // Ensure at least one FindingOccurrence exists for this canonical finding
+      if (!f.occurrences || f.occurrences.length === 0) {
+        await prisma.findingOccurrence.create({
+          data: {
+            findingId: f.id,
+            scanner: f.toolName,
+            ruleId: f.sourceRuleId || null,
+            filePath: f.evidences[0]?.filePath || f.evidences[0]?.url || 'global',
+            lineStart: f.evidences[0]?.lineStart || null,
+            lineEnd: f.evidences[0]?.lineEnd || null,
+            snippet: f.evidences[0]?.rawSnippet || null,
+            normalizedEvidence: f.evidences[0]?.evidenceSummary || null,
+          },
+        }).catch(() => null);
       }
-      await prisma.finding.delete({ where: { id: f.id } });
+    } else {
+      // Merge exact duplicate into canonical finding inside a transaction
+      const canonical = seenFingerprints.get(fp)!;
+
+      await prisma.$transaction(async (tx) => {
+        // 1. Move evidences to canonical finding
+        for (const ev of f.evidences) {
+          await tx.findingEvidence.update({
+            where: { id: ev.id },
+            data: {
+              findingId: canonical.id,
+              scanner: f.toolName,
+              ruleId: f.sourceRuleId || undefined,
+            },
+          });
+        }
+
+        // 2. Create or link FindingOccurrence
+        await tx.findingOccurrence.create({
+          data: {
+            findingId: canonical.id,
+            scanner: f.toolName,
+            ruleId: f.sourceRuleId || null,
+            filePath: f.evidences[0]?.filePath || f.evidences[0]?.url || 'global',
+            lineStart: f.evidences[0]?.lineStart || null,
+            lineEnd: f.evidences[0]?.lineEnd || null,
+            snippet: f.evidences[0]?.rawSnippet || null,
+            normalizedEvidence: f.evidences[0]?.evidenceSummary || null,
+          },
+        });
+
+        // 3. Combine tool names if different scanners reported the same finding
+        let updatedToolName = canonical.toolName;
+        if (!canonical.toolName.includes(f.toolName)) {
+          updatedToolName = `${canonical.toolName} & ${f.toolName}`;
+        }
+
+        // 4. Elevate confidence if duplicate has higher verification
+        const elevatedConf = (f.confidence === 'CONFIRMED' || canonical.confidence === 'CONFIRMED')
+          ? 'CONFIRMED'
+          : canonical.confidence;
+
+        const maxCvss = Math.max(canonical.cvssScore || 0, f.cvssScore || 0);
+
+        await tx.finding.update({
+          where: { id: canonical.id },
+          data: {
+            toolName: updatedToolName,
+            confidence: elevatedConf,
+            cvssScore: maxCvss > 0 ? maxCvss : undefined,
+          },
+        });
+
+        // 5. Delete duplicate finding
+        await tx.finding.delete({ where: { id: f.id } });
+      });
+
       mergedCount++;
     }
   }
 
-  // 2. Cross-Rule & Cross-Tool Semantic Deduplication on Identical Location/Line
-  // Collapses overlapping multi-tool findings (e.g. 4 email warnings on install.php line 27) into 1 canonical finding
-  const remainingFindings = await prisma.finding.findMany({
+  // =========================================================================
+  // STAGE 2: Root-Cause Grouping (Preserving Occurrences)
+  // =========================================================================
+  const postStage1Findings = await prisma.finding.findMany({
     where: { scanId },
-    include: { evidences: true },
+    include: {
+      evidences: true,
+      occurrences: true,
+    },
     orderBy: { id: 'asc' },
   });
 
-  const semanticGroups = new Map<string, typeof remainingFindings>();
-  for (const f of remainingFindings) {
-    const loc = (f.evidences[0]?.filePath || f.evidences[0]?.url || 'global').trim().toLowerCase();
-    const line = f.evidences[0]?.lineStart || 0;
-    const group = getSemanticCategoryGroup(f.category, f.title, f.cwe);
+  const rootCauseMap = new Map<string, typeof postStage1Findings>();
 
-    if (loc !== 'global' && line > 0) {
-      const key = `${loc}:${line}:${group}`;
-      if (!semanticGroups.has(key)) {
-        semanticGroups.set(key, []);
+  for (const f of postStage1Findings) {
+    const rootKey = getRootCauseGroupKey(f);
+    if (rootKey) {
+      if (!rootCauseMap.has(rootKey)) {
+        rootCauseMap.set(rootKey, []);
       }
-      semanticGroups.get(key)!.push(f);
+      rootCauseMap.get(rootKey)!.push(f);
     }
   }
 
-  for (const [, group] of semanticGroups) {
+  for (const [, group] of rootCauseMap) {
     if (group.length > 1) {
-      // Sort to find the highest severity finding as canonical
+      // Pick the canonical finding with highest severity or most complete evidence
       group.sort((a, b) => (SEVERITY_SCORES[b.severity.toUpperCase()] || 0) - (SEVERITY_SCORES[a.severity.toUpperCase()] || 0));
       const canonical = group[0];
       const duplicates = group.slice(1);
 
-      // Collect all tool names
-      const toolNames = new Set<string>([canonical.toolName]);
-      let isNeedsReview = canonical.confidence === 'NEEDS_REVIEW' || canonical.status === 'NEEDS_REVIEW';
+      await prisma.$transaction(async (tx) => {
+        const toolSet = new Set<string>(canonical.toolName.split(' & ').map(t => t.trim()));
 
-      for (const dup of duplicates) {
-        toolNames.add(dup.toolName);
-        if (dup.confidence === 'NEEDS_REVIEW' || dup.status === 'NEEDS_REVIEW') {
-          isNeedsReview = true;
-        }
+        for (const dup of duplicates) {
+          dup.toolName.split(' & ').forEach(t => toolSet.add(t.trim()));
 
-        // Re-link evidences to canonical
-        for (const ev of dup.evidences) {
-          await prisma.findingEvidence.update({
-            where: { id: ev.id },
+          // Move all occurrences to canonical finding
+          await tx.findingOccurrence.updateMany({
+            where: { findingId: dup.id },
             data: { findingId: canonical.id },
           });
+
+          // Move all evidences to canonical finding
+          for (const ev of dup.evidences) {
+            await tx.findingEvidence.update({
+              where: { id: ev.id },
+              data: {
+                findingId: canonical.id,
+                scanner: dup.toolName,
+                ruleId: dup.sourceRuleId || undefined,
+              },
+            });
+          }
+
+          // Delete duplicate finding row
+          await tx.finding.delete({ where: { id: dup.id } });
+          mergedCount++;
         }
 
-        // Remove duplicate finding
-        await prisma.finding.delete({ where: { id: dup.id } });
-        mergedCount++;
-      }
-
-      // Update canonical with combined tools, preserved confidence and linked related findings
-      const combinedTools = Array.from(toolNames).join(' & ');
-      const relatedList = duplicates.map(dup => ({
-        id: dup.id,
-        tool: dup.toolName,
-        title: dup.title,
-        sourceRuleId: dup.sourceRuleId,
-        cwe: dup.cwe,
-      }));
-
-      await prisma.finding.update({
-        where: { id: canonical.id },
-        data: {
-          toolName: combinedTools,
-          confidence: isNeedsReview ? 'POTENTIAL' : canonical.confidence,
-          verificationStatus: isNeedsReview ? 'NEEDS_REVIEW' : canonical.verificationStatus,
-          status: isNeedsReview ? 'NEEDS_REVIEW' : canonical.status,
-          relatedFindingsJson: JSON.stringify(relatedList),
-        },
-      });
-    }
-  }
-
-  // 3. Root-Cause Aggregation across identical vulnerability types
-  // Aggregates recurrent findings sharing the same root cause (e.g. repeated email disclosures or pattern warnings),
-  // while preserving all occurrences, line numbers, and snippets in evidences & relatedFindingsJson.
-  const postSemanticFindings = await prisma.finding.findMany({
-    where: { scanId },
-    include: { evidences: true },
-    orderBy: { id: 'asc' },
-  });
-
-  const rootCauseGroups = new Map<string, typeof postSemanticFindings>();
-  for (const f of postSemanticFindings) {
-    const loc = (f.evidences[0]?.filePath || 'global').trim().toLowerCase();
-    const rootKey = `${f.toolName}:${f.category || 'VULN'}:${f.title}:${loc}`;
-    if (!rootCauseGroups.has(rootKey)) {
-      rootCauseGroups.set(rootKey, []);
-    }
-    rootCauseGroups.get(rootKey)!.push(f);
-  }
-
-  for (const [, group] of rootCauseGroups) {
-    if (group.length > 1) {
-      const canonical = group[0];
-      const duplicates = group.slice(1);
-
-      const occurrencesList: Array<{ filePath: string; lineStart?: number; lineEnd?: number; snippet?: string }> = [];
-
-      // Add canonical's primary location
-      if (canonical.evidences[0]) {
-        occurrencesList.push({
-          filePath: canonical.evidences[0].filePath || canonical.evidences[0].url || 'unknown',
-          lineStart: canonical.evidences[0].lineStart || undefined,
-          lineEnd: canonical.evidences[0].lineEnd || undefined,
-          snippet: canonical.evidences[0].rawSnippet || undefined,
+        // Fetch all consolidated occurrences
+        const consolidatedOccurrences = await tx.findingOccurrence.findMany({
+          where: { findingId: canonical.id },
+          orderBy: { id: 'asc' },
         });
-      }
 
-      for (const dup of duplicates) {
-        for (const ev of dup.evidences) {
-          occurrencesList.push({
-            filePath: ev.filePath || ev.url || 'unknown',
-            lineStart: ev.lineStart || undefined,
-            lineEnd: ev.lineEnd || undefined,
-            snippet: ev.rawSnippet || undefined,
-          });
+        const occurrencesCount = consolidatedOccurrences.length;
+        const baseTitle = canonical.title.replace(/\s*\(\d+\s+occurrences.*?\)/i, '');
 
-          await prisma.findingEvidence.update({
-            where: { id: ev.id },
-            data: { findingId: canonical.id },
-          });
-        }
-
-        await prisma.finding.delete({ where: { id: dup.id } });
-        mergedCount++;
-      }
-
-      let existingRelated: any[] = [];
-      try {
-        if (canonical.relatedFindingsJson) {
-          const parsed = JSON.parse(canonical.relatedFindingsJson);
-          existingRelated = Array.isArray(parsed) ? parsed : (parsed.related || []);
-        }
-      } catch {}
-
-      const totalOccurrences = group.length;
-      await prisma.finding.update({
-        where: { id: canonical.id },
-        data: {
-          description: `${canonical.description || canonical.title} (${totalOccurrences} occurrences identified across source files)`,
-          relatedFindingsJson: JSON.stringify({
-            rootCauseCount: totalOccurrences,
-            occurrences: occurrencesList.slice(0, 100),
-            related: existingRelated,
-          }),
-        },
+        await tx.finding.update({
+          where: { id: canonical.id },
+          data: {
+            toolName: Array.from(toolSet).join(' & '),
+            description: `${canonical.description || baseTitle} (${occurrencesCount} occurrences identified across source files)`,
+            relatedFindingsJson: JSON.stringify({
+              rootCauseGroup: true,
+              totalOccurrences: occurrencesCount,
+              occurrences: consolidatedOccurrences.map(o => ({
+                id: o.id,
+                scanner: o.scanner,
+                ruleId: o.ruleId,
+                filePath: o.filePath,
+                line: o.lineStart,
+                snippet: o.snippet,
+              })),
+            }),
+          },
+        });
       });
     }
   }
 
-  // 4. Cross-Engine Correlation & Attack Path Verification
+  // =========================================================================
+  // STAGE 3: Cross-Engine Correlation & Attack Path Verification
+  // =========================================================================
   const correlatedFindings = await correlateAndValidateFindings(scanId);
 
   const finalFindings = await prisma.finding.count({ where: { scanId } });
+  const totalOccurrences = await prisma.findingOccurrence.count({
+    where: {
+      finding: { scanId },
+    },
+  });
 
   return {
     totalBefore,
     totalUnique: finalFindings,
     mergedDuplicates: mergedCount,
+    totalOccurrences: Math.max(totalOccurrences, finalFindings),
     correlatedFindings,
   };
 }
@@ -263,7 +401,6 @@ export async function correlateAndValidateFindings(scanId: number): Promise<numb
 
   let correlatedCount = 0;
 
-  // Group findings by category and location/endpoint
   for (const f of findings) {
     const isCodeQLTaint = f.toolName === 'CODEQL' || (f.sourceRuleId && f.sourceRuleId.startsWith('codeql.'));
     const isDAST = f.toolName === 'OWASP_ZAP' || f.toolName === 'NUCLEI';
@@ -272,7 +409,6 @@ export async function correlateAndValidateFindings(scanId: number): Promise<numb
     // Check for matching complementary findings in the same scan
     const correlatedPeer = findings.find(other => {
       if (other.id === f.id) return false;
-      // Match on same CWE or category
       const sameCwe = f.cwe && other.cwe && f.cwe === other.cwe;
       const sameCategory = f.category && other.category && f.category === other.category;
       return (sameCwe || sameCategory) && ((isDAST && other.toolName === 'CODEQL') || (isSAST && (other.toolName === 'OWASP_ZAP' || other.toolName === 'NUCLEI')));
@@ -294,16 +430,18 @@ export async function correlateAndValidateFindings(scanId: number): Promise<numb
       attackPathNote = `\n\n[Cross-Engine Correlation]: Confirmed by both ${f.toolName} and ${correlatedPeer.toolName}. Active attack surface maps directly to internal implementation.`;
       correlatedCount++;
 
-      let parsedRelated: any[] = [];
+      let parsedRelated: any = {};
       try {
         if (f.relatedFindingsJson) parsedRelated = JSON.parse(f.relatedFindingsJson);
       } catch {}
-      parsedRelated.push({
+      const existingRelated = Array.isArray(parsedRelated) ? parsedRelated : (parsedRelated.related || []);
+      existingRelated.push({
         id: correlatedPeer.id,
         tool: correlatedPeer.toolName,
         title: correlatedPeer.title,
         cwe: correlatedPeer.cwe,
       });
+      parsedRelated.related = existingRelated;
       updatedRelatedJson = JSON.stringify(parsedRelated);
     }
 
@@ -331,7 +469,6 @@ export async function compareWithPreviousScan(
   targetId: number,
   currentScanId: number
 ): Promise<CrossScanComparison> {
-  // Find the immediately preceding scan on the same target
   const previousScan = await prisma.scan.findFirst({
     where: {
       targetId,

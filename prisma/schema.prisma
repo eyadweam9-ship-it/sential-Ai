@@ -161,11 +161,14 @@ model Finding {
   remediation         String?           // Recommended text-only advice
   cwe                 String?
   cve                 String?
+  cvssScore           Float?
+  cvssVector          String?
   relatedFindingsJson String?           // JSON list of correlated findings for cross-tool intelligence
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
   scan                Scan              @relation(fields: [scanId], references: [id], onDelete: Cascade)
   evidences           FindingEvidence[]
+  occurrences         FindingOccurrence[]
   aiAnalyses          AIAnalysis[]
 }
 
@@ -180,8 +183,24 @@ model FindingEvidence {
   rawSnippet      String?
   httpMethod      String?
   paramName       String?
+  scanner         String?
+  ruleId          String?
   createdAt       DateTime  @default(now())
   finding         Finding   @relation(fields: [findingId], references: [id], onDelete: Cascade)
+}
+
+model FindingOccurrence {
+  id                 Int       @id @default(autoincrement())
+  findingId          Int
+  scanner            String    // SEMGREP, GITLEAKS, OWASP_ZAP, etc.
+  ruleId             String?
+  filePath           String?
+  lineStart          Int?
+  lineEnd            Int?
+  snippet            String?
+  normalizedEvidence String?
+  createdAt          DateTime  @default(now())
+  finding            Finding   @relation(fields: [findingId], references: [id], onDelete: Cascade)
 }
 
 model AIAnalysis {

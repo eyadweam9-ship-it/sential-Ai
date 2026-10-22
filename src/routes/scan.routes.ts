@@ -1206,7 +1206,7 @@ scanRouter.get('/findings/list', async (req: Request, res: Response): Promise<vo
         scanId: targetScanId,
         status: { not: 'FALSE_POSITIVE' },
       },
-      include: { evidences: true, aiAnalyses: true },
+      include: { evidences: true, occurrences: true, aiAnalyses: true },
       orderBy: { id: 'desc' },
     });
 
@@ -1217,6 +1217,22 @@ scanRouter.get('/findings/list', async (req: Request, res: Response): Promise<vo
       try {
         if (f.relatedFindingsJson) relatedList = JSON.parse(f.relatedFindingsJson);
       } catch {}
+
+      const occurrences = (f.occurrences && f.occurrences.length > 0)
+        ? f.occurrences
+        : f.evidences.map((e, idx) => ({
+            id: idx + 1,
+            findingId: f.id,
+            scanner: e.scanner || f.toolName,
+            ruleId: e.ruleId || f.sourceRuleId,
+            filePath: e.filePath || e.url || '/api/endpoint',
+            lineStart: e.lineStart,
+            lineEnd: e.lineEnd,
+            snippet: e.rawSnippet,
+            normalizedEvidence: e.evidenceSummary,
+          }));
+
+      const finalCvss = f.cvssScore ?? (sev === 'CRITICAL' ? 9.8 : sev === 'HIGH' ? 7.5 : sev === 'MEDIUM' ? 5.3 : 3.1);
 
       return {
         id: f.id,
@@ -1246,8 +1262,10 @@ scanRouter.get('/findings/list', async (req: Request, res: Response): Promise<vo
         findingStatus: f.status || 'CONFIRMED',
         cwe: f.cwe || 'CWE-200',
         cwe_id: f.cwe || 'CWE-200',
-        cvss_score: sev === 'CRITICAL' ? 9.8 : sev === 'HIGH' ? 7.5 : sev === 'MEDIUM' ? 5.3 : 3.1,
-        cvss: sev === 'CRITICAL' ? '9.8' : sev === 'HIGH' ? '7.5' : sev === 'MEDIUM' ? '5.3' : '3.1',
+        cvss_score: finalCvss,
+        cvss: String(finalCvss),
+        cvssScore: finalCvss,
+        cvssVector: f.cvssVector || 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N',
         status: f.status === 'NEEDS_REVIEW' ? 'Needs Review' : (isScanOnly ? 'Detected' : 'Open'),
         category: f.category || (isDev ? 'Static Code Analysis (SAST)' : 'Web Application Security'),
         scanCategory: determineScanCategory(f.toolName, f.category),
@@ -1258,6 +1276,9 @@ scanRouter.get('/findings/list', async (req: Request, res: Response): Promise<vo
         remediation: f.remediation,
         related_findings: relatedList,
         evidences: f.evidences,
+        occurrences,
+        occurrencesCount: occurrences.length,
+        occurrences_count: occurrences.length,
       };
     });
 
@@ -1664,7 +1685,7 @@ scanRouter.get('/:id/findings', async (req: Request, res: Response): Promise<voi
     const scanId = Number(req.params.id);
     let findings = await prisma.finding.findMany({
       where: { scanId, status: { not: 'FALSE_POSITIVE' } },
-      include: { evidences: true, aiAnalyses: true },
+      include: { evidences: true, occurrences: true, aiAnalyses: true },
       orderBy: { id: 'desc' },
     });
 
@@ -1687,6 +1708,8 @@ scanRouter.get('/:id/findings', async (req: Request, res: Response): Promise<voi
           remediation: v.remediation,
           cwe: 'CWE-200',
           evidences: [{ id: v.id, url: v.filePath || '/', filePath: v.filePath || '/', evidenceSummary: v.description }],
+          occurrences: [{ id: v.id, scanner: 'OWASP_ZAP', filePath: v.filePath || '/', lineStart: null, snippet: null }],
+          occurrencesCount: 1,
           aiAnalyses: [],
         }));
         res.status(200).json({
@@ -1705,6 +1728,23 @@ scanRouter.get('/:id/findings', async (req: Request, res: Response): Promise<voi
       try {
         if (f.relatedFindingsJson) relatedList = JSON.parse(f.relatedFindingsJson);
       } catch {}
+
+      const occurrences = (f.occurrences && f.occurrences.length > 0)
+        ? f.occurrences
+        : f.evidences.map((e, idx) => ({
+            id: idx + 1,
+            findingId: f.id,
+            scanner: e.scanner || f.toolName,
+            ruleId: e.ruleId || f.sourceRuleId,
+            filePath: e.filePath || e.url || '/api/endpoint',
+            lineStart: e.lineStart,
+            lineEnd: e.lineEnd,
+            snippet: e.rawSnippet,
+            normalizedEvidence: e.evidenceSummary,
+          }));
+
+      const sev = f.severity.toUpperCase();
+      const finalCvss = f.cvssScore ?? (sev === 'CRITICAL' ? 9.8 : sev === 'HIGH' ? 7.5 : sev === 'MEDIUM' ? 5.3 : 3.1);
 
       return {
         ...f,
@@ -1725,9 +1765,15 @@ scanRouter.get('/:id/findings', async (req: Request, res: Response): Promise<voi
         filePath: ev?.filePath || null,
         lineStart: ev?.lineStart || null,
         lineEnd: ev?.lineEnd || null,
+        cvss_score: finalCvss,
+        cvssScore: finalCvss,
+        cvssVector: f.cvssVector || 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N',
         scanCategory: determineScanCategory(f.toolName, f.category),
         scan_category: determineScanCategory(f.toolName, f.category),
         related_findings: relatedList,
+        occurrences,
+        occurrencesCount: occurrences.length,
+        occurrences_count: occurrences.length,
       };
     });
 

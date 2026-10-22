@@ -1,7 +1,8 @@
 import crypto from 'crypto';
 import { prisma } from '../config/db';
 import { RawToolFinding } from '../tools/security-tool.interface';
-import { validateFindingEvidence } from './evidence-validator.service';
+import { evaluateFindingRisk } from './severity-engine.service';
+import { createFindingFingerprint, normalizeFilePath } from './findings-deduplication.service';
 
 export interface NormalizedFindingResult {
   id: number;
@@ -18,22 +19,28 @@ export interface NormalizedFindingResult {
   remediation?: string | null;
   cwe?: string | null;
   cve?: string | null;
+  cvssScore?: number | null;
+  cvssVector?: string | null;
 }
 
 export function generateFindingFingerprint(finding: RawToolFinding): string {
-  const loc = (finding.filePath || finding.targetUrl || 'global').trim().toLowerCase();
-  const rule = (finding.sourceRuleId || finding.title).trim();
-  const line = finding.lineStart || 0;
-  const raw = `${finding.category}:${rule}:${loc}:${line}`;
-  return crypto.createHash('sha256').update(raw).digest('hex');
+  return createFindingFingerprint({
+    targetId: finding.targetUrl || 'default',
+    ruleId: finding.sourceRuleId || finding.title,
+    filePath: finding.filePath || finding.targetUrl,
+    startLine: finding.lineStart,
+    sink: finding.rawSnippet,
+    normalizedEvidence: finding.evidenceSummary,
+  });
 }
 
 export function sanitizeEvidence(text?: string): string {
   if (!text) return '';
-  // Redact third-party cloud provider tokens if dumped, while preserving detected project credentials for auditor verification
+  // Redact credentials, API keys and cloud tokens from evidence
   let sanitized = text
-    .replace(/(AKIA[0-9A-Z]{16})/g, '$1 [REDACTED]')
-    .replace(/(ghp_[A-Za-z0-9]{36})/g, 'ghp_********************************');
+    .replace(/(AKIA[0-9A-Z]{16})/g, '[REDACTED_AWS_KEY]')
+    .replace(/(ghp_[A-Za-z0-9]{36})/g, 'ghp_********************************')
+    .replace(/(password|passwd|pwd|secret|token|api[_-]?key)\s*[:=]\s*['"][^'"]+['"]/gi, '$1="[REDACTED]"');
 
   if (sanitized.length > 2000) {
     sanitized = sanitized.slice(0, 1997) + '...';
@@ -49,26 +56,36 @@ export async function normalizeAndSaveFindings(
   const saved: NormalizedFindingResult[] = [];
 
   for (const raw of rawFindings) {
-    // Stage 2: Evidence Validation & False Positive Filtering
-    const validation = validateFindingEvidence(raw);
-    if (validation.verdict === 'DROP_FALSE_POSITIVE') {
-      // Discard verified false positives so they never pollute the findings register or distort risk scores
+    // Stage 1: Severity Engine & False Positive Evaluation
+    const riskEval = evaluateFindingRisk(raw);
+
+    // Drop proven False Positives so they do not pollute the register or distort risk metrics
+    if (riskEval.isFalsePositive || riskEval.workflowStatus === 'FALSE_POSITIVE') {
       continue;
     }
 
-    const title = validation.adjustedTitle || raw.title;
-    const remediation = validation.adjustedRemediation || raw.remediation || null;
-    const confidence = validation.confidence || raw.confidence || 'MEDIUM';
-    const status = validation.status || 'OPEN';
+    const title = raw.title;
+    const remediation = raw.remediation || null;
+    const confidence = riskEval.confidence;
+    const status = riskEval.workflowStatus;
+    const severity = riskEval.severity;
 
-    const normalizedRaw: RawToolFinding = {
-      ...raw,
-      title,
-      remediation: remediation || undefined,
-      confidence,
-    };
+    const fingerprint = createFindingFingerprint({
+      targetId: scanId,
+      ruleId: raw.sourceRuleId || raw.title,
+      filePath: raw.filePath || raw.targetUrl,
+      startLine: raw.lineStart,
+      sink: raw.rawSnippet,
+      normalizedEvidence: raw.evidenceSummary,
+    });
 
-    const fingerprint = generateFindingFingerprint(normalizedRaw);
+    // Determine verification status
+    const verificationStatus =
+      status === 'CONFIRMED'
+        ? 'VERIFIED'
+        : status === 'NEEDS_REVIEW'
+        ? 'NEEDS_REVIEW'
+        : 'UNVERIFIED';
 
     // Create Unified Finding Record
     const findingRecord = await prisma.finding.create({
@@ -78,18 +95,34 @@ export async function normalizeAndSaveFindings(
         sourceRuleId: raw.sourceRuleId || null,
         title,
         description: raw.evidenceSummary,
-        severity: validation.adjustedSeverity || raw.severity,
+        severity,
         confidence,
-        verificationStatus: validation.verificationStatus || raw.verificationStatus || 'UNVERIFIED',
+        verificationStatus,
         category: raw.category || 'VULNERABILITY',
         fingerprint,
         status,
         remediation,
         cwe: raw.cwe || null,
         cve: raw.cve || null,
+        cvssScore: riskEval.cvssScore,
+        cvssVector: riskEval.cvssVector,
         relatedFindingsJson: raw.relatedFindings ? JSON.stringify(raw.relatedFindings) : null,
       },
     });
+
+    // Create First FindingOccurrence Record
+    await prisma.findingOccurrence.create({
+      data: {
+        findingId: findingRecord.id,
+        scanner: toolName,
+        ruleId: raw.sourceRuleId || null,
+        filePath: raw.filePath || raw.targetUrl || null,
+        lineStart: raw.lineStart || null,
+        lineEnd: raw.lineEnd || null,
+        snippet: raw.rawSnippet ? sanitizeEvidence(raw.rawSnippet) : null,
+        normalizedEvidence: sanitizeEvidence(raw.evidenceSummary),
+      },
+    }).catch(() => null);
 
     // Create Linked Evidence Record
     await prisma.findingEvidence.create({
@@ -101,16 +134,18 @@ export async function normalizeAndSaveFindings(
         lineEnd: raw.lineEnd || null,
         evidenceSummary: sanitizeEvidence(raw.evidenceSummary),
         rawSnippet: raw.rawSnippet ? sanitizeEvidence(raw.rawSnippet) : null,
+        scanner: toolName,
+        ruleId: raw.sourceRuleId || null,
       },
     });
 
-    // Also mirror to legacy Vulnerability table for seamless backward compatibility with existing views
+    // Mirror to legacy table for backward compatibility
     await prisma.vulnerability.create({
       data: {
         scanId,
         title,
         description: raw.evidenceSummary,
-        severity: raw.severity,
+        severity,
         status,
         remediation,
         filePath: raw.filePath || raw.targetUrl || null,

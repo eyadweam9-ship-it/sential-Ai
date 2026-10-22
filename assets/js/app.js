@@ -4682,6 +4682,7 @@ const App = {
             const medCount = this.findingsData.filter(f => (f.severity || '').toUpperCase() === 'MEDIUM').length;
             const lowCount = this.findingsData.filter(f => (f.severity || '').toUpperCase() === 'LOW').length;
             const totalCount = this.findingsData.length;
+            const totalOccurrences = this.findingsData.reduce((acc, f) => acc + (f.occurrencesCount || (f.occurrences ? f.occurrences.length : 1)), 0);
 
             const cEl = document.getElementById('kpi-critical');
             const hEl = document.getElementById('kpi-high');
@@ -4692,7 +4693,7 @@ const App = {
 
             const countEl = document.getElementById('findings-toolbar-count');
             if (countEl) {
-                countEl.textContent = `${totalCount} finding${totalCount === 1 ? '' : 's'} cataloged across assessment targets`;
+                countEl.textContent = `${totalCount} unique finding${totalCount === 1 ? '' : 's'} (${totalOccurrences} raw occurrences) cataloged across targets`;
             }
 
             // Dynamic Security Score Calculation
@@ -5038,6 +5039,10 @@ const App = {
             ? (finding.status === 'confirmed' || finding.status === 'Fix ready' || finding.status === 'Fixed' ? 'Detected' : (finding.status ? finding.status.charAt(0).toUpperCase() + finding.status.slice(1) : 'Detected')) 
             : (finding.status || 'Open');
 
+        const occurrences = (finding.occurrences && finding.occurrences.length > 0)
+            ? finding.occurrences
+            : (finding.related_findings?.occurrences || (finding.evidences && finding.evidences.length > 0 ? finding.evidences : []));
+
         return `
             <button type="button" class="back-link" onclick="App.navigate('dashboard')">
                 ${Icons.get('arrow', 'size-4 rotate-180')} Back to findings
@@ -5049,6 +5054,7 @@ const App = {
                         <span class="severity-badge ${sevClass}" id="finding-sev-badge">${sevLabel}</span>
                         <span class="mono-tag" id="finding-cwe-text">${escapeHtml(cwe)}</span>
                         <span class="mono-tag" id="finding-cvss-text">CVSS ${escapeHtml(cvss)}</span>
+                        <span class="mono-tag" style="background:#eff6ff; color:#2563eb; font-weight:700;">${occurrences.length} Occurrence${occurrences.length === 1 ? '' : 's'}</span>
                     </div>
                     <h1 id="finding-title-text">${escapeHtml(title)}</h1>
                     <p id="finding-desc-p">${escapeHtml(desc)}</p>
@@ -5106,6 +5112,37 @@ const App = {
                                     </button>
                                 </div>
                             </section>
+
+                            ${occurrences.length > 1 ? `
+                                <section class="detail-section">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                        <h2 style="margin:0;">Cataloged occurrences (${occurrences.length} distinct locations)</h2>
+                                        <span style="font-size:11px; color:#64748b; font-weight:600;">Consolidated Root-Cause Grouping</span>
+                                    </div>
+                                    <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; overflow-x:auto;">
+                                        <table style="width:100%; border-collapse:collapse; font-size:12px; text-align:left;">
+                                            <thead style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
+                                                <tr>
+                                                    <th style="padding:8px 12px; color:#475569; font-weight:700;">#</th>
+                                                    <th style="padding:8px 12px; color:#475569; font-weight:700;">File / Location</th>
+                                                    <th style="padding:8px 12px; color:#475569; font-weight:700;">Line</th>
+                                                    <th style="padding:8px 12px; color:#475569; font-weight:700;">Scanner Tool</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                ${occurrences.map((occ, idx) => `
+                                                    <tr style="border-bottom:1px solid #f1f5f9;">
+                                                        <td style="padding:8px 12px; color:#94a3b8; font-weight:600;">${idx + 1}</td>
+                                                        <td style="padding:8px 12px; font-family:monospace; color:#1e293b; font-weight:600;">${escapeHtml(occ.filePath || occ.url || '/')}</td>
+                                                        <td style="padding:8px 12px; color:#64748b;">${occ.lineStart || occ.line ? `Line ${occ.lineStart || occ.line}` : '—'}</td>
+                                                        <td style="padding:8px 12px;"><span class="badge" style="background:#eff6ff; color:#2563eb; font-size:10px; padding:2px 6px; border-radius:4px; font-weight:700;">${escapeHtml(occ.scanner || finding.tool || 'Scanner')}</span></td>
+                                                    </tr>
+                                                `).join('')}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </section>
+                            ` : ''}
 
                             <section class="detail-section">
                                 <h2>Recommended remediation (Guidance only)</h2>
