@@ -2168,11 +2168,19 @@ const App = {
     },
 
     triggerFileInput() {
-        document.getElementById('target-file-input')?.click();
+        const input = document.getElementById('target-file-input');
+        if (input) {
+            input.value = '';
+            input.click();
+        }
     },
 
     triggerFolderInput() {
-        document.getElementById('target-folder-input')?.click();
+        const input = document.getElementById('target-folder-input');
+        if (input) {
+            input.value = '';
+            input.click();
+        }
     },
 
     async handleFileSelect(event) {
@@ -2188,7 +2196,7 @@ const App = {
         const first = files[0];
         const folderName = first.webkitRelativePath ? first.webkitRelativePath.split('/')[0] : 'project_source';
         this.scanState.isUploading = true;
-        showToast(`Analyzing folder "${folderName}"...`, 'info');
+        showToast(`Analyzing folder "${folderName}" (${files.length} items found)...`, 'info');
 
         try {
             const formData = new FormData();
@@ -2210,16 +2218,16 @@ const App = {
                 formData.append('files', f);
                 formData.append('paths', relPath);
                 addedCount++;
-                if (addedCount >= 600) break; // reasonable max source files
+                if (addedCount >= 950) break; // support up to 950 files
             }
 
             if (addedCount === 0) {
-                showToast('No source code files found in selected folder.', 'error');
+                showToast(`No source code files found in "${folderName}". (Cache and node_modules are excluded).`, 'error');
                 this.scanState.isUploading = false;
                 return;
             }
 
-            showToast(`Uploading ${addedCount} source files from "${folderName}" for line-by-line audit...`, 'info');
+            showToast(`Uploading ${addedCount} source files from "${folderName}"...`, 'info');
             const res = await API.uploadFolder(formData);
 
             if (res.file) {
@@ -2231,13 +2239,14 @@ const App = {
                     filesCount: res.file.filesCount || addedCount,
                     totalLines: res.file.totalLines || 0
                 };
-                showToast(`Project folder "${folderName}" uploaded: ${this.scanState.uploadedFile.filesCount} files (${(this.scanState.uploadedFile.totalLines || 0).toLocaleString()} lines) indexed for deep SAST!`, 'success');
+                showToast(`Project folder "${folderName}" uploaded: ${this.scanState.uploadedFile.filesCount} files (${(this.scanState.uploadedFile.totalLines || 0).toLocaleString()} lines) ready for scan!`, 'success');
             }
         } catch (err) {
             console.error('Folder upload error:', err);
             showToast(err.message || 'Failed to upload project folder', 'error');
         } finally {
             this.scanState.isUploading = false;
+            try { event.target.value = ''; } catch {}
             try {
                 if (this.scanState.uploadedFile) {
                     localStorage.setItem('sential_staged_file', JSON.stringify(this.scanState.uploadedFile));
