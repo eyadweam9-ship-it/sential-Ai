@@ -328,12 +328,12 @@ const App = {
         },
         confirmedAuthorization: false,
         showConfirmModal: false,
-        currentScanId: 1,
-        progress: 64,
+        currentScanId: null,
+        progress: 0,
         timer: null
     },
-    findingsData: [...FIGMA_FINDINGS],
-    selectedFindingId: 1,
+    findingsData: [],
+    selectedFindingId: null,
     findingTab: 'overview', // 'overview' | 'request' | 'fix'
     dashboardViewMode: 'standard', // 'standard' or 'sheet'
 
@@ -1131,7 +1131,12 @@ const App = {
     startNewAssessment() {
         try {
             localStorage.removeItem('sentinel_history_all_cleared');
+            localStorage.removeItem('sential_staged_file');
         } catch (e) {}
+        this.findingsData = [];
+        this.selectedFindingId = null;
+        this.scanState.currentScanId = null;
+        this.scanState.uploadedFile = null;
         this.scanState.name = '';
         this.scanState.url = '';
         this.scanState.confirmedAuthorization = false;
@@ -3722,6 +3727,8 @@ const App = {
             if (res.scan && res.scan.id) {
                 this.scanState.currentScanId = res.scan.id;
             }
+            this.findingsData = [];
+            this.selectedFindingId = null;
 
             this.scanState.maxUnlockedStep = Math.max(this.scanState.maxUnlockedStep || 1, 4);
             showToast('Security assessment initialized and authorized!', 'success');
@@ -4531,16 +4538,6 @@ const App = {
     },
 
     async loadDashboardData() {
-        if (!this.findingsData || this.findingsData.length === 0) {
-            this.findingsData = [...FIGMA_FINDINGS];
-        }
-
-        if (this.dashboardViewMode === 'sheet') {
-            GoogleSheetView.init(this.findingsData);
-        } else {
-            this.renderStandardRows(this.findingsData);
-        }
-
         let scanId = this.scanState.currentScanId;
         if (!scanId) {
             try {
@@ -4552,7 +4549,7 @@ const App = {
             } catch (e) {}
         }
 
-        // 1. Fetch Multi-Tool Task Matrix
+        // 1. Fetch Multi-Tool Task Matrix strictly for this scan
         if (scanId) {
             try {
                 const taskRes = await API.getScanTasks(scanId);
@@ -4597,64 +4594,67 @@ const App = {
             }
         }
 
-        // 2. Fetch Findings from database
+        // 2. Fetch Findings strictly for this scan
         try {
-            const findingsRes = scanId ? await API.getScanFindings(scanId).catch(() => null) : null;
-            const res = (findingsRes && Array.isArray(findingsRes.findings) && findingsRes.findings.length > 0) 
-                ? findingsRes 
-                : await API.getFindings().catch(() => null);
-
-            if (res && Array.isArray(res.findings)) {
-                this.findingsData = res.findings;
-                const criticalCount = this.findingsData.filter(f => (f.severity || '').toUpperCase() === 'CRITICAL').length;
-                const highCount = this.findingsData.filter(f => (f.severity || '').toUpperCase() === 'HIGH').length;
-                const medCount = this.findingsData.filter(f => (f.severity || '').toUpperCase() === 'MEDIUM').length;
-                const lowCount = this.findingsData.filter(f => (f.severity || '').toUpperCase() === 'LOW').length;
-                const totalCount = this.findingsData.length;
-
-                const cEl = document.getElementById('kpi-critical');
-                const hEl = document.getElementById('kpi-high');
-                const tEl = document.getElementById('kpi-total');
-                if (cEl) cEl.textContent = criticalCount;
-                if (hEl) hEl.textContent = highCount;
-                if (tEl) tEl.textContent = totalCount;
-
-                const countEl = document.getElementById('findings-toolbar-count');
-                if (countEl) {
-                    countEl.textContent = `${totalCount} finding${totalCount === 1 ? '' : 's'} cataloged across assessment targets`;
-                }
-
-                // Dynamic Security Score Calculation
-                const scoreValEl = document.getElementById('dashboard-security-score');
-                const scoreStatusEl = document.getElementById('dashboard-score-status');
-                const scoreDescEl = document.getElementById('dashboard-score-desc');
-                if (scoreValEl && scoreStatusEl) {
-                    let calcScore = 100 - (criticalCount * 25 + highCount * 15 + medCount * 8 + lowCount * 3);
-                    calcScore = Math.max(15, Math.min(100, calcScore));
-                    scoreValEl.textContent = calcScore;
-                    if (calcScore >= 90) {
-                        scoreStatusEl.className = 'status status-safe';
-                        scoreStatusEl.textContent = 'Clean & Secure';
-                        if (scoreDescEl) scoreDescEl.textContent = 'Zero critical or high-severity vulnerabilities detected.';
-                    } else if (calcScore >= 70) {
-                        scoreStatusEl.className = 'status status-warning';
-                        scoreStatusEl.textContent = 'Needs attention';
-                        if (scoreDescEl) scoreDescEl.innerHTML = `Identified <b class="text-slate-700">${totalCount} findings</b> requiring security review.`;
-                    } else {
-                        scoreStatusEl.className = 'status status-low';
-                        scoreStatusEl.textContent = 'High risk';
-                        if (scoreDescEl) scoreDescEl.textContent = 'Critical issues identified requiring immediate remediation.';
-                    }
-                }
-
-                if (this.dashboardViewMode === 'sheet') {
-                    GoogleSheetView.init(this.findingsData);
-                } else {
-                    this.renderStandardRows(this.findingsData);
+            let scanFindings = [];
+            if (scanId) {
+                const findingsRes = await API.getScanFindings(scanId).catch(() => null);
+                if (findingsRes && Array.isArray(findingsRes.findings)) {
+                    scanFindings = findingsRes.findings;
                 }
             }
+            this.findingsData = scanFindings;
+
+            const criticalCount = this.findingsData.filter(f => (f.severity || '').toUpperCase() === 'CRITICAL').length;
+            const highCount = this.findingsData.filter(f => (f.severity || '').toUpperCase() === 'HIGH').length;
+            const medCount = this.findingsData.filter(f => (f.severity || '').toUpperCase() === 'MEDIUM').length;
+            const lowCount = this.findingsData.filter(f => (f.severity || '').toUpperCase() === 'LOW').length;
+            const totalCount = this.findingsData.length;
+
+            const cEl = document.getElementById('kpi-critical');
+            const hEl = document.getElementById('kpi-high');
+            const tEl = document.getElementById('kpi-total');
+            if (cEl) cEl.textContent = criticalCount;
+            if (hEl) hEl.textContent = highCount;
+            if (tEl) tEl.textContent = totalCount;
+
+            const countEl = document.getElementById('findings-toolbar-count');
+            if (countEl) {
+                countEl.textContent = `${totalCount} finding${totalCount === 1 ? '' : 's'} cataloged across assessment targets`;
+            }
+
+            // Dynamic Security Score Calculation
+            const scoreValEl = document.getElementById('dashboard-security-score');
+            const scoreStatusEl = document.getElementById('dashboard-score-status');
+            const scoreDescEl = document.getElementById('dashboard-score-desc');
+            if (scoreValEl && scoreStatusEl) {
+                let calcScore = 100 - (criticalCount * 25 + highCount * 15 + medCount * 8 + lowCount * 3);
+                calcScore = Math.max(15, Math.min(100, calcScore));
+                scoreValEl.textContent = calcScore;
+                if (calcScore >= 90) {
+                    scoreStatusEl.className = 'status status-safe';
+                    scoreStatusEl.textContent = 'Clean & Secure';
+                    if (scoreDescEl) scoreDescEl.textContent = totalCount === 0 ? 'Zero vulnerabilities detected. Assessment passed with 100% score.' : 'Zero critical or high-severity vulnerabilities detected.';
+                } else if (calcScore >= 70) {
+                    scoreStatusEl.className = 'status status-warning';
+                    scoreStatusEl.textContent = 'Needs attention';
+                    if (scoreDescEl) scoreDescEl.innerHTML = `Identified <b class="text-slate-700">${totalCount} findings</b> requiring security review.`;
+                } else {
+                    scoreStatusEl.className = 'status status-low';
+                    scoreStatusEl.textContent = 'High risk';
+                    if (scoreDescEl) scoreDescEl.textContent = 'Critical issues identified requiring immediate remediation.';
+                }
+            }
+
+            if (this.dashboardViewMode === 'sheet') {
+                GoogleSheetView.init(this.findingsData);
+            } else {
+                this.renderStandardRows(this.findingsData);
+            }
         } catch (e) {
-            console.warn('API findings load error:', e);
+            console.warn('Scan findings load error:', e);
+            this.findingsData = [];
+            this.renderStandardRows([]);
         }
     },
 
@@ -4703,7 +4703,7 @@ const App = {
             return;
         }
 
-        const list = (findings && findings.length > 0) ? findings : FIGMA_FINDINGS;
+        const list = Array.isArray(findings) ? findings : [];
         const isScanOnly = this.scanState.scanType === 'scan_only';
 
         target.innerHTML = list.map(f => {
@@ -4781,9 +4781,23 @@ const App = {
         const isScanOnly = this.scanState.scanType === 'scan_only';
         const tab = (isScanOnly && this.findingTab === 'fix') ? 'overview' : (this.findingTab || 'overview');
         const finding = (this.findingsData && this.findingsData.find(f => f.id == this.selectedFindingId))
-                     || (FIGMA_FINDINGS.find(f => f.id == this.selectedFindingId))
-                     || (this.findingsData && this.findingsData[0])
-                     || FIGMA_FINDINGS[0];
+                     || (this.findingsData && this.findingsData[0]);
+
+        if (!finding) {
+            return `
+                <button type="button" class="back-link" onclick="App.navigate('dashboard')">
+                    ${Icons.get('arrow', 'size-4 rotate-180')} Back to findings
+                </button>
+                <div style="padding: 3rem 1.5rem; text-align: center; background: #ffffff; border-radius: 8px; border: 1px dashed #cbd5e1; margin-top: 1.5rem;">
+                    <div style="font-size: 2rem; margin-bottom: 0.5rem; color: #10b981;">${Icons.get('check', 'size-8 inline-block')}</div>
+                    <b style="color: #0f172a; font-size: 1.1rem; display: block; font-weight: 700;">No Finding Selected or No Vulnerabilities</b>
+                    <p style="font-size: 0.85rem; color: #64748b; margin-top: 0.5rem;">This assessment scan completed with zero detected vulnerabilities or no finding was selected.</p>
+                    <button type="button" class="button button-primary" style="margin-top: 1rem;" onclick="App.navigate('dashboard')">
+                        Return to Dashboard
+                    </button>
+                </div>
+            `;
+        }
 
         const sev = (finding.severity || finding.sev || 'Medium').toLowerCase();
         const sevClass = sev === 'critical' ? 'critical' : sev === 'high' ? 'high' : sev === 'medium' ? 'medium' : 'low';
@@ -5021,9 +5035,11 @@ const App = {
     },
 
     async loadFindingDetail(id) {
+        const targetId = id || this.selectedFindingId;
+        if (!targetId) return;
         try {
-            const res = await API.getFindingDetail(id || this.selectedFindingId || 1);
-            if (!res.finding) return;
+            const res = await API.getFindingDetail(targetId);
+            if (!res || !res.finding) return;
 
             const f = res.finding;
             const titleEl = document.getElementById('finding-title-text');
@@ -5090,8 +5106,7 @@ const App = {
     },
 
     async markFindingFixed() {
-        const finding = (this.findingsData && this.findingsData.find(f => f.id == this.selectedFindingId))
-                     || (FIGMA_FINDINGS.find(f => f.id == this.selectedFindingId));
+        const finding = this.findingsData && this.findingsData.find(f => f.id == this.selectedFindingId);
         if (finding) {
             finding.status = 'Fixed';
         }
@@ -5152,13 +5167,13 @@ const App = {
         const targetName = isDev
             ? (this.scanState.uploadedFile?.name || 'Local Code Repository')
             : targetUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
-        const scanId = this.scanState.currentScanId || 24;
+        const scanId = this.scanState.currentScanId || 'N/A';
         const env = (this.scanState.environment || 'staging').toUpperCase();
         const mode = (this.scanState.scanType || 'scan_only') === 'scan_only' ? 'Scan Only' : 'Full Lifecycle';
 
-        const findings = (this.findingsData && Array.isArray(this.findingsData) && this.findingsData.length > 0)
+        const findings = (this.findingsData && Array.isArray(this.findingsData))
             ? this.findingsData
-            : FIGMA_FINDINGS;
+            : [];
 
         const critCount = findings.filter(f => (f.severity || f.sev || '').toUpperCase() === 'CRITICAL').length;
         const highCount = findings.filter(f => (f.severity || f.sev || '').toUpperCase() === 'HIGH').length;

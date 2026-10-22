@@ -10,10 +10,26 @@ export const findingsRouter = Router();
  */
 findingsRouter.get('/list', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { scanId, toolName, severity, status } = req.query;
+    const rawScanId = req.query.scanId || req.query.scan_id;
+    const { toolName, severity, status } = req.query;
 
-    const whereClause: any = {};
-    if (scanId) whereClause.scanId = Number(scanId);
+    let targetScanId: number | null = rawScanId ? Number(rawScanId) : null;
+    if (!targetScanId || isNaN(targetScanId)) {
+      const latestScan = await prisma.scan.findFirst({ orderBy: { id: 'desc' } });
+      targetScanId = latestScan ? latestScan.id : null;
+    }
+
+    if (!targetScanId) {
+      res.status(200).json({
+        success: true,
+        count: 0,
+        findings: [],
+        summary: { security_score: 100, critical: 0, high: 0, medium: 0, low: 0, resolved: 0 },
+      });
+      return;
+    }
+
+    const whereClause: any = { scanId: targetScanId };
     if (toolName) whereClause.toolName = String(toolName).toUpperCase();
     if (severity) whereClause.severity = String(severity).toUpperCase();
     if (status) whereClause.status = String(status).toUpperCase();
@@ -27,14 +43,98 @@ findingsRouter.get('/list', async (req: Request, res: Response): Promise<void> =
       orderBy: { id: 'desc' },
     });
 
+    const criticalCount = findings.filter((f) => f.severity.toUpperCase() === 'CRITICAL').length;
+    const highCount = findings.filter((f) => f.severity.toUpperCase() === 'HIGH').length;
+    const mediumCount = findings.filter((f) => f.severity.toUpperCase() === 'MEDIUM').length;
+    const lowCount = findings.filter((f) => f.severity.toUpperCase() === 'LOW').length;
+    const resolvedCount = findings.filter((f) => f.status.toUpperCase() === 'FIXED').length;
+
+    let calcScore = 100 - (criticalCount * 25 + highCount * 15 + mediumCount * 8 + lowCount * 3);
+    calcScore = Math.max(15, Math.min(100, calcScore));
+
     res.status(200).json({
       success: true,
       count: findings.length,
       findings,
+      summary: {
+        security_score: calcScore,
+        critical: criticalCount,
+        high: highCount,
+        medium: mediumCount,
+        low: lowCount,
+        resolved: resolvedCount,
+      },
     });
   } catch (error) {
     console.error('List findings error:', error);
     res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/findings/export-csv
+ * Export CSV strictly isolated to the specified or latest scan
+ */
+findingsRouter.get('/export-csv', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const rawScanId = req.query.scan_id || req.query.scanId;
+    let targetScanId: number | null = rawScanId ? Number(rawScanId) : null;
+    if (!targetScanId || isNaN(targetScanId)) {
+      const latestScan = await prisma.scan.findFirst({ orderBy: { id: 'desc' } });
+      targetScanId = latestScan ? latestScan.id : null;
+    }
+
+    let items: any[] = [];
+    if (targetScanId) {
+      const dbFindings = await prisma.finding.findMany({
+        where: { scanId: targetScanId },
+        include: { evidences: true },
+        orderBy: { id: 'desc' },
+      });
+      if (dbFindings.length > 0) {
+        items = dbFindings.map((f) => ({
+          id: f.id,
+          title: f.title,
+          cwe_id: f.cwe || 'CWE-200',
+          filePath: f.evidences[0]?.filePath || f.evidences[0]?.url || '/api/endpoint',
+          severity: f.severity,
+          status: 'Detected',
+          createdAt: f.createdAt,
+        }));
+      } else {
+        const dbVulns = await prisma.vulnerability.findMany({
+          where: { scanId: targetScanId },
+          orderBy: { id: 'desc' },
+        });
+        items = dbVulns.map((v) => ({
+          id: v.id,
+          title: v.title,
+          cwe_id: 'CWE-200',
+          filePath: v.filePath || '/api/endpoint',
+          severity: v.severity,
+          status: v.status || 'OPEN',
+          createdAt: v.createdAt,
+        }));
+      }
+    }
+
+    let csv = 'ID,Finding Title,CWE Identifier,Endpoint / File,Severity Level,Status,Created At\n';
+    items.forEach((item: any) => {
+      const title = `"${(item.title || '').replace(/"/g, '""')}"`;
+      const cwe = `"${(item.cwe_id || 'CWE-89').replace(/"/g, '""')}"`;
+      const endpoint = `"${(item.filePath || item.endpoint || '').replace(/"/g, '""')}"`;
+      const severity = item.severity || 'HIGH';
+      const status = item.status || 'OPEN';
+      const date = item.createdAt ? new Date(item.createdAt).toISOString() : new Date().toISOString();
+      csv += `${item.id},${title},${cwe},${endpoint},${severity},${status},${date}\n`;
+    });
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="SentinelAI_Findings_${Date.now()}.csv"`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Export CSV error:', error);
+    res.status(500).send('Failed to export CSV');
   }
 });
 

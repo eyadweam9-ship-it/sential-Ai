@@ -191,7 +191,8 @@ const GoogleSheetView = {
 
     async onFilterChange(sev) {
         try {
-            const res = await API.getFindings({ severity: sev });
+            const scanId = (typeof App !== 'undefined' && App.scanState?.currentScanId) ? App.scanState.currentScanId : undefined;
+            const res = await API.getFindings({ severity: sev, scan_id: scanId });
             this.setFindings(res.findings);
         } catch (e) {
             console.error(e);
@@ -201,7 +202,8 @@ const GoogleSheetView = {
     async refreshData() {
         try {
             const filter = document.getElementById('sheet-filter-severity')?.value || '';
-            const res = await API.getFindings({ severity: filter });
+            const scanId = (typeof App !== 'undefined' && App.scanState?.currentScanId) ? App.scanState.currentScanId : undefined;
+            const res = await API.getFindings({ severity: filter, scan_id: scanId });
             this.setFindings(res.findings);
             showToast('Spreadsheet data refreshed successfully!', 'success');
         } catch (e) {
@@ -211,7 +213,8 @@ const GoogleSheetView = {
 
     exportCSV() {
         const token = API.getToken();
-        const exportUrl = `/api/findings/export-csv?token=${encodeURIComponent(token || '')}`;
+        const scanId = (typeof App !== 'undefined' && App.scanState?.currentScanId) ? App.scanState.currentScanId : '';
+        const exportUrl = `/api/findings/export-csv?token=${encodeURIComponent(token || '')}${scanId ? `&scan_id=${encodeURIComponent(scanId)}` : ''}`;
         const a = document.createElement('a');
         a.href = exportUrl;
         a.download = `SentinelAI_Findings_${Date.now()}.csv`;

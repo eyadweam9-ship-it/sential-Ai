@@ -1213,45 +1213,104 @@ scanRouter.get('/findings/list', async (req: Request, res: Response): Promise<vo
   try {
     const severityFilter = typeof req.query.severity === 'string' ? req.query.severity.toUpperCase() : '';
     const searchFilter = typeof req.query.q === 'string' ? req.query.q.toLowerCase() : '';
+    const scanIdParam = req.query.scan_id || req.query.scanId;
 
-    const latestScan = await prisma.scan.findFirst({
-      orderBy: { id: 'desc' },
+    let targetScanId: number | null = scanIdParam ? Number(scanIdParam) : null;
+    if (!targetScanId || isNaN(targetScanId)) {
+      const latestScan = await prisma.scan.findFirst({
+        orderBy: { id: 'desc' },
+      });
+      targetScanId = latestScan ? latestScan.id : null;
+    }
+
+    if (!targetScanId) {
+      res.json({
+        success: true,
+        total: 0,
+        findings: [],
+        summary: { security_score: 100, critical: 0, high: 0, medium: 0, low: 0, resolved: 0 },
+      });
+      return;
+    }
+
+    const currentScan = await prisma.scan.findUnique({
+      where: { id: targetScanId },
       include: { target: true },
     });
 
-    const isScanOnly = (latestScan?.scanMode || 'scan_only') === 'scan_only';
-    const isDev = (latestScan?.environment || 'PRODUCTION').toUpperCase() === 'DEVELOPMENT';
+    const isScanOnly = (currentScan?.scanMode || 'scan_only') === 'scan_only';
+    const isDev = (currentScan?.environment || 'PRODUCTION').toUpperCase() === 'DEVELOPMENT';
 
-    const dbVulns = await prisma.vulnerability.findMany({
-      include: { scan: { include: { target: true } } },
-      orderBy: { id: 'asc' },
+    // 1. Fetch from prisma.finding strictly for this targetScanId
+    const dbFindings = await prisma.finding.findMany({
+      where: { scanId: targetScanId },
+      include: { evidences: true, aiAnalyses: true },
+      orderBy: { id: 'desc' },
     });
 
-    let findings = dbVulns.map((v) => ({
-      id: v.id,
-      title: v.title,
-      endpoint: v.filePath || '/api/endpoint',
-      severity: v.severity,
-      sev: v.severity.charAt(0) + v.severity.slice(1).toLowerCase(),
-      cwe_id: v.severity === 'CRITICAL' ? 'CWE-89' : 'CWE-79',
-      cvss_score: v.severity === 'CRITICAL' ? 9.8 : v.severity === 'HIGH' ? 7.5 : 5.0,
-      cvss: v.severity === 'CRITICAL' ? '9.8' : v.severity === 'HIGH' ? '7.5' : '5.0',
-      status: isScanOnly ? 'Detected' : (v.status === 'OPEN' ? 'Fix ready' : 'Fixed'),
-      category: isDev ? 'Static Code Analysis (SAST)' : 'Web Application Security',
-      parameter: 'input',
-      first_detected_at: v.createdAt.toISOString().split('T')[0],
-      description: v.description,
-      remediation: v.remediation,
-    }));
+    let findings: any[] = dbFindings.map((f) => {
+      const ev = f.evidences[0];
+      const sev = f.severity.toUpperCase();
+      return {
+        id: f.id,
+        scanId: f.scanId,
+        title: f.title,
+        endpoint: ev?.filePath || ev?.url || '/api/endpoint',
+        filePath: ev?.filePath || null,
+        lineStart: ev?.lineStart || null,
+        lineEnd: ev?.lineEnd || null,
+        rawSnippet: ev?.rawSnippet || null,
+        evidenceSummary: ev?.evidenceSummary || f.description,
+        tool: f.toolName,
+        toolName: f.toolName,
+        severity: sev,
+        sev: sev.charAt(0) + sev.slice(1).toLowerCase(),
+        cwe: f.cwe || 'CWE-200',
+        cwe_id: f.cwe || 'CWE-200',
+        cvss_score: sev === 'CRITICAL' ? 9.8 : sev === 'HIGH' ? 7.5 : sev === 'MEDIUM' ? 5.3 : 3.1,
+        cvss: sev === 'CRITICAL' ? '9.8' : sev === 'HIGH' ? '7.5' : sev === 'MEDIUM' ? '5.3' : '3.1',
+        status: isScanOnly ? 'Detected' : 'Open',
+        category: f.category || (isDev ? 'Static Code Analysis (SAST)' : 'Web Application Security'),
+        parameter: 'input',
+        first_detected_at: f.createdAt.toISOString().split('T')[0],
+        description: f.description,
+        remediation: f.remediation,
+        evidences: f.evidences,
+      };
+    });
 
+    // 2. Fallback to prisma.vulnerability strictly for this targetScanId
     if (findings.length === 0) {
-      const template = isDev ? SAST_FINDINGS : WEB_FINDINGS;
-      findings = template.map((f) => ({
-        ...f,
-        sev: f.severity.charAt(0) + f.severity.slice(1).toLowerCase(),
-        cvss: String(f.cvss_score),
-        status: isScanOnly ? 'Detected' : f.status,
-        first_detected_at: new Date().toISOString().split('T')[0],
+      const dbVulns = await prisma.vulnerability.findMany({
+        where: { scanId: targetScanId },
+        orderBy: { id: 'asc' },
+      });
+
+      findings = dbVulns.map((v) => ({
+        id: v.id,
+        scanId: v.scanId,
+        title: v.title,
+        endpoint: v.filePath || '/api/endpoint',
+        filePath: v.filePath || null,
+        lineStart: null,
+        lineEnd: null,
+        rawSnippet: null,
+        evidenceSummary: v.description,
+        tool: 'SEMGREP',
+        toolName: 'SEMGREP',
+        severity: v.severity,
+        sev: v.severity.charAt(0) + v.severity.slice(1).toLowerCase(),
+        cwe: 'CWE-200',
+        cwe_id: 'CWE-200',
+        cvss_score: v.severity === 'CRITICAL' ? 9.8 : v.severity === 'HIGH' ? 7.5 : 5.0,
+        cvss: v.severity === 'CRITICAL' ? '9.8' : v.severity === 'HIGH' ? '7.5' : '5.0',
+        status: isScanOnly ? 'Detected' : (v.status === 'OPEN' ? 'Fix ready' : 'Fixed'),
+        category: isDev ? 'Static Code Analysis (SAST)' : 'Web Application Security',
+        parameter: 'input',
+        first_detected_at: v.createdAt.toISOString().split('T')[0],
+        description: v.description,
+        remediation: v.remediation,
+        evidences: [{ id: v.id, filePath: v.filePath, evidenceSummary: v.description }],
       }));
     }
 
@@ -1274,14 +1333,18 @@ scanRouter.get('/findings/list', async (req: Request, res: Response): Promise<vo
     const lowCount = findings.filter((f) => f.severity.toUpperCase() === 'LOW').length;
     const resolvedCount = findings.filter((f) => f.status.toLowerCase() === 'fixed').length;
 
+    let calcScore = 100 - (criticalCount * 25 + highCount * 15 + mediumCount * 8 + lowCount * 3);
+    calcScore = Math.max(15, Math.min(100, calcScore));
+
     res.json({
       success: true,
+      scanId: targetScanId,
       total: findings.length,
-      scan_mode: latestScan?.scanMode || 'scan_only',
+      scan_mode: currentScan?.scanMode || 'scan_only',
       is_scan_only: isScanOnly,
-      environment: latestScan?.environment || 'PRODUCTION',
+      environment: currentScan?.environment || 'PRODUCTION',
       summary: {
-        security_score: isScanOnly ? 82 : 88,
+        security_score: calcScore,
         critical: criticalCount,
         high: highCount,
         medium: mediumCount,
@@ -1292,7 +1355,7 @@ scanRouter.get('/findings/list', async (req: Request, res: Response): Promise<vo
     });
   } catch (error) {
     console.error('Findings list error:', error);
-    res.status(500).json({ success: false, error: 'Failed to load findings.' });
+    res.status(500).json({ success: false, error: 'Failed to fetch findings list.' });
   }
 });
 
@@ -1301,43 +1364,101 @@ scanRouter.get('/findings/list', async (req: Request, res: Response): Promise<vo
  */
 scanRouter.get('/findings/detail', async (req: Request, res: Response): Promise<void> => {
   try {
-    const id = Number(req.query.id || 1);
+    const id = Number(req.query.id || req.query.finding_id || 1);
+
+    // 1. Try finding in prisma.finding
+    const unifiedFinding = await prisma.finding.findUnique({
+      where: { id },
+      include: {
+        scan: { include: { target: true } },
+        evidences: true,
+        aiAnalyses: true,
+      },
+    });
+
+    if (unifiedFinding) {
+      const scan = unifiedFinding.scan;
+      const evidence = unifiedFinding.evidences[0];
+      const isScanOnly = (scan?.scanMode || 'scan_only') === 'scan_only';
+      const isDev = (scan?.environment || 'PRODUCTION').toUpperCase() === 'DEVELOPMENT';
+      const sev = unifiedFinding.severity.toUpperCase();
+
+      const finding = {
+        id: unifiedFinding.id,
+        scanId: unifiedFinding.scanId,
+        title: unifiedFinding.title,
+        endpoint: evidence?.filePath || evidence?.url || '/api/endpoint',
+        path: evidence?.filePath ? `FILE: ${evidence.filePath}${evidence.lineStart ? ` (Line ${evidence.lineStart})` : ''}` : `URL: ${evidence?.url || '/'}`,
+        filePath: evidence?.filePath || null,
+        lineStart: evidence?.lineStart || null,
+        lineEnd: evidence?.lineEnd || null,
+        rawSnippet: evidence?.rawSnippet || null,
+        severity: sev,
+        sev: sev.charAt(0) + sev.slice(1).toLowerCase(),
+        cwe: unifiedFinding.cwe || 'CWE-200',
+        cwe_id: unifiedFinding.cwe || 'CWE-200',
+        type: unifiedFinding.cwe || 'CWE-200',
+        cvss: sev === 'CRITICAL' ? '9.8' : sev === 'HIGH' ? '7.5' : sev === 'MEDIUM' ? '5.3' : '3.1',
+        cvss_score: sev === 'CRITICAL' ? 9.8 : sev === 'HIGH' ? 7.5 : sev === 'MEDIUM' ? 5.3 : 3.1,
+        status: isScanOnly ? 'Detected' : 'Open',
+        description: unifiedFinding.description || evidence?.evidenceSummary || '',
+        what_we_found: evidence?.evidenceSummary || unifiedFinding.description || '',
+        remediation: unifiedFinding.remediation || '',
+        tool: unifiedFinding.toolName,
+        toolName: unifiedFinding.toolName,
+        date: unifiedFinding.createdAt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+        asset: scan?.target?.url || (isDev ? 'Project Source' : 'Target Application'),
+        confidence: unifiedFinding.confidence ? `${unifiedFinding.confidence} · Confirmed` : 'Confirmed',
+        is_scan_only: isScanOnly,
+        evidences: unifiedFinding.evidences,
+        aiAnalyses: unifiedFinding.aiAnalyses,
+      };
+
+      res.json({ success: true, finding });
+      return;
+    }
+
+    // 2. Fallback to prisma.vulnerability
     const dbVuln = await prisma.vulnerability.findUnique({
       where: { id },
       include: { scan: { include: { target: true } } },
     });
 
-    const isDev = dbVuln?.scan?.environment === 'DEVELOPMENT';
-    const isScanOnly = dbVuln?.scan?.scanMode === 'scan_only';
-    const fallbackList = isDev ? SAST_FINDINGS : WEB_FINDINGS;
-    const fallback = fallbackList.find((f) => f.id === id) || fallbackList[0];
+    if (dbVuln) {
+      const isDev = dbVuln.scan?.environment === 'DEVELOPMENT';
+      const isScanOnly = dbVuln.scan?.scanMode === 'scan_only';
+      const sev = dbVuln.severity.toUpperCase();
 
-    const finding = dbVuln
-      ? {
-          id: dbVuln.id,
-          title: dbVuln.title,
-          endpoint: dbVuln.filePath || fallback.endpoint,
-          path: `FILE: ${dbVuln.filePath || fallback.endpoint}`,
-          severity: dbVuln.severity,
-          sev: dbVuln.severity.charAt(0) + dbVuln.severity.slice(1).toLowerCase(),
-          cwe_id: fallback.cwe_id,
-          type: fallback.cwe_id,
-          cvss: dbVuln.severity === 'CRITICAL' ? '9.8' : '7.5',
-          status: isScanOnly ? 'Detected' : (dbVuln.status === 'OPEN' ? 'Fix ready' : 'Fixed'),
-          description: dbVuln.description || fallback.description,
-          what_we_found: dbVuln.description || fallback.description,
-          method: isDev ? 'SAST_SCAN' : 'POST',
-          patch_file: dbVuln.filePath || fallback.filePath,
-          patch_diff: isScanOnly ? null : fallback.patch_diff,
-          owasp: 'A03: Injection',
-          date: dbVuln.createdAt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
-          asset: dbVuln.scan.target.url || 'project_source',
-          confidence: '98% · Confirmed',
-          is_scan_only: isScanOnly,
-        }
-      : fallback;
+      const finding = {
+        id: dbVuln.id,
+        scanId: dbVuln.scanId,
+        title: dbVuln.title,
+        endpoint: dbVuln.filePath || '/api/endpoint',
+        path: `FILE: ${dbVuln.filePath || '/api/endpoint'}`,
+        filePath: dbVuln.filePath || null,
+        severity: sev,
+        sev: sev.charAt(0) + sev.slice(1).toLowerCase(),
+        cwe_id: 'CWE-200',
+        cwe: 'CWE-200',
+        type: 'CWE-200',
+        cvss: sev === 'CRITICAL' ? '9.8' : sev === 'HIGH' ? '7.5' : '5.0',
+        status: isScanOnly ? 'Detected' : (dbVuln.status === 'OPEN' ? 'Fix ready' : 'Fixed'),
+        description: dbVuln.description || '',
+        what_we_found: dbVuln.description || '',
+        remediation: dbVuln.remediation || '',
+        tool: 'SEMGREP',
+        toolName: 'SEMGREP',
+        date: dbVuln.createdAt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+        asset: dbVuln.scan?.target?.url || 'Project Codebase',
+        confidence: '95% · Confirmed',
+        is_scan_only: isScanOnly,
+      };
 
-    res.json({ success: true, finding });
+      res.json({ success: true, finding });
+      return;
+    }
+
+    res.status(404).json({ success: false, error: 'Finding not found.' });
   } catch (error) {
     console.error('Finding detail error:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch finding details.' });
@@ -1374,11 +1495,46 @@ scanRouter.post('/findings/update-status', async (req: Request, res: Response): 
  */
 scanRouter.get('/findings/export-csv', async (req: Request, res: Response): Promise<void> => {
   try {
-    const dbVulns = await prisma.vulnerability.findMany({
-      include: { scan: { include: { target: true } } },
-    });
+    const scanIdParam = req.query.scan_id || req.query.scanId;
+    let targetScanId: number | null = scanIdParam ? Number(scanIdParam) : null;
+    if (!targetScanId || isNaN(targetScanId)) {
+      const latestScan = await prisma.scan.findFirst({ orderBy: { id: 'desc' } });
+      targetScanId = latestScan ? latestScan.id : null;
+    }
 
-    const items = dbVulns.length > 0 ? dbVulns : WEB_FINDINGS;
+    let items: any[] = [];
+    if (targetScanId) {
+      const dbFindings = await prisma.finding.findMany({
+        where: { scanId: targetScanId },
+        include: { evidences: true },
+        orderBy: { id: 'desc' },
+      });
+      if (dbFindings.length > 0) {
+        items = dbFindings.map((f) => ({
+          id: f.id,
+          title: f.title,
+          cwe_id: f.cwe || 'CWE-200',
+          filePath: f.evidences[0]?.filePath || f.evidences[0]?.url || '/api/endpoint',
+          severity: f.severity,
+          status: 'Detected',
+          createdAt: f.createdAt,
+        }));
+      } else {
+        const dbVulns = await prisma.vulnerability.findMany({
+          where: { scanId: targetScanId },
+          orderBy: { id: 'desc' },
+        });
+        items = dbVulns.map((v) => ({
+          id: v.id,
+          title: v.title,
+          cwe_id: 'CWE-200',
+          filePath: v.filePath || '/api/endpoint',
+          severity: v.severity,
+          status: v.status || 'OPEN',
+          createdAt: v.createdAt,
+        }));
+      }
+    }
 
     let csv = 'ID,Finding Title,CWE Identifier,Endpoint / File,Severity Level,Status,Created At\n';
     items.forEach((item: any) => {
@@ -1392,7 +1548,7 @@ scanRouter.get('/findings/export-csv', async (req: Request, res: Response): Prom
     });
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="SentialAI_Findings_${Date.now()}.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="SentinelAI_Findings_${Date.now()}.csv"`);
     res.send(csv);
   } catch (error) {
     console.error('Export CSV error:', error);
@@ -1405,25 +1561,56 @@ scanRouter.get('/findings/export-csv', async (req: Request, res: Response): Prom
  */
 scanRouter.get('/reports/assessment', async (req: Request, res: Response): Promise<void> => {
   try {
-    const scan = await prisma.scan.findFirst({
-      orderBy: { id: 'desc' },
-      include: { target: true, vulnerabilities: true },
-    });
+    const scanIdParam = req.query.scan_id || req.query.scanId;
+    let targetScanId: number | null = scanIdParam ? Number(scanIdParam) : null;
+    let scan = null;
+    if (targetScanId && !isNaN(targetScanId)) {
+      scan = await prisma.scan.findUnique({
+        where: { id: targetScanId },
+        include: { target: true, vulnerabilities: true, findings: true },
+      });
+    }
+    if (!scan) {
+      scan = await prisma.scan.findFirst({
+        orderBy: { id: 'desc' },
+        include: { target: true, vulnerabilities: true, findings: true },
+      });
+    }
 
     const isScanOnly = (scan?.scanMode || 'scan_only') === 'scan_only';
+    const totalFindings = (scan?.findings?.length || 0) + (scan?.vulnerabilities?.length || 0);
+
+    let criticalCount = 0;
+    let highCount = 0;
+    let medCount = 0;
+    let lowCount = 0;
+    if (scan?.findings && scan.findings.length > 0) {
+      criticalCount = scan.findings.filter((f) => f.severity.toUpperCase() === 'CRITICAL').length;
+      highCount = scan.findings.filter((f) => f.severity.toUpperCase() === 'HIGH').length;
+      medCount = scan.findings.filter((f) => f.severity.toUpperCase() === 'MEDIUM').length;
+      lowCount = scan.findings.filter((f) => f.severity.toUpperCase() === 'LOW').length;
+    } else if (scan?.vulnerabilities && scan.vulnerabilities.length > 0) {
+      criticalCount = scan.vulnerabilities.filter((v) => v.severity.toUpperCase() === 'CRITICAL').length;
+      highCount = scan.vulnerabilities.filter((v) => v.severity.toUpperCase() === 'HIGH').length;
+      medCount = scan.vulnerabilities.filter((v) => v.severity.toUpperCase() === 'MEDIUM').length;
+      lowCount = scan.vulnerabilities.filter((v) => v.severity.toUpperCase() === 'LOW').length;
+    }
+
+    let calcScore = 100 - (criticalCount * 25 + highCount * 15 + medCount * 8 + lowCount * 3);
+    calcScore = Math.max(15, Math.min(100, calcScore));
 
     res.json({
       success: true,
       report: {
         title: 'Executive Security Assessment Report',
-        target: scan?.target.url || 'https://app.northstar.io',
+        target: scan?.target.url || 'https://aymanaboelela.com',
         environment: scan?.environment || 'PRODUCTION',
         scan_mode: scan?.scanMode || 'scan_only',
         is_scan_only: isScanOnly,
         scan_date: scan?.startedAt || new Date(),
-        security_score: isScanOnly ? 82 : 88,
-        total_vulnerabilities: scan?.vulnerabilities.length || 5,
-        status: 'COMPLETED',
+        security_score: calcScore,
+        total_vulnerabilities: totalFindings,
+        status: scan?.status || 'COMPLETED',
         executive_summary: isScanOnly
           ? 'Comprehensive security audit completed under Scan Only mode. Potential vulnerabilities have been detected, triaged by CVSS score, and mapped with remediation guidance. Automated code alterations were intentionally bypassed.'
           : 'Full automated security assessment, AI-assisted code patch synthesis, and regression validation completed successfully.',
