@@ -387,17 +387,39 @@ export class SemgrepAdapter implements SecurityToolAdapter {
     if (depth > 12 || !fs.existsSync(dirPath)) return;
     const root = baseDir || dirPath;
 
+    const VENDOR_AND_EXCLUDED_DIRS = new Set([
+      'node_modules', 'vendor', 'bower_components', 'third_party', 'thirdparty',
+      'packages', 'libs', 'bundle', 'dist', 'build', 'coverage', '.next', '.nuxt',
+      '.system_generated', '__pycache__', '.venv', 'venv', 'env', '.git', '.svn'
+    ]);
+
+    const MINIFIED_PATTERNS = [
+      /\.min\.(js|css|mjs)$/i,
+      /\.bundle\.(js|css)$/i,
+      /\.pack\.js$/i,
+      /\.map$/i,
+      /jquery.*\.js$/i,
+      /bootstrap.*\.js$/i,
+      /react.*\.production\.min\.js$/i,
+    ];
+
     try {
       const entries = fs.readdirSync(dirPath, { withFileTypes: true });
       for (const entry of entries) {
         const fullPath = path.join(dirPath, entry.name);
         if (entry.isDirectory()) {
-          if (['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.system_generated'].includes(entry.name)) {
+          if (VENDOR_AND_EXCLUDED_DIRS.has(entry.name.toLowerCase())) {
             continue;
           }
           this.scanDirectory(fullPath, findings, depth + 1, root);
         } else if (entry.isFile()) {
           const nameLower = entry.name.toLowerCase();
+
+          // Exclude minified libraries and generated bundles from SAST code pattern scans
+          if (MINIFIED_PATTERNS.some(p => p.test(nameLower))) {
+            continue;
+          }
+
           const ext = path.extname(nameLower);
           const isTargetFile =
             nameLower.startsWith('.env') ||

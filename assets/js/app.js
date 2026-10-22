@@ -336,6 +336,10 @@ const App = {
     selectedFindingId: null,
     findingTab: 'overview', // 'overview' | 'request' | 'fix'
     dashboardViewMode: 'standard', // 'standard' or 'sheet'
+    activeCategoryFilter: '', // '' (All) | 'SAST' | 'DAST' | 'SECRETS' | 'SCA' | 'IAC'
+    activeSeverityFilter: '',
+    activeStatusFilter: '',
+    activeSearchQuery: '',
 
     // Dynamically retrieve the logged-in client's credentials (never hardcoded)
     getCurrentUser() {
@@ -4453,6 +4457,29 @@ const App = {
 
             <!-- Findings Card (Toolbar + Table / Google Sheets) -->
             <div class="findings-card">
+                <!-- Scan Category Filter Tabs / Pills -->
+                <div class="category-tabs-bar" style="display:flex; align-items:center; gap:8px; padding:10px 16px; border-bottom:1px solid #e2e8f0; background:#f8fafc; overflow-x:auto; border-top-left-radius:12px; border-top-right-radius:12px;">
+                    <span style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; margin-right:4px; white-space:nowrap;">Category:</span>
+                    <button type="button" class="cat-pill active" id="cat-pill-all" onclick="App.onSelectCategoryFilter('')" style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:9999px; font-size:12px; font-weight:700; background:#2563eb; color:#ffffff; border:1px solid #2563eb; cursor:pointer; transition:all 0.15s ease;">
+                        All <span id="cat-count-all" style="font-size:10px; background:rgba(255,255,255,0.25); color:#ffffff; padding:1px 6px; border-radius:9999px;">0</span>
+                    </button>
+                    <button type="button" class="cat-pill" id="cat-pill-sast" onclick="App.onSelectCategoryFilter('SAST')" style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:9999px; font-size:12px; font-weight:500; background:#ffffff; color:#475569; border:1px solid #cbd5e1; cursor:pointer; transition:all 0.15s ease;">
+                        Source Code (SAST) <span id="cat-count-sast" style="font-size:10px; background:#f1f5f9; color:#475569; padding:1px 6px; border-radius:9999px;">0</span>
+                    </button>
+                    <button type="button" class="cat-pill" id="cat-pill-dast" onclick="App.onSelectCategoryFilter('DAST')" style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:9999px; font-size:12px; font-weight:500; background:#ffffff; color:#475569; border:1px solid #cbd5e1; cursor:pointer; transition:all 0.15s ease;">
+                        Web App (DAST) <span id="cat-count-dast" style="font-size:10px; background:#f1f5f9; color:#475569; padding:1px 6px; border-radius:9999px;">0</span>
+                    </button>
+                    <button type="button" class="cat-pill" id="cat-pill-secrets" onclick="App.onSelectCategoryFilter('SECRETS')" style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:9999px; font-size:12px; font-weight:500; background:#ffffff; color:#475569; border:1px solid #cbd5e1; cursor:pointer; transition:all 0.15s ease;">
+                        Secrets &amp; Credentials <span id="cat-count-secrets" style="font-size:10px; background:#f1f5f9; color:#475569; padding:1px 6px; border-radius:9999px;">0</span>
+                    </button>
+                    <button type="button" class="cat-pill" id="cat-pill-sca" onclick="App.onSelectCategoryFilter('SCA')" style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:9999px; font-size:12px; font-weight:500; background:#ffffff; color:#475569; border:1px solid #cbd5e1; cursor:pointer; transition:all 0.15s ease;">
+                        Dependencies (SCA) <span id="cat-count-sca" style="font-size:10px; background:#f1f5f9; color:#475569; padding:1px 6px; border-radius:9999px;">0</span>
+                    </button>
+                    <button type="button" class="cat-pill" id="cat-pill-iac" onclick="App.onSelectCategoryFilter('IAC')" style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:9999px; font-size:12px; font-weight:500; background:#ffffff; color:#475569; border:1px solid #cbd5e1; cursor:pointer; transition:all 0.15s ease;">
+                        Infrastructure (IaC) <span id="cat-count-iac" style="font-size:10px; background:#f1f5f9; color:#475569; padding:1px 6px; border-radius:9999px;">0</span>
+                    </button>
+                </div>
+
                 <div class="findings-toolbar">
                     <div>
                         <h2>All findings</h2>
@@ -4535,10 +4562,11 @@ const App = {
     },
 
     onSelectSeverityFilter(sev) {
+        this.activeSeverityFilter = sev;
         document.getElementById('sev-dropdown-menu')?.classList.add('hidden');
         const lbl = document.getElementById('label-sev-filter');
         if (lbl) lbl.textContent = sev ? sev.charAt(0).toUpperCase() + sev.slice(1) : 'All severity';
-        this.onSeverityFilter(sev);
+        this.applyFindingsFilters();
     },
 
     toggleStatusDropdown() {
@@ -4549,6 +4577,7 @@ const App = {
     },
 
     onSelectStatusFilter(status) {
+        this.activeStatusFilter = status;
         document.getElementById('status-dropdown-menu')?.classList.add('hidden');
         const lbl = document.getElementById('label-status-filter');
         const isScanOnly = this.scanState.scanType === 'scan_only';
@@ -4556,21 +4585,7 @@ const App = {
             ? { '': 'All status', 'detected': 'Detected', 'open': 'Open' }
             : { '': 'All status', 'confirmed': 'Fix ready', 'open': 'Open', 'fixed': 'Fixed' };
         if (lbl) lbl.textContent = textMap[status] || 'All status';
-
-        const filtered = status ? this.findingsData.filter(f => {
-            const st = (f.status || '').toLowerCase();
-            if (isScanOnly) {
-                if (status === 'detected') return st === 'detected' || st === 'confirmed' || st === 'fix ready' || st === 'open';
-                return st === status.toLowerCase();
-            }
-            return st === status.toLowerCase() || (status === 'confirmed' && (st === 'confirmed' || st === 'fix ready'));
-        }) : this.findingsData;
-
-        if (this.dashboardViewMode === 'sheet') {
-            GoogleSheetView.setFindings(filtered);
-        } else {
-            this.renderStandardRows(filtered);
-        }
+        this.applyFindingsFilters();
     },
 
     toggleDashboardViewMode() {
@@ -4703,15 +4718,29 @@ const App = {
                 }
             }
 
-            if (this.dashboardViewMode === 'sheet') {
-                GoogleSheetView.init(this.findingsData);
-            } else {
-                this.renderStandardRows(this.findingsData);
-            }
+            // Update Scan Category Badges & Counts
+            const sastCount = this.findingsData.filter(f => (f.scanCategory || f.scan_category || '').toUpperCase() === 'SAST').length;
+            const dastCount = this.findingsData.filter(f => (f.scanCategory || f.scan_category || '').toUpperCase() === 'DAST').length;
+            const secretsCount = this.findingsData.filter(f => (f.scanCategory || f.scan_category || '').toUpperCase() === 'SECRETS').length;
+            const scaCount = this.findingsData.filter(f => (f.scanCategory || f.scan_category || '').toUpperCase() === 'SCA').length;
+            const iacCount = this.findingsData.filter(f => (f.scanCategory || f.scan_category || '').toUpperCase() === 'IAC').length;
+
+            const setBadge = (id, count) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = count;
+            };
+            setBadge('cat-count-all', this.findingsData.length);
+            setBadge('cat-count-sast', sastCount);
+            setBadge('cat-count-dast', dastCount);
+            setBadge('cat-count-secrets', secretsCount);
+            setBadge('cat-count-sca', scaCount);
+            setBadge('cat-count-iac', iacCount);
+
+            this.applyFindingsFilters();
         } catch (e) {
             console.warn('Scan findings load error:', e);
             this.findingsData = [];
-            this.renderStandardRows([]);
+            this.applyFindingsFilters();
         }
     },
 
@@ -4785,6 +4814,8 @@ const App = {
                 || f.path 
                 || '/';
             const cweLabel = f.cwe || f.cwe_id || f.category || f.type || 'CWE-200';
+            const cat = (f.scanCategory || f.scan_category || 'SAST').toUpperCase();
+            const catBadge = `<span class="badge" style="font-size:9px; padding:1px 5px; border-radius:4px; background:#f1f5f9; color:#475569; font-weight:700; margin-right:5px; border:1px solid #e2e8f0;">${escapeHtml(cat)}</span>`;
             const isNeedsReview = f.confidence === 'NEEDS_REVIEW' || f.status === 'Needs Review' || f.findingStatus === 'NEEDS_REVIEW';
             const confBadge = isNeedsReview
                 ? `<span class="badge" style="font-size:10px; padding:1px 6px; border-radius:9999px; background:#fef3c7; color:#d97706; font-weight:700; margin-left:6px; vertical-align:middle;">⚠️ Needs Review</span>`
@@ -4800,7 +4831,7 @@ const App = {
                         <i class="severity-dot ${sevLower}"></i>
                         ${sev.charAt(0).toUpperCase() + sev.slice(1)}
                     </span>
-                    <span class="mono-tag">${escapeHtml(cweLabel)}</span>
+                    <span class="mono-tag">${catBadge}${escapeHtml(cweLabel)}</span>
                     <span class="${isFixReady ? 'fix-ready' : ''}">
                         ${isFixReady ? Icons.get('sparkles', 'size-4') : ''}
                         ${statusLabel}
@@ -4811,13 +4842,63 @@ const App = {
         }).join('');
     },
 
-    onSearchFindings(q) {
-        const filtered = this.findingsData.filter(f => 
-            f.title.toLowerCase().includes(q.toLowerCase()) || 
-            (f.endpoint && f.endpoint.toLowerCase().includes(q.toLowerCase())) ||
-            (f.path && f.path.toLowerCase().includes(q.toLowerCase())) ||
-            ((f.cwe_id || f.type) && (f.cwe_id || f.type).toLowerCase().includes(q.toLowerCase()))
-        );
+    applyFindingsFilters() {
+        if (!Array.isArray(this.findingsData)) {
+            if (this.dashboardViewMode === 'sheet') GoogleSheetView.setFindings([]);
+            else this.renderStandardRows([]);
+            return;
+        }
+
+        const isScanOnly = this.scanState.scanType === 'scan_only';
+        const filtered = this.findingsData.filter(f => {
+            // Category filter
+            if (this.activeCategoryFilter) {
+                const cat = (f.scanCategory || f.scan_category || '').toUpperCase();
+                if (cat !== this.activeCategoryFilter.toUpperCase()) return false;
+            }
+
+            // Severity filter
+            if (this.activeSeverityFilter) {
+                const sev = (f.severity || f.sev || '').toLowerCase();
+                if (sev !== this.activeSeverityFilter.toLowerCase()) return false;
+            }
+
+            // Status filter
+            if (this.activeStatusFilter) {
+                const st = (f.status || '').toLowerCase();
+                if (isScanOnly) {
+                    if (this.activeStatusFilter === 'detected') {
+                        if (st !== 'detected' && st !== 'confirmed' && st !== 'fix ready' && st !== 'open') return false;
+                    } else if (st !== this.activeStatusFilter.toLowerCase()) {
+                        return false;
+                    }
+                } else {
+                    if (this.activeStatusFilter === 'confirmed') {
+                        if (st !== 'confirmed' && st !== 'fix ready') return false;
+                    } else if (st !== this.activeStatusFilter.toLowerCase()) {
+                        return false;
+                    }
+                }
+            }
+
+            // Search query
+            if (this.activeSearchQuery) {
+                const q = this.activeSearchQuery.toLowerCase();
+                const titleMatch = (f.title || '').toLowerCase().includes(q);
+                const endpointMatch = (f.endpoint || '').toLowerCase().includes(q);
+                const pathMatch = (f.path || f.filePath || '').toLowerCase().includes(q);
+                const cweMatch = (f.cwe || f.cwe_id || f.type || '').toLowerCase().includes(q);
+                if (!titleMatch && !endpointMatch && !pathMatch && !cweMatch) return false;
+            }
+
+            return true;
+        });
+
+        const countEl = document.getElementById('findings-toolbar-count');
+        if (countEl) {
+            countEl.textContent = `${filtered.length} finding${filtered.length === 1 ? '' : 's'} cataloged${(this.activeCategoryFilter || this.activeSeverityFilter || this.activeStatusFilter || this.activeSearchQuery) ? ' (filtered)' : ''}`;
+        }
+
         if (this.dashboardViewMode === 'sheet') {
             GoogleSheetView.setFindings(filtered);
         } else {
@@ -4825,13 +4906,53 @@ const App = {
         }
     },
 
+    onSelectCategoryFilter(cat) {
+        this.activeCategoryFilter = cat;
+        const pills = [
+            { id: 'all', key: '' },
+            { id: 'sast', key: 'SAST' },
+            { id: 'dast', key: 'DAST' },
+            { id: 'secrets', key: 'SECRETS' },
+            { id: 'sca', key: 'SCA' },
+            { id: 'iac', key: 'IAC' }
+        ];
+        pills.forEach(p => {
+            const btn = document.getElementById(`cat-pill-${p.id}`);
+            const count = document.getElementById(`cat-count-${p.id}`);
+            if (btn) {
+                const isSelected = (!cat && p.key === '') || (cat && cat.toUpperCase() === p.key);
+                if (isSelected) {
+                    btn.style.background = '#2563eb';
+                    btn.style.color = '#ffffff';
+                    btn.style.borderColor = '#2563eb';
+                    btn.style.fontWeight = '700';
+                    if (count) {
+                        count.style.background = 'rgba(255,255,255,0.25)';
+                        count.style.color = '#ffffff';
+                    }
+                } else {
+                    btn.style.background = '#ffffff';
+                    btn.style.color = '#475569';
+                    btn.style.borderColor = '#cbd5e1';
+                    btn.style.fontWeight = '500';
+                    if (count) {
+                        count.style.background = '#f1f5f9';
+                        count.style.color = '#475569';
+                    }
+                }
+            }
+        });
+        this.applyFindingsFilters();
+    },
+
+    onSearchFindings(q) {
+        this.activeSearchQuery = q;
+        this.applyFindingsFilters();
+    },
+
     onSeverityFilter(sev) {
-        const filtered = sev ? this.findingsData.filter(f => (f.severity || f.sev || '').toLowerCase() === sev.toLowerCase()) : this.findingsData;
-        if (this.dashboardViewMode === 'sheet') {
-            GoogleSheetView.setFindings(filtered);
-        } else {
-            this.renderStandardRows(filtered);
-        }
+        this.activeSeverityFilter = sev;
+        this.applyFindingsFilters();
     },
 
     viewFinding(id) {

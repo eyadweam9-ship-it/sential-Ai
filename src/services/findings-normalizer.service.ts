@@ -78,7 +78,7 @@ export async function normalizeAndSaveFindings(
         sourceRuleId: raw.sourceRuleId || null,
         title,
         description: raw.evidenceSummary,
-        severity: raw.severity,
+        severity: validation.adjustedSeverity || raw.severity,
         confidence,
         verificationStatus: validation.verificationStatus || raw.verificationStatus || 'UNVERIFIED',
         category: raw.category || 'VULNERABILITY',

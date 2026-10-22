@@ -5,6 +5,7 @@ export interface FindingValidationResult {
   confidence: 'CONFIRMED' | 'POTENTIAL' | 'INFORMATIONAL' | 'HIGH' | 'MEDIUM' | 'NEEDS_REVIEW' | 'LIKELY_FALSE_POSITIVE';
   verificationStatus: 'VERIFIED' | 'UNVERIFIED' | 'NEEDS_REVIEW';
   status: 'CONFIRMED' | 'NEEDS_REVIEW' | 'FALSE_POSITIVE' | 'OPEN';
+  adjustedSeverity?: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFORMATIONAL';
   reason?: string;
   adjustedTitle?: string;
   adjustedRemediation?: string;
@@ -230,9 +231,10 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
 
     return {
       verdict: 'VALID',
-      confidence: 'CONFIRMED',
-      verificationStatus: 'VERIFIED',
-      status: 'CONFIRMED',
+      confidence: 'INFORMATIONAL',
+      verificationStatus: 'UNVERIFIED',
+      status: 'OPEN',
+      adjustedSeverity: 'LOW',
     };
   }
 
@@ -270,19 +272,21 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
       };
     }
 
-    // C. Template placeholders (CHANGEME, YOUR_PASSWORD)
+    // C. Template placeholders & weak default passwords (admin, changeme, 123456)
     if (
       snippetLower.includes('your_password') ||
       snippetLower.includes('changeme') ||
       snippetLower.includes('todo') ||
-      snippetLower.includes('placeholder')
+      snippetLower.includes('placeholder') ||
+      /['"](?:admin|password|123456|root|test|secret|temp)['"]/i.test(snippet)
     ) {
       return {
         verdict: 'NEEDS_REVIEW',
         confidence: 'POTENTIAL',
         verificationStatus: 'NEEDS_REVIEW',
         status: 'NEEDS_REVIEW',
-        reason: 'Template placeholder credential detected. Verify that default placeholder has been replaced before deployment.',
+        adjustedSeverity: 'LOW',
+        reason: 'Default/placeholder credential detected. Downgraded from Critical to Low/Needs Review.',
       };
     }
 
@@ -290,22 +294,91 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
     if (
       filePath.includes('install') ||
       filePath.includes('setup') ||
-      filePath.includes('seed')
+      filePath.includes('seed') ||
+      filePath.includes('test') ||
+      filePath.includes('mock') ||
+      filePath.includes('fixture')
     ) {
       return {
         verdict: 'NEEDS_REVIEW',
         confidence: 'POTENTIAL',
         verificationStatus: 'NEEDS_REVIEW',
         status: 'NEEDS_REVIEW',
-        reason: 'Initial setup credentials in installation/seed script. Verify that installation scripts are removed after provisioning.',
+        adjustedSeverity: 'MEDIUM',
+        reason: 'Setup credentials in installation, test or seed script. Downgraded to Medium; verify script is deleted after provisioning.',
       };
     }
 
+    // E. High-entropy real production credential or verified account pair
     return {
       verdict: 'VALID',
       confidence: 'CONFIRMED',
       verificationStatus: 'VERIFIED',
       status: 'CONFIRMED',
+      adjustedSeverity: 'HIGH',
+    };
+  }
+
+  // =========================================================================
+  // 5. Command Injection Validation (CWE-78)
+  // =========================================================================
+  if (cwe === 'CWE-78' || category === 'COMMAND_INJECTION' || title.includes('command injection')) {
+    // A. Static command strings without variables or dynamic interpolation
+    const isStaticCommand =
+      /^(?:exec|system|passthru|shell_exec|popen)\s*\(\s*['"][a-zA-Z0-9_\-\s\.\/]+['"]\s*\)\s*;?$/i.test(snippet) ||
+      /^child_process\.(?:exec|execSync)\s*\(\s*['"][a-zA-Z0-9_\-\s\.\/]+['"]\s*\)\s*;?$/i.test(snippet);
+
+    if (isStaticCommand) {
+      return {
+        verdict: 'VALID',
+        confidence: 'INFORMATIONAL',
+        verificationStatus: 'UNVERIFIED',
+        status: 'OPEN',
+        adjustedSeverity: 'LOW',
+        reason: 'Static system command with hardcoded arguments. No dynamic taint or user input injection possible.',
+      };
+    }
+
+    // B. Properly escaped commands using escapeshellarg or escapeshellcmd
+    if (snippetLower.includes('escapeshellarg') || snippetLower.includes('escapeshellcmd')) {
+      return {
+        verdict: 'VALID',
+        confidence: 'POTENTIAL',
+        verificationStatus: 'NEEDS_REVIEW',
+        status: 'NEEDS_REVIEW',
+        adjustedSeverity: 'LOW',
+        reason: 'Shell argument escaping detected (escapeshellarg). Command execution appears protected against injection.',
+      };
+    }
+
+    // C. Direct unescaped user input concatenation into shell sink
+    const hasTaintedInput =
+      snippetLower.includes('$_get') ||
+      snippetLower.includes('$_post') ||
+      snippetLower.includes('$_request') ||
+      snippetLower.includes('req.query') ||
+      snippetLower.includes('req.body') ||
+      snippetLower.includes('req.params');
+
+    if (hasTaintedInput) {
+      return {
+        verdict: 'VALID',
+        confidence: 'CONFIRMED',
+        verificationStatus: 'VERIFIED',
+        status: 'CONFIRMED',
+        adjustedSeverity: 'CRITICAL',
+        reason: 'Unvalidated user input directly concatenated into shell command execution sink.',
+      };
+    }
+
+    // D. Ambiguous variable passed to exec
+    return {
+      verdict: 'NEEDS_REVIEW',
+      confidence: 'POTENTIAL',
+      verificationStatus: 'NEEDS_REVIEW',
+      status: 'NEEDS_REVIEW',
+      adjustedSeverity: 'MEDIUM',
+      reason: 'Dynamic variable passed to command execution sink. Review variable origin to ensure user taint cannot reach the shell.',
     };
   }
 

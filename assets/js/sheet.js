@@ -139,7 +139,7 @@ const GoogleSheetView = {
                         ${escapeHtml(f.cwe_id || 'N/A')}
                     </td>
                     <td data-col="C" class="text-slate-600" onclick="GoogleSheetView.selectCell(this, ${rowNum}, 'C', '${escapeHtml(f.category || '')}')">
-                        ${escapeHtml(f.category || '')}
+                        ${f.scanCategory ? `<span style="font-size:10px; font-weight:700; color:#2563eb; background:#eff6ff; padding:1px 5px; border-radius:4px; margin-right:4px;">${escapeHtml(f.scanCategory)}</span>` : ''}${escapeHtml(f.category || '')}
                     </td>
                     <td data-col="D" class="font-mono text-blue-700" onclick="GoogleSheetView.selectCell(this, ${rowNum}, 'D', '${escapeHtml(f.endpoint || '')}')">
                         ${escapeHtml(f.endpoint || '')}

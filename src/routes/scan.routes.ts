@@ -1157,6 +1157,17 @@ scanRouter.delete('/:id', async (req: Request, res: Response): Promise<void> => 
 /**
  * GET /api/findings/list
  */
+function determineScanCategory(toolName?: string | null, category?: string | null): 'SAST' | 'DAST' | 'SCA' | 'SECRETS' | 'IAC' {
+  const t = (toolName || '').toUpperCase();
+  const c = (category || '').toUpperCase();
+
+  if (t === 'CHECKOV' || c.includes('IAC') || c.includes('INFRASTRUCTURE') || c.includes('CONTAINER')) return 'IAC';
+  if (t === 'GITLEAKS' || c.includes('SECRET') || c.includes('CREDENTIAL') || c.includes('EXPOSURE') || c.includes('PII')) return 'SECRETS';
+  if (t === 'TRIVY' || t === 'OSV_SCANNER' || t === 'NPM_AUDIT' || c.includes('DEPENDENCY') || c.includes('SUPPLY_CHAIN')) return 'SCA';
+  if (t === 'OWASP_ZAP' || t === 'NUCLEI' || t === 'WPSCAN' || t === 'WHATWEB' || t === 'TESTSSL' || c.includes('SECURITY_MISCONFIGURATION')) return 'DAST';
+  return 'SAST';
+}
+
 scanRouter.get('/findings/list', async (req: Request, res: Response): Promise<void> => {
   try {
     const severityFilter = typeof req.query.severity === 'string' ? req.query.severity.toUpperCase() : '';
@@ -1239,6 +1250,8 @@ scanRouter.get('/findings/list', async (req: Request, res: Response): Promise<vo
         cvss: sev === 'CRITICAL' ? '9.8' : sev === 'HIGH' ? '7.5' : sev === 'MEDIUM' ? '5.3' : '3.1',
         status: f.status === 'NEEDS_REVIEW' ? 'Needs Review' : (isScanOnly ? 'Detected' : 'Open'),
         category: f.category || (isDev ? 'Static Code Analysis (SAST)' : 'Web Application Security'),
+        scanCategory: determineScanCategory(f.toolName, f.category),
+        scan_category: determineScanCategory(f.toolName, f.category),
         parameter: 'input',
         first_detected_at: f.createdAt.toISOString().split('T')[0],
         description: f.description,
@@ -1712,6 +1725,8 @@ scanRouter.get('/:id/findings', async (req: Request, res: Response): Promise<voi
         filePath: ev?.filePath || null,
         lineStart: ev?.lineStart || null,
         lineEnd: ev?.lineEnd || null,
+        scanCategory: determineScanCategory(f.toolName, f.category),
+        scan_category: determineScanCategory(f.toolName, f.category),
         related_findings: relatedList,
       };
     });

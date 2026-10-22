@@ -159,7 +159,85 @@ export async function deduplicateScanFindings(scanId: number): Promise<Deduplica
     }
   }
 
-  // 3. Cross-Engine Correlation & Attack Path Verification
+  // 3. Root-Cause Aggregation across identical vulnerability types
+  // Aggregates recurrent findings sharing the same root cause (e.g. repeated email disclosures or pattern warnings),
+  // while preserving all occurrences, line numbers, and snippets in evidences & relatedFindingsJson.
+  const postSemanticFindings = await prisma.finding.findMany({
+    where: { scanId },
+    include: { evidences: true },
+    orderBy: { id: 'asc' },
+  });
+
+  const rootCauseGroups = new Map<string, typeof postSemanticFindings>();
+  for (const f of postSemanticFindings) {
+    const loc = (f.evidences[0]?.filePath || 'global').trim().toLowerCase();
+    const rootKey = `${f.toolName}:${f.category || 'VULN'}:${f.title}:${loc}`;
+    if (!rootCauseGroups.has(rootKey)) {
+      rootCauseGroups.set(rootKey, []);
+    }
+    rootCauseGroups.get(rootKey)!.push(f);
+  }
+
+  for (const [, group] of rootCauseGroups) {
+    if (group.length > 1) {
+      const canonical = group[0];
+      const duplicates = group.slice(1);
+
+      const occurrencesList: Array<{ filePath: string; lineStart?: number; lineEnd?: number; snippet?: string }> = [];
+
+      // Add canonical's primary location
+      if (canonical.evidences[0]) {
+        occurrencesList.push({
+          filePath: canonical.evidences[0].filePath || canonical.evidences[0].url || 'unknown',
+          lineStart: canonical.evidences[0].lineStart || undefined,
+          lineEnd: canonical.evidences[0].lineEnd || undefined,
+          snippet: canonical.evidences[0].rawSnippet || undefined,
+        });
+      }
+
+      for (const dup of duplicates) {
+        for (const ev of dup.evidences) {
+          occurrencesList.push({
+            filePath: ev.filePath || ev.url || 'unknown',
+            lineStart: ev.lineStart || undefined,
+            lineEnd: ev.lineEnd || undefined,
+            snippet: ev.rawSnippet || undefined,
+          });
+
+          await prisma.findingEvidence.update({
+            where: { id: ev.id },
+            data: { findingId: canonical.id },
+          });
+        }
+
+        await prisma.finding.delete({ where: { id: dup.id } });
+        mergedCount++;
+      }
+
+      let existingRelated: any[] = [];
+      try {
+        if (canonical.relatedFindingsJson) {
+          const parsed = JSON.parse(canonical.relatedFindingsJson);
+          existingRelated = Array.isArray(parsed) ? parsed : (parsed.related || []);
+        }
+      } catch {}
+
+      const totalOccurrences = group.length;
+      await prisma.finding.update({
+        where: { id: canonical.id },
+        data: {
+          description: `${canonical.description || canonical.title} (${totalOccurrences} occurrences identified across source files)`,
+          relatedFindingsJson: JSON.stringify({
+            rootCauseCount: totalOccurrences,
+            occurrences: occurrencesList.slice(0, 100),
+            related: existingRelated,
+          }),
+        },
+      });
+    }
+  }
+
+  // 4. Cross-Engine Correlation & Attack Path Verification
   const correlatedFindings = await correlateAndValidateFindings(scanId);
 
   const finalFindings = await prisma.finding.count({ where: { scanId } });

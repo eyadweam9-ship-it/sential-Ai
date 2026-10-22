@@ -304,6 +304,8 @@ export class GitleaksAdapter implements SecurityToolAdapter {
     const lines = content.split('\n');
     const maxLines = Math.min(lines.length, 5000);
 
+    const emailMatchesCount = new Map<string, number>();
+
     for (let i = 0; i < maxLines; i++) {
       const line = lines[i];
       if (line.length > 2000) continue; // Skip minified mega-lines to avoid catastrophic regex backtracking
@@ -339,6 +341,12 @@ export class GitleaksAdapter implements SecurityToolAdapter {
       }
 
       for (const rule of GITLEAKS_RULES) {
+        // Prevent flooding findings catalog with thousands of identical standalone PII emails from a single file
+        if (rule.id === 'gitleaks.exposed-email-pii') {
+          const currentCount = emailMatchesCount.get(sourceLocation) || 0;
+          if (currentCount >= 3) continue; // max 3 sample PII disclosures per file
+        }
+
         const match = line.match(rule.regex);
         if (match) {
           const secretMatch = match[1] || match[0];
@@ -364,6 +372,10 @@ export class GitleaksAdapter implements SecurityToolAdapter {
             lower.includes('@localhost')
           ) {
             continue;
+          }
+
+          if (rule.id === 'gitleaks.exposed-email-pii') {
+            emailMatchesCount.set(sourceLocation, (emailMatchesCount.get(sourceLocation) || 0) + 1);
           }
 
           // If auth credentials pair matched on the same line, clearly show both Email/Username and Password
@@ -410,16 +422,36 @@ export class GitleaksAdapter implements SecurityToolAdapter {
     if (depth > 12 || !fs.existsSync(dirPath)) return;
     const base = rootDir || dirPath;
 
+    const VENDOR_AND_EXCLUDED_DIRS = new Set([
+      'node_modules', 'vendor', 'bower_components', 'third_party', 'thirdparty',
+      'packages', 'libs', 'bundle', 'dist', 'build', 'coverage', '.next', '.nuxt',
+      '.system_generated', '__pycache__', '.venv', 'venv', 'env', '.git', '.svn'
+    ]);
+
+    const MINIFIED_PATTERNS = [
+      /\.min\.(js|css|mjs)$/i,
+      /\.bundle\.(js|css)$/i,
+      /\.pack\.js$/i,
+      /\.map$/i,
+      /jquery.*\.js$/i,
+      /bootstrap.*\.js$/i,
+      /react.*\.production\.min\.js$/i,
+    ];
+
     try {
       const entries = fs.readdirSync(dirPath, { withFileTypes: true });
       for (const entry of entries) {
         const fullPath = path.join(dirPath, entry.name);
         if (entry.isDirectory()) {
-          if (['node_modules', 'dist', 'build', '.system_generated', '.git', 'coverage', '.next'].includes(entry.name)) {
+          if (VENDOR_AND_EXCLUDED_DIRS.has(entry.name.toLowerCase())) {
             continue;
           }
           this.scanDirectory(fullPath, findings, depth + 1, base);
         } else if (entry.isFile()) {
+          const nameLower = entry.name.toLowerCase();
+          if (MINIFIED_PATTERNS.some(p => p.test(nameLower))) {
+            continue;
+          }
           this.scanFile(fullPath, findings, base);
         }
       }
