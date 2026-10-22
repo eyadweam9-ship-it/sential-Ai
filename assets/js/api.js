@@ -108,16 +108,23 @@ const API = {
         const headers = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const res = await fetch(`${this.BASE_URL}/scans/upload`, {
-            method: 'POST',
-            headers,
-            body: formData
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-            throw new Error(data.error || data.message || 'File upload failed');
+        try {
+            const res = await fetch(`${this.BASE_URL}/scans/upload`, {
+                method: 'POST',
+                headers,
+                body: formData
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                throw new Error(data.error || data.message || `File upload failed with status ${res.status}`);
+            }
+            return data;
+        } catch (err) {
+            if (err.name === 'TypeError' && String(err.message).toLowerCase().includes('fetch')) {
+                throw new Error('Network error or connection reset while uploading file. Ensure file is within 100MB.');
+            }
+            throw err;
         }
-        return data;
     },
 
     async uploadFolder(formData) {
@@ -125,16 +132,23 @@ const API = {
         const headers = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const res = await fetch(`${this.BASE_URL}/scans/upload-folder`, {
-            method: 'POST',
-            headers,
-            body: formData
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-            throw new Error(data.error || data.message || 'Folder upload failed');
+        try {
+            const res = await fetch(`${this.BASE_URL}/scans/upload-folder`, {
+                method: 'POST',
+                headers,
+                body: formData
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                throw new Error(data.error || data.message || `Folder upload failed with status ${res.status}`);
+            }
+            return data;
+        } catch (err) {
+            if (err.name === 'TypeError' && String(err.message).toLowerCase().includes('fetch')) {
+                throw new Error('Connection reset during folder upload. Some files may be too large or blocked. Consider archiving as ZIP.');
+            }
+            throw err;
         }
-        return data;
     },
 
     // Target Authorization & Scope Gate
