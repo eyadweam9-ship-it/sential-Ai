@@ -425,7 +425,8 @@ export class GitleaksAdapter implements SecurityToolAdapter {
     const VENDOR_AND_EXCLUDED_DIRS = new Set([
       'node_modules', 'vendor', 'bower_components', 'third_party', 'thirdparty',
       'packages', 'libs', 'bundle', 'dist', 'build', 'coverage', '.next', '.nuxt',
-      '.system_generated', '__pycache__', '.venv', 'venv', 'env', '.git', '.svn'
+      '.system_generated', '__pycache__', '.venv', 'venv', 'env', '.git', '.svn',
+      'storage', 'reports', 'tool-results', 'uploads', 'temp', 'tmp', 'logs'
     ]);
 
     const MINIFIED_PATTERNS = [
@@ -466,10 +467,13 @@ export class GitleaksAdapter implements SecurityToolAdapter {
       const nameLower = path.basename(filePath).toLowerCase();
       const ext = path.extname(nameLower);
 
-      // Strictly skip documentation, benchmark ground truth, and package lock files
+      // Strictly skip documentation, benchmark ground truth, package locks, and past scanner output reports
       if (
         nameLower === 'vulnerabilities.json' ||
         nameLower.includes('benchmark') ||
+        nameLower.startsWith('report-scan-') ||
+        nameLower.endsWith('-semgrep.json') ||
+        nameLower.endsWith('-gitleaks.json') ||
         ['.md', '.txt', '.csv', '.lock', '.pdf', '.map'].includes(ext) ||
         nameLower === 'package-lock.json'
       ) {

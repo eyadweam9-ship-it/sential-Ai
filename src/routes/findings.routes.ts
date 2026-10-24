@@ -80,7 +80,15 @@ findingsRouter.get('/list', async (req: AuthenticatedRequest, res: Response): Pr
     for (const f of rawFindings) {
       const rawFile = (f.evidences && f.evidences[0]?.filePath) || f.evidences[0]?.url || 'global';
       const normFile = rawFile.replace(/\\/g, '/').toLowerCase().trim();
-      if (normFile.includes('vulnerabilities.json') || normFile.includes('benchmark-report')) {
+      if (
+        normFile.includes('vulnerabilities.json') ||
+        normFile.includes('benchmark-report') ||
+        normFile.includes('/storage/tool-results/') ||
+        normFile.includes('/storage/reports/') ||
+        normFile.includes('report-scan-') ||
+        normFile.includes('-semgrep.json') ||
+        normFile.includes('-gitleaks.json')
+      ) {
         continue;
       }
 
