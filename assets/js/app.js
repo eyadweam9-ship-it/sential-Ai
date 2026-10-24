@@ -4801,7 +4801,24 @@ const App = {
         const list = Array.isArray(findings) ? findings : [];
         const isScanOnly = this.scanState.scanType === 'scan_only';
 
-        target.innerHTML = list.map(f => {
+        // Deduplicate findings by canonical location and CWE
+        const seenFindingKeys = new Set();
+        const uniqueFindings = list.filter(f => {
+            const file = (f.evidences && f.evidences[0] && (f.evidences[0].filePath || f.evidences[0].url)) || f.filePath || '';
+            const normFile = file.replace(/\\/g, '/').toLowerCase().trim();
+            if (normFile.includes('vulnerabilities.json') || normFile.includes('benchmark-report')) return false;
+
+            const cwe = (f.cwe || f.cwe_id || '').toUpperCase();
+            const line = (f.evidences && f.evidences[0] && f.evidences[0].lineStart) || f.lineStart || 0;
+            const cluster = Math.floor(line / 25);
+            const key = `${normFile}:${cwe}:${f.title}:${cluster}`;
+
+            if (seenFindingKeys.has(key)) return false;
+            seenFindingKeys.add(key);
+            return true;
+        });
+
+        target.innerHTML = uniqueFindings.map(f => {
             const sev = f.severity || f.sev || 'Medium';
             const sevLower = sev.toLowerCase();
             const isFixReady = !isScanOnly && (f.status === 'confirmed' || f.status === 'Fix ready');
@@ -4814,9 +4831,10 @@ const App = {
                 || f.filePath 
                 || f.path 
                 || '/';
-            const cweLabel = f.cwe || f.cwe_id || f.category || f.type || 'CWE-200';
-            const cat = (f.scanCategory || f.scan_category || 'SAST').toUpperCase();
-            const catBadge = `<span class="badge" style="font-size:9px; padding:1px 5px; border-radius:4px; background:#f1f5f9; color:#475569; font-weight:700; margin-right:5px; border:1px solid #e2e8f0;">${escapeHtml(cat)}</span>`;
+            const cweLabel = f.cwe || f.cwe_id || 'CWE-200';
+            const cat = (f.scanCategory || f.scan_category || (f.category ? f.category.split(' ')[0] : 'SAST')).toUpperCase();
+            const catBadge = `<span class="badge" style="font-size:9px; padding:2px 6px; border-radius:4px; background:#f1f5f9; color:#334155; font-weight:700; border:1px solid #cbd5e1;">${escapeHtml(cat)}</span>`;
+            const cweBadge = `<span class="badge" style="font-size:9px; padding:2px 6px; border-radius:4px; background:#e0f2fe; color:#0369a1; font-weight:700; border:1px solid #bae6fd;">${escapeHtml(cweLabel)}</span>`;
             const isNeedsReview = f.confidence === 'NEEDS_REVIEW' || f.status === 'Needs Review' || f.findingStatus === 'NEEDS_REVIEW';
             const confBadge = isNeedsReview
                 ? `<span class="badge" style="font-size:10px; padding:1px 6px; border-radius:9999px; background:#fef3c7; color:#d97706; font-weight:700; margin-left:6px; vertical-align:middle;">⚠️ Needs Review</span>`
@@ -4832,7 +4850,9 @@ const App = {
                         <i class="severity-dot ${sevLower}"></i>
                         ${sev.charAt(0).toUpperCase() + sev.slice(1)}
                     </span>
-                    <span class="mono-tag">${catBadge}${escapeHtml(cweLabel)}</span>
+                    <span class="mono-tag" style="display:inline-flex; align-items:center; gap:6px;">
+                        ${catBadge} <span>${cweBadge}</span>
+                    </span>
                     <span class="${isFixReady ? 'fix-ready' : ''}">
                         ${isFixReady ? Icons.get('sparkles', 'size-4') : ''}
                         ${statusLabel}

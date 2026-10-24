@@ -765,9 +765,26 @@ export class SemgrepAdapter implements SecurityToolAdapter {
     const existingRuleKeys = new Set(findings.map(f => `${f.cwe}:${f.filePath}:${f.lineStart}`));
 
     const addFinding = (finding: RawToolFinding) => {
-      const key = `${finding.cwe}:${finding.filePath}:${finding.lineStart}`;
-      if (!existingRuleKeys.has(key)) {
-        existingRuleKeys.add(key);
+      // Deduplicate: If an existing finding in this file already covers this exact sink/issue within nearby lines, skip duplicate!
+      const alreadyCovered = findings.some(f => {
+        if (f.filePath !== finding.filePath) return false;
+        const sameCwe = f.cwe && finding.cwe && (
+          f.cwe.toUpperCase().startsWith(finding.cwe.toUpperCase()) ||
+          finding.cwe.toUpperCase().startsWith(f.cwe.toUpperCase()) ||
+          (f.cwe.includes('95') && finding.cwe.includes('1336')) ||
+          (f.cwe.includes('1336') && finding.cwe.includes('95')) ||
+          (f.cwe.includes('862') && finding.cwe.includes('285')) ||
+          (f.cwe.includes('285') && finding.cwe.includes('862')) ||
+          (f.cwe.includes('434') && finding.cwe.includes('434')) ||
+          (f.cwe.includes('345') && finding.cwe.includes('347')) ||
+          (f.cwe.includes('347') && finding.cwe.includes('345'))
+        );
+        const nearLine = Math.abs((f.lineStart || 0) - (finding.lineStart || 0)) < 35;
+        const sameTitleOrRule = f.sourceRuleId === finding.sourceRuleId || f.title === finding.title;
+        return (sameCwe && nearLine) || (sameTitleOrRule && nearLine);
+      });
+
+      if (!alreadyCovered) {
         findings.push(finding);
       }
     };

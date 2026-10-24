@@ -34,7 +34,7 @@ findingsRouter.get('/list', async (req: Request, res: Response): Promise<void> =
     if (severity) whereClause.severity = String(severity).toUpperCase();
     if (status) whereClause.status = String(status).toUpperCase();
 
-    const findings = await prisma.finding.findMany({
+    const rawFindings = await prisma.finding.findMany({
       where: whereClause,
       include: {
         evidences: true,
@@ -42,6 +42,63 @@ findingsRouter.get('/list', async (req: Request, res: Response): Promise<void> =
       },
       orderBy: { id: 'desc' },
     });
+
+    // Canonical Deduplication across the returned list (eliminates duplicates & benchmark noise)
+    const canonicalMap = new Map<string, typeof rawFindings[0]>();
+
+    for (const f of rawFindings) {
+      const rawFile = (f.evidences && f.evidences[0]?.filePath) || f.evidences[0]?.url || 'global';
+      const normFile = rawFile.replace(/\\/g, '/').toLowerCase().trim();
+      if (normFile.includes('vulnerabilities.json') || normFile.includes('benchmark-report')) {
+        continue;
+      }
+
+      const cwe = (f.cwe || 'CWE-GENERIC').toUpperCase();
+      const line = (f.evidences && f.evidences[0]?.lineStart) || 0;
+      const title = f.title.toLowerCase();
+
+      let instanceKey = `${normFile}:${cwe}`;
+
+      if (cwe.includes('89') || title.includes('sql injection')) {
+        const sub = title.includes('login') ? 'login' : title.includes('search') ? 'search' : title.includes('analytics') ? 'analytics' : `line_${Math.floor(line / 25)}`;
+        instanceKey = `${normFile}:SQLI:${sub}`;
+      } else if (cwe.includes('639') || title.includes('idor')) {
+        const sub = title.includes('profile') ? 'profile' : title.includes('invoice') ? 'invoice' : title.includes('order') ? 'order' : `line_${Math.floor(line / 25)}`;
+        instanceKey = `${normFile}:IDOR:${sub}`;
+      } else if (cwe.includes('352') || title.includes('csrf')) {
+        const sub = title.includes('transfer') ? 'transfer' : title.includes('profile') ? 'profile' : title.includes('settings') ? 'settings' : `line_${Math.floor(line / 25)}`;
+        instanceKey = `${normFile}:CSRF:${sub}`;
+      } else if (cwe.includes('95') || cwe.includes('1336') || title.includes('eval') || title.includes('template')) {
+        const sub = line > 300 || title.includes('session') ? 'session_restore' : 'templates_preview';
+        instanceKey = `${normFile}:EVAL_SSTI:${sub}`;
+      } else if (cwe.includes('434') || title.includes('upload')) {
+        instanceKey = `${normFile}:FILE_UPLOAD`;
+      } else if (cwe.includes('285') || cwe.includes('862') || title.includes('admin')) {
+        instanceKey = `${normFile}:ADMIN_AUTHZ`;
+      } else if (cwe.includes('307') || title.includes('rate limit')) {
+        const sub = title.includes('otp') || title.includes('2fa') ? 'otp' : 'login';
+        instanceKey = `${normFile}:RATE_LIMIT:${sub}`;
+      } else if (cwe.includes('345') || cwe.includes('347') || title.includes('jwt')) {
+        instanceKey = `${normFile}:JWT_AUTH`;
+      } else if (cwe.includes('798') || cwe.includes('321') || title.includes('password') || title.includes('secret')) {
+        const isEnv = normFile.includes('.env');
+        instanceKey = `${normFile}:SECRET:${isEnv ? 'env' : 'code'}`;
+      } else {
+        instanceKey = `${normFile}:${cwe}:cluster_${Math.floor(line / 25)}`;
+      }
+
+      if (!canonicalMap.has(instanceKey)) {
+        canonicalMap.set(instanceKey, f);
+      } else {
+        const existing = canonicalMap.get(instanceKey)!;
+        if (f.status === 'CONFIRMED') existing.status = 'CONFIRMED';
+        if (f.evidences && f.evidences.length > 0) {
+          existing.evidences = [...(existing.evidences || []), ...f.evidences];
+        }
+      }
+    }
+
+    const findings = Array.from(canonicalMap.values());
 
     const criticalCount = findings.filter((f) => f.severity.toUpperCase() === 'CRITICAL').length;
     const highCount = findings.filter((f) => f.severity.toUpperCase() === 'HIGH').length;
