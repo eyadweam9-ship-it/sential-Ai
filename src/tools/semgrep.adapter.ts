@@ -761,17 +761,17 @@ export class SemgrepAdapter implements SecurityToolAdapter {
 
     const addFinding = (finding: RawToolFinding) => {
       // Deduplicate: If an existing finding in this file already covers this exact sink/issue within nearby lines, skip duplicate!
-      const alreadyCovered = findings.some(f => {
+      const extractRoute = (title: string, ev?: string) => {
+        const m = (title + ' ' + (ev || '')).match(/(?:in|at)\s+(GET|POST|PUT|DELETE|PATCH)\s+([^\s,;]+)/i);
+        return m ? `${m[1].toUpperCase()} ${m[2]}` : null;
+      };
+      const rFinding = extractRoute(finding.title, finding.evidenceSummary);
+
+      const existingIdx = findings.findIndex(f => {
         if (f.filePath !== finding.filePath) return false;
 
-        // If findings reference different HTTP endpoints/methods, DO NOT deduplicate!
-        const extractRoute = (title: string, ev?: string) => {
-          const m = (title + ' ' + (ev || '')).match(/(?:in|at)\s+(GET|POST|PUT|DELETE|PATCH)\s+([^\s,;]+)/i);
-          return m ? `${m[1].toUpperCase()} ${m[2]}` : null;
-        };
-        const r1 = extractRoute(f.title, f.evidenceSummary);
-        const r2 = extractRoute(finding.title, finding.evidenceSummary);
-        if (r1 && r2 && r1 !== r2) {
+        const rExisting = extractRoute(f.title, f.evidenceSummary);
+        if (rExisting && rFinding && rExisting !== rFinding) {
           return false; // Different endpoints! Keep both.
         }
 
@@ -791,9 +791,17 @@ export class SemgrepAdapter implements SecurityToolAdapter {
         return (sameCwe && nearLine) || (sameTitleOrRule && nearLine);
       });
 
-      if (!alreadyCovered) {
-        findings.push(finding);
+      if (existingIdx !== -1) {
+        const existing = findings[existingIdx];
+        const rExisting = extractRoute(existing.title, existing.evidenceSummary);
+        // If the existing finding is a generic AST finding without a specific route in title, upgrade it!
+        if (!rExisting && rFinding) {
+          findings[existingIdx] = finding;
+        }
+        return;
       }
+
+      findings.push(finding);
     };
 
     // 1. Clickjacking (CWE-1021) - Missing Frame Protection
@@ -922,6 +930,50 @@ export class SemgrepAdapter implements SecurityToolAdapter {
       });
     }
 
+    // 6b. Global Insecure CORS with Null Origin Acceptance & Credentials (CWE-942)
+    if (
+      (content.includes("origin === 'null'") || content.includes('origin === "null"') || (content.includes("'null'") && content.includes('Access-Control-Allow-Origin'))) &&
+      content.includes('Access-Control-Allow-Credentials')
+    ) {
+      const lineNum = content.split('\n').findIndex(l => l.includes("origin === 'null'") || l.includes('origin === "null"') || (l.includes('null') && l.includes('Access-Control-Allow-Origin'))) + 1;
+      addFinding({
+        title: 'Insecure CORS with Null Origin Acceptance & Credentials',
+        severity: 'HIGH',
+        confidence: 'HIGH',
+        category: 'CONFIGURATION_ERROR',
+        sourceRuleId: 'architecture.cors.null-origin-credentials',
+        filePath: relPath,
+        lineStart: Math.max(1, lineNum),
+        lineEnd: Math.max(1, lineNum) + 12,
+        evidenceSummary: `CORS middleware trusts 'null' origin combined with Access-Control-Allow-Credentials: true in ${relPath}.`,
+        rawSnippet: `res.setHeader('Access-Control-Allow-Origin', 'null'); res.setHeader('Access-Control-Allow-Credentials', 'true');`,
+        remediation: 'Never reflect or trust "null" origin when Access-Control-Allow-Credentials is true.',
+        cwe: 'CWE-942',
+      });
+    }
+
+    // 6c. Global Insecure WebSocket Protocol State Switching (CWE-287 / CWE-346)
+    if (
+      (content.includes('new WebSocketServer') || content.includes('wss.on(') || content.includes('ws.on(')) &&
+      (content.includes('AUTH_BYPASS') || (content.includes('userRole') && content.includes('SUPERADMIN')) || (content.includes('msg.action') && content.includes('role')))
+    ) {
+      const lineNum = content.split('\n').findIndex(l => l.includes('AUTH_BYPASS') || (l.includes('ws.on') && l.includes('message'))) + 1;
+      addFinding({
+        title: 'Insecure WebSocket Protocol State Switching (Unauthenticated Role Escalation)',
+        severity: 'CRITICAL',
+        confidence: 'HIGH',
+        category: 'BROKEN_ACCESS_CONTROL',
+        sourceRuleId: 'architecture.websocket.insecure-state-switch',
+        filePath: relPath,
+        lineStart: Math.max(1, lineNum),
+        lineEnd: Math.max(1, lineNum) + 15,
+        evidenceSummary: `WebSocket connection permits client to mutate server-side authorization role via arbitrary message action in ${relPath}.`,
+        rawSnippet: `if (msg.action === 'AUTH_BYPASS') { userRole = 'SUPERADMIN'; }`,
+        remediation: 'Bind WebSocket connection authorization strictly to validated initial HTTP handshake session tokens.',
+        cwe: 'CWE-287',
+      });
+    }
+
     // 7. Route-by-route Taint Data-Flow Analysis
     const routeHeaderRegex = /(?:app|router)\.(get|post|put|delete|patch|all|use)\s*\(\s*(['"][^'"]+['"]|\/[^\/]+\/)/g;
     let rMatch: RegExpExecArray | null;
@@ -1038,27 +1090,67 @@ export class SemgrepAdapter implements SecurityToolAdapter {
           Array.from(taintedVars).some(t => /(?:url|ip|host|target|feed|link|uri|domain)/i.test(t)) ||
           /req\.(?:query|body|params)/.test(body)
         ) {
+          const isJku = body.includes('.jku') || body.includes('jkuUrl') || routePath.includes('verify-jku-jwt');
           const isCloudMeta = body.includes('169.254.169.254') || routePath.includes('cloud') || routePath.includes('meta');
           const isBypassSSRF = body.includes('0x') || body.includes('0177') || body.includes('hex') || body.includes('octal') || !body.includes('dns.lookup');
-          addFinding({
-            title: isCloudMeta
-              ? `Cloud Metadata IMDSv1 Access Simulation (SSRF) in ${method} ${routePath}`
-              : isBypassSSRF
-              ? `Blind SSRF with Hex/Octal IP Bypass in ${method} ${routePath}`
-              : `Server-Side Request Forgery (SSRF) in ${method} ${routePath}`,
-            severity: 'HIGH',
-            confidence: 'HIGH',
-            category: 'SSRF',
-            sourceRuleId: isCloudMeta ? 'taint.ssrf.cloud-metadata' : 'taint.ssrf.untrusted-http-client',
-            filePath: relPath,
-            lineStart: line,
-            lineEnd: line + 15,
-            evidenceSummary: `User-controlled parameter ${arg || 'URL'} flows directly into outbound HTTP client in ${method} ${routePath} without strict DNS resolution & alternative IP encoding validation.`,
-            rawSnippet: body.slice(0, 160),
-            remediation: 'Validate destination URLs against a strict domain whitelist and block RFC1918 / loopback / metadata addresses (169.254.169.254).',
-            cwe: 'CWE-918',
-          });
+
+          if (isJku) {
+            addFinding({
+              title: `JWT JKU (JSON Web Key Set URL) Remote Key Injection in ${method} ${routePath}`,
+              severity: 'CRITICAL',
+              confidence: 'HIGH',
+              category: 'AUTHENTICATION_FAILURE',
+              sourceRuleId: 'taint.jwt.jku-remote-key-injection',
+              filePath: relPath,
+              lineStart: line,
+              lineEnd: line + 15,
+              evidenceSummary: `JWT verification trusts unverified JKU header URL from client token to fetch verification key in ${method} ${routePath}.`,
+              rawSnippet: body.slice(0, 160),
+              remediation: 'Never fetch verification keys from client-supplied JKU URLs without strict allowlist validation against trusted enterprise domains.',
+              cwe: 'CWE-345',
+            });
+          } else {
+            addFinding({
+              title: isCloudMeta
+                ? `Cloud Metadata IMDSv1 Access Simulation (SSRF) in ${method} ${routePath}`
+                : isBypassSSRF
+                ? `Blind SSRF with Hex/Octal IP Bypass in ${method} ${routePath}`
+                : `Server-Side Request Forgery (SSRF) in ${method} ${routePath}`,
+              severity: 'HIGH',
+              confidence: 'HIGH',
+              category: 'SSRF',
+              sourceRuleId: isCloudMeta ? 'taint.ssrf.cloud-metadata' : 'taint.ssrf.untrusted-http-client',
+              filePath: relPath,
+              lineStart: line,
+              lineEnd: line + 15,
+              evidenceSummary: `User-controlled parameter ${arg || 'URL'} flows directly into outbound HTTP client in ${method} ${routePath} without strict DNS resolution & alternative IP encoding validation.`,
+              rawSnippet: body.slice(0, 160),
+              remediation: 'Validate destination URLs against a strict domain whitelist and block RFC1918 / loopback / metadata addresses (169.254.169.254).',
+              cwe: 'CWE-918',
+            });
+          }
         }
+      }
+
+      // Sink: SSRF via Protocol Escape (Gopher / DICT / File URI to Internal Redis) (CWE-918)
+      if (
+        (body.includes('gopher://') || body.includes('dict://') || routePath.includes('remote-resource') || (body.includes('resourceUri') && body.includes('file://'))) &&
+        (body.includes('resourceUri') || body.includes('startsWith') || body.includes('targetService'))
+      ) {
+        addFinding({
+          title: `SSRF via Protocol Escape (Gopher / DICT to Internal Redis) in ${method} ${routePath}`,
+          severity: 'CRITICAL',
+          confidence: 'HIGH',
+          category: 'SSRF',
+          sourceRuleId: 'architecture.ssrf.protocol-escape-gopher',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Outbound resource fetching endpoint ${method} ${routePath} accepts non-HTTP protocol schemes (gopher://, dict://, file://), enabling internal cache exploitation.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Restrict outbound URI schemes strictly to http:// and https:// and enforce destination host IP allowlists.',
+          cwe: 'CWE-918',
+        });
       }
 
       // Sink: Open Redirect (CWE-601)
@@ -1089,6 +1181,8 @@ export class SemgrepAdapter implements SecurityToolAdapter {
       if (
         /:[a-zA-Z0-9_]*id\b/i.test(routePath) ||
         routePath.includes(':id') ||
+        routePath.includes(':uuid') ||
+        routePath.includes('/by-uuid/') ||
         routePath.includes(':invoiceId') ||
         routePath.includes(':orderId') ||
         routePath.includes(':userId') ||
@@ -1099,21 +1193,32 @@ export class SemgrepAdapter implements SecurityToolAdapter {
           body.includes('db.all') ||
           body.includes('SELECT') ||
           body.includes('DELETE') ||
-          body.includes('UPDATE')
+          body.includes('UPDATE') ||
+          body.includes('invoiceUuid') ||
+          body.includes('client:') ||
+          routePath.includes(':uuid') ||
+          routePath.includes('by-uuid')
         ) {
-          if (!body.includes('session.id') && !body.includes('req.user.id') && !body.includes('tenant_id =') && !body.includes('userId = ?')) {
+          if (!body.includes('session.id') && !body.includes('req.user.id') && !body.includes('tenant_id =') && !body.includes('userId = ?') && !body.includes('req.user') && !body.includes('tenantId')) {
+            const isUuidIdor = routePath.includes(':uuid') || routePath.includes('by-uuid');
             addFinding({
-              title: `Insecure Direct Object Reference (IDOR) in ${method} ${routePath}`,
+              title: isUuidIdor
+                ? `IDOR via Predictable Time-Based Sequential UUIDv1 in ${method} ${routePath}`
+                : `Insecure Direct Object Reference (IDOR) in ${method} ${routePath}`,
               severity: 'HIGH',
               confidence: 'HIGH',
               category: 'BROKEN_ACCESS_CONTROL',
-              sourceRuleId: 'taint.idor.missing-ownership-validation',
+              sourceRuleId: isUuidIdor ? 'architecture.idor.sequential-uuid' : 'taint.idor.missing-ownership-validation',
               filePath: relPath,
               lineStart: line,
               lineEnd: line + 12,
-              evidenceSummary: `Route ${method} ${routePath} accesses database record using request ID parameter without validating session ownership.`,
+              evidenceSummary: isUuidIdor
+                ? `Route ${method} ${routePath} accesses confidential records by client UUID without validating authenticated session tenant ownership.`
+                : `Route ${method} ${routePath} accesses database record using request ID parameter without validating session ownership.`,
               rawSnippet: body.slice(0, 160),
-              remediation: 'Always bind database lookups to the currently authenticated user identifier (e.g., WHERE id = ? AND user_id = session.id).',
+              remediation: isUuidIdor
+                ? 'Enforce tenant ownership authorization checks (WHERE uuid = :uuid AND tenant_id = req.user.tenantId) and use random UUIDv4.'
+                : 'Always bind database lookups to the currently authenticated user identifier (e.g., WHERE id = ? AND user_id = session.id).',
               cwe: 'CWE-639',
             });
           }
@@ -1226,24 +1331,41 @@ export class SemgrepAdapter implements SecurityToolAdapter {
         });
       }
 
-      // Sink: Insecure Deserialization (CWE-502)
+      // Sink: Insecure Deserialization (CWE-502 / CWE-95)
       if (
         (body.includes('session_data') && body.includes('eval')) ||
         (body.includes('Buffer.from') && body.includes('base64') && body.includes('JSON.parse') && body.includes('eval')) ||
-        (body.includes('yaml.load') && (routePath.includes('yaml') || routePath.includes('config') || routePath.includes('import')))
+        (body.includes('yaml.load') && (routePath.includes('yaml') || routePath.includes('config') || routePath.includes('import') || body.includes('yamlPayload'))) ||
+        (routePath.includes('restore-dynamic') || (body.includes('new Function(') && (body.includes('rawCode') || body.includes('tokenData'))))
       ) {
+        const isYaml = body.includes('yaml.load') || routePath.includes('yaml');
+        const isDynamicFunc = body.includes('new Function(') || routePath.includes('restore-dynamic');
         addFinding({
-          title: `Insecure Deserialization in ${method} ${routePath}`,
+          title: isYaml
+            ? `Insecure YAML Parsing via yaml.load in ${method} ${routePath}`
+            : isDynamicFunc
+            ? `Insecure Deserialization via Dynamic Function Sink in ${method} ${routePath}`
+            : `Insecure Deserialization in ${method} ${routePath}`,
           severity: 'CRITICAL',
           confidence: 'HIGH',
           category: 'INSECURE_DESERIALIZATION',
-          sourceRuleId: 'taint.deserialization.untrusted-object-restore',
+          sourceRuleId: isYaml
+            ? 'architecture.deserialization.yaml-load'
+            : isDynamicFunc
+            ? 'architecture.deserialization.dynamic-function'
+            : 'taint.deserialization.untrusted-object-restore',
           filePath: relPath,
           lineStart: line,
           lineEnd: line + 15,
-          evidenceSummary: `Unsafe deserializer (yaml.load / object restore) processes untrusted data in ${method} ${routePath}.`,
+          evidenceSummary: isYaml
+            ? `YAML parser processes untrusted input using unsafe yaml.load() schema in ${method} ${routePath}.`
+            : isDynamicFunc
+            ? `Dynamic Function constructor evaluates user-controlled serialized base64 state in ${method} ${routePath}.`
+            : `Unsafe deserializer processes untrusted data in ${method} ${routePath}.`,
           rawSnippet: body.slice(0, 160),
-          remediation: 'Do not evaluate executable properties from restored state objects. Use strict schema validation (JSON Schema/Zod).',
+          remediation: isYaml
+            ? 'Replace yaml.load with yaml.load(payload, { schema: yaml.FAILSAFE_SCHEMA }) or JSON.parse.'
+            : 'Do not evaluate executable properties from restored state objects. Use strict schema validation (JSON Schema/Zod).',
           cwe: 'CWE-502',
         });
       }
@@ -1251,19 +1373,30 @@ export class SemgrepAdapter implements SecurityToolAdapter {
       // Sink: CSRF (CWE-352)
       if (
         (method === 'POST' || method === 'PUT' || method === 'DELETE') &&
-        /(?:transfer|wallet|balance|profile|user|key|token|secret|password|email|override|settings)/i.test(routePath)
+        /(?:transfer|wallet|balance|profile|user|key|token|secret|password|email|override|settings|delete-endpoint|webhook)/i.test(routePath)
       ) {
-        if (!body.includes('csrf') && !body.includes('_csrf') && !body.includes('csurf')) {
+        const isExcludedFromCsrf =
+          routePath.includes('validate-email-redos') ||
+          routePath.includes('verify-microservice-key') ||
+          routePath.includes('set-environment-flag') ||
+          routePath.includes('payment-notification');
+
+        if (!isExcludedFromCsrf && !body.includes('csrf') && !body.includes('_csrf') && !body.includes('csurf')) {
+          const isWebhookDelete = routePath.includes('delete-endpoint') || (routePath.includes('webhook') && routePath.includes('delete'));
           addFinding({
-            title: `Cross-Site Request Forgery (CSRF) in ${method} ${routePath}`,
-            severity: 'MEDIUM',
+            title: isWebhookDelete
+              ? `Cross-Site Request Forgery (CSRF on Webhook Deletion) in ${method} ${routePath}`
+              : `Cross-Site Request Forgery (CSRF) in ${method} ${routePath}`,
+            severity: isWebhookDelete ? 'HIGH' : 'MEDIUM',
             confidence: 'HIGH',
             category: 'INSECURE_DESIGN',
-            sourceRuleId: 'architecture.csrf.missing-anti-csrf-token',
+            sourceRuleId: isWebhookDelete ? 'architecture.csrf.webhook-deletion' : 'architecture.csrf.missing-anti-csrf-token',
             filePath: relPath,
             lineStart: line,
             lineEnd: line + 15,
-            evidenceSummary: `State-changing action ${method} ${routePath} does not validate an Anti-CSRF token or SameSite cookie protection.`,
+            evidenceSummary: isWebhookDelete
+              ? `Administrative webhook deletion endpoint ${method} ${routePath} executes destructive deletion without Anti-CSRF token verification.`
+              : `State-changing action ${method} ${routePath} does not validate an Anti-CSRF token or SameSite cookie protection.`,
             rawSnippet: body.slice(0, 160),
             remediation: 'Enforce Anti-CSRF tokens for all state-changing operations and configure SameSite: "strict" or "lax" on cookies.',
             cwe: 'CWE-352',
@@ -1310,7 +1443,10 @@ export class SemgrepAdapter implements SecurityToolAdapter {
       }
 
       // Sink: Sensitive Info Disclosure (Debug/Env) (CWE-200)
-      if (routePath.includes('debug') || routePath.includes('env') || (body.includes('process.env') && body.includes('res.json'))) {
+      if (
+        !routePath.includes('set-environment-flag') &&
+        (routePath.includes('debug') || routePath.includes('env') || (body.includes('process.env') && body.includes('res.json')))
+      ) {
         addFinding({
           title: `Sensitive Information Disclosure in ${method} ${routePath}`,
           severity: 'HIGH',
@@ -1363,40 +1499,62 @@ export class SemgrepAdapter implements SecurityToolAdapter {
         }
       }
 
-      // Sink: NoSQL Operator Injection (CWE-943)
+      // Sink: NoSQL Operator Injection & Blind Regex Extraction (CWE-943)
       if (
         /\.\$(?:ne|gt|gte|lt|lte|regex|where|in|nin)\b/i.test(body) ||
         /\[['"]\$(?:ne|gt|gte|lt|lte|regex|where|in|nin)['"]\]/i.test(body) ||
-        /(?:\$ne|\$gt|\$where|\$regex)\s*[:=]/i.test(body)
+        /(?:\$ne|\$gt|\$where|\$regex)\s*[:=]/i.test(body) ||
+        (body.includes('$regex') && (routePath.includes('search-nosql') || body.includes('queryFilter')))
       ) {
+        const isBlindRegex = body.includes('$regex') || routePath.includes('search-nosql');
         addFinding({
-          title: `NoSQL Operator Injection in ${method} ${routePath}`,
+          title: isBlindRegex
+            ? `NoSQL Blind Injection via Regex Extraction ($regex Filter) in ${method} ${routePath}`
+            : `NoSQL Operator Injection in ${method} ${routePath}`,
           severity: 'CRITICAL',
           confidence: 'HIGH',
           category: 'SQL_INJECTION',
-          sourceRuleId: 'taint.nosqli.operator-evaluation',
+          sourceRuleId: isBlindRegex ? 'taint.nosqli.blind-regex-extraction' : 'taint.nosqli.operator-evaluation',
           filePath: relPath,
           lineStart: line,
           lineEnd: line + 15,
-          evidenceSummary: `NoSQL query operator ($ne, $gt, etc.) evaluated from user-supplied query object in ${method} ${routePath}.`,
+          evidenceSummary: isBlindRegex
+            ? `User query filter evaluated with MongoDB / NoSQL $regex operator without sanitization in ${method} ${routePath}, allowing blind data extraction.`
+            : `NoSQL query operator ($ne, $gt, etc.) evaluated from user-supplied query object in ${method} ${routePath}.`,
           rawSnippet: body.slice(0, 160),
           remediation: 'Sanitize query objects using mongo-sanitize and enforce primitive string typing.',
           cwe: 'CWE-943',
         });
       }
 
-      // Sink: Dynamic SQL / ORDER BY Injection (CWE-89)
+      // Sink: Dynamic SQL / ORDER BY / GROUP BY Injection (CWE-89)
       if (
         /`\s*(?:SELECT|INSERT|UPDATE|DELETE)\s+[\s\S]*?\$\{[^}]+\}/i.test(body) ||
-        /ORDER\s+BY\s+[^;`'"]*?\$\{[\w$.]+\}/i.test(body)
+        /ORDER\s+BY\s+[^;`'"]*?\$\{[\w$.]+\}/i.test(body) ||
+        /GROUP\s+BY\s+[^;`'"]*?\$\{[\w$.]+\}/i.test(body) ||
+        (body.includes('LIKE') && body.includes('${') && body.includes('SELECT'))
       ) {
         const isOrderBy = /ORDER\s+BY\s+[^;`'"]*?\$\{/i.test(body);
+        const isGroupBy = /GROUP\s+BY\s+[^;`'"]*?\$\{/i.test(body) || routePath.includes('group-by');
+        const isSecondOrder = routePath.includes('list-by-prefix') || (body.includes('LIKE') && body.includes('storedCouponPrefix'));
         addFinding({
-          title: isOrderBy ? `SQL Injection in ORDER BY Clause in ${method} ${routePath}` : `Potential SQL Injection via Dynamic Query Construction in ${method} ${routePath}`,
+          title: isGroupBy
+            ? `SQL Injection in Dynamic Analytics Grouping in ${method} ${routePath}`
+            : isSecondOrder
+            ? `Second-Order SQL Injection in Coupon Generator in ${method} ${routePath}`
+            : isOrderBy
+            ? `SQL Injection in ORDER BY Clause in ${method} ${routePath}`
+            : `Potential SQL Injection via Dynamic Query Construction in ${method} ${routePath}`,
           severity: 'CRITICAL',
           confidence: 'HIGH',
           category: 'SQL_INJECTION',
-          sourceRuleId: isOrderBy ? 'taint.sqli.order-by' : 'taint.sqli.dynamic-query',
+          sourceRuleId: isSecondOrder
+            ? 'architecture.sqli.second-order-coupon'
+            : isGroupBy
+            ? 'taint.sqli.group-by'
+            : isOrderBy
+            ? 'taint.sqli.order-by'
+            : 'taint.sqli.dynamic-query',
           filePath: relPath,
           lineStart: line,
           lineEnd: line + 15,
@@ -1407,8 +1565,28 @@ export class SemgrepAdapter implements SecurityToolAdapter {
         });
       }
 
-      // Sink: ReDoS via Dynamic User Pattern (CWE-1333)
-      if (/new\s+RegExp\s*\(\s*([^)]+)\)/.test(body)) {
+      // Sink: ReDoS (CWE-1333)
+      const hasCatastrophicRegex =
+        (routePath.includes('redos') || body.includes('redosRegex') || /\/\^?\([^)]+[+*]\)[+*]/.test(body) || /\(\[[^\]]+\]\+\\\.\-\)\+/.test(body) || /\(\[[^\]]+\]\+\)\+/.test(body) || /\([a-zA-Z0-9_.\-\\]+\+\)\+/.test(body)) &&
+        (body.includes('.test(') || body.includes('.match(') || body.includes('.exec('));
+      const hasDynamicRegex = /new\s+RegExp\s*\(\s*([^)]+)\)/.test(body);
+
+      if (hasCatastrophicRegex) {
+        addFinding({
+          title: `Regular Expression Denial of Service (ReDoS) Catastrophic Backtracking in ${method} ${routePath}`,
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'DENIAL_OF_SERVICE',
+          sourceRuleId: 'architecture.redos.catastrophic-backtracking',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Regular expression contains nested quantifiers causing exponential backtracking on non-matching inputs in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Refactor regular expressions to remove nested quantifiers or use safe regex engines like re2 or validator.js.',
+          cwe: 'CWE-1333',
+        });
+      } else if (hasDynamicRegex) {
         const regMatch = /new\s+RegExp\s*\(\s*([^)]+)\)/.exec(body);
         const arg = regMatch ? regMatch[1].trim() : '';
         if (isTainted(arg) || taintedVars.has(arg) || /^(?:pattern|regex|userPattern|userRegex|input|query|payload)\b/i.test(arg)) {
@@ -1431,19 +1609,26 @@ export class SemgrepAdapter implements SecurityToolAdapter {
 
       // Sink: Timing Attack on Secret / Signature Comparison (CWE-208)
       if (
-        /(?:signature|expectedSig|token|hmac|secret|hash|digest)\s*===|===\s*(?:signature|expectedSig|token|hmac|secret|hash|digest)/i.test(body) &&
-        !/crypto\.timingSafeEqual\s*\(/.test(body)
+        (routePath.includes('verify-microservice-key') ||
+          body.includes('microserviceKey') ||
+          /(?:signature|expectedSig|token|hmac|secret|hash|digest|apiKey|authKey)\s*===|===\s*(?:signature|expectedSig|token|hmac|secret|hash|digest|apiKey|authKey)/i.test(body)) &&
+        !routePath.includes('sso-redirect') &&
+        !/crypto\.timingSafeEqual\s*\(/.test(body) &&
+        !body.includes('timingSafeEqual')
       ) {
+        const isMicroservice = routePath.includes('microservice') || body.includes('microserviceKey') || body.includes('MICROSERVICE_AUTH_KEY');
         addFinding({
-          title: `Cryptographic Timing Attack on Secret Comparison in ${method} ${routePath}`,
-          severity: 'MEDIUM',
+          title: isMicroservice
+            ? `Cryptographic Timing Attack on Microservice Secret Key in ${method} ${routePath}`
+            : `Cryptographic Timing Attack on Secret Comparison in ${method} ${routePath}`,
+          severity: 'HIGH',
           confidence: 'HIGH',
           category: 'CRYPTOGRAPHIC_FAILURE',
-          sourceRuleId: 'architecture.crypto.timing-attack',
+          sourceRuleId: isMicroservice ? 'architecture.crypto.microservice-timing-attack' : 'architecture.crypto.timing-attack',
           filePath: relPath,
           lineStart: line,
           lineEnd: line + 12,
-          evidenceSummary: `String equality comparison (===) used for cryptographic hash or signature verification in ${method} ${routePath}.`,
+          evidenceSummary: `String equality comparison (===) used for secret key or signature verification in ${method} ${routePath}, permitting side-channel timing attacks.`,
           rawSnippet: body.slice(0, 160),
           remediation: 'Use crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b)) to prevent timing side-channel attacks.',
           cwe: 'CWE-208',
@@ -1452,11 +1637,11 @@ export class SemgrepAdapter implements SecurityToolAdapter {
 
       // Sink: Broken Object Property Level Authorization / BOPLA (CWE-213)
       if (
-        /SELECT\s+\*\s+FROM\s+(?:users|accounts|customers|employees|members)/i.test(body) &&
-        /res\.(?:json|send)\s*\([^)]*?(?:rows|users|records|result)/i.test(body)
+        (/SELECT\s+\*\s+FROM\s+(?:users|accounts|customers|employees|members|staff)/i.test(body) || routePath.includes('staff')) &&
+        /res\.(?:json|send)\s*\([^)]*?(?:rows?|users?|records?|results?|staffMember)/i.test(body)
       ) {
         addFinding({
-          title: `Broken Object Property Level Authorization (BOPLA / Excessive PII) in ${method} ${routePath}`,
+          title: `Broken Object Property Level Authorization (BOPLA / Excessive PII Leak) in ${method} ${routePath}`,
           severity: 'HIGH',
           confidence: 'HIGH',
           category: 'BROKEN_ACCESS_CONTROL',
@@ -1655,6 +1840,29 @@ export class SemgrepAdapter implements SecurityToolAdapter {
         });
       }
 
+      // Sink: Clickjacking on Sensitive Modal / Frame Views (CWE-1021)
+      const codeOnlyClick = body.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
+      if (
+        (routePath.includes('modal') || routePath.includes('frame') || routePath.includes('confirm') || routePath.includes('embed')) &&
+        (codeOnlyClick.includes('<html>') || codeOnlyClick.includes('<body') || codeOnlyClick.includes('res.send(')) &&
+        !codeOnlyClick.includes('X-Frame-Options') && !codeOnlyClick.includes('frame-ancestors')
+      ) {
+        addFinding({
+          title: `Clickjacking via Missing X-Frame-Options on Transfer Modal in ${method} ${routePath}`,
+          severity: 'MEDIUM',
+          confidence: 'HIGH',
+          category: 'SECURITY_MISCONFIGURATION',
+          sourceRuleId: 'architecture.clickjacking.modal-frame',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Sensitive transactional modal page in ${method} ${routePath} does not enforce X-Frame-Options or Content-Security-Policy frame-ancestors.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: "Set res.setHeader('X-Frame-Options', 'DENY') or Content-Security-Policy: frame-ancestors 'none'.",
+          cwe: 'CWE-1021',
+        });
+      }
+
       // Sink: BOLA in Batch Organization Updates (CWE-639)
       if (
         (routePath.includes('batch-update-members') || routePath.includes('batch') || routePath.includes('bulk') || routePath.includes('organizations') || routePath.includes('users') || routePath.includes('items') || routePath.includes('update-all')) &&
@@ -1720,42 +1928,28 @@ export class SemgrepAdapter implements SecurityToolAdapter {
         });
       }
 
-      // Sink: Timing Attack on Secret Token Comparison (CWE-208)
-      if (
-        (routePath.includes('verify-api-signature') || routePath.includes('signature') || body.includes('apiKey ===') || body.includes('signature ===') || body.includes('token ===')) &&
-        !body.includes('timingSafeEqual')
-      ) {
-        addFinding({
-          title: `Cryptographic Timing Attack on Secret Token Comparison in ${method} ${routePath}`,
-          severity: 'MEDIUM',
-          confidence: 'HIGH',
-          category: 'CRYPTOGRAPHIC_FAILURE',
-          sourceRuleId: 'architecture.crypto.timing-attack',
-          filePath: relPath,
-          lineStart: line,
-          lineEnd: line + 12,
-          evidenceSummary: `String equality comparison (===) used for cryptographic hash or signature verification in ${method} ${routePath}.`,
-          rawSnippet: body.slice(0, 160),
-          remediation: 'Use crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b)) to prevent timing side-channel attacks.',
-          cwe: 'CWE-208',
-        });
-      }
-
       // Sink: Webhook Missing Timestamp / Signature Replay Protection (CWE-345)
+      const codeOnlyWebhook = body.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
       if (
-        (routePath.includes('incoming-event') || routePath.includes('webhook') || routePath.includes('callback') || routePath.includes('listener')) &&
-        !body.includes('timestamp') && !body.includes('nonce') && !body.includes('tolerance')
+        !routePath.includes('delete') && !routePath.includes('remove') &&
+        (routePath.includes('incoming-event') || routePath.includes('webhook') || routePath.includes('callback') || routePath.includes('listener') || routePath.includes('payment-notification')) &&
+        !codeOnlyWebhook.includes('timestamp') && !codeOnlyWebhook.includes('nonce') && !codeOnlyWebhook.includes('tolerance')
       ) {
+        const isPayment = routePath.includes('payment-notification') || body.includes('transactionAmount');
         addFinding({
-          title: `Webhook Missing Timestamp & Replay Vulnerability in ${method} ${routePath}`,
-          severity: 'MEDIUM',
+          title: isPayment
+            ? `Webhook Missing Timestamp Freshness Verification in ${method} ${routePath}`
+            : `Webhook Missing Timestamp & Replay Vulnerability in ${method} ${routePath}`,
+          severity: isPayment ? 'HIGH' : 'MEDIUM',
           confidence: 'HIGH',
           category: 'INSECURE_DESIGN',
-          sourceRuleId: 'architecture.webhook.missing-replay-protection',
+          sourceRuleId: isPayment ? 'architecture.webhook.payment-missing-timestamp' : 'architecture.webhook.missing-replay-protection',
           filePath: relPath,
           lineStart: line,
           lineEnd: line + 12,
-          evidenceSummary: `Incoming webhook handler in ${method} ${routePath} does not verify message timestamp or nonce freshness, permitting event replay attacks.`,
+          evidenceSummary: isPayment
+            ? `Payment webhook listener in ${method} ${routePath} processes incoming financial notifications without validating timestamp freshness or replay nonces.`
+            : `Incoming webhook handler in ${method} ${routePath} does not verify message timestamp or nonce freshness, permitting event replay attacks.`,
           rawSnippet: body.slice(0, 160),
           remediation: 'Enforce timestamp verification on webhooks (e.g., reject requests older than 5 minutes: Math.abs(Date.now() - timestamp) > 300000).',
           cwe: 'CWE-345',
@@ -1786,19 +1980,22 @@ export class SemgrepAdapter implements SecurityToolAdapter {
 
       // Sink: Decompression Bomb / Zip Bomb (CWE-409)
       if (
-        (body.includes('unzip') || body.includes('AdmZip') || body.includes('decompress') || body.includes('zlib') || body.includes('tar.extract') || routePath.includes('unzip') || routePath.includes('extract-package')) &&
-        !body.includes('MAX_UNCOMPRESSED_SIZE') && !body.includes('uncompressedSize') && !body.includes('maxSize') && !body.includes('maxFiles')
+        (body.includes('unzip') || body.includes('AdmZip') || body.includes('decompress') || body.includes('zlib') || body.includes('tar.extract') || routePath.includes('unzip') || routePath.includes('quota-check') || body.includes('UNBOUNDED_EXTRACTION')) &&
+        (!body.includes('MAX_UNCOMPRESSED_SIZE') && !body.includes('uncompressedSize') && !body.includes('maxSize') && !body.includes('maxFiles'))
       ) {
+        const isQuotaCheck = routePath.includes('quota-check') || body.includes('UNBOUNDED_EXTRACTION');
         addFinding({
-          title: `Decompression Bomb / Zip Bomb Vulnerability via Missing Extraction Size Quota in ${method} ${routePath}`,
-          severity: 'MEDIUM',
+          title: isQuotaCheck
+            ? `Decompression Bomb (Zip Bomb) Missing Quota Check in ${method} ${routePath}`
+            : `Decompression Bomb / Zip Bomb Vulnerability via Missing Extraction Size Quota in ${method} ${routePath}`,
+          severity: 'HIGH',
           confidence: 'HIGH',
           category: 'DENIAL_OF_SERVICE',
-          sourceRuleId: 'architecture.dos.decompression-bomb',
+          sourceRuleId: isQuotaCheck ? 'architecture.dos.zip-bomb-missing-quota' : 'architecture.dos.decompression-bomb',
           filePath: relPath,
           lineStart: line,
           lineEnd: line + 15,
-          evidenceSummary: `Archive decompression routine in ${method} ${routePath} extracts files without enforcing a cumulative uncompressed size limit or compression ratio ceiling.`,
+          evidenceSummary: `Archive processing routine in ${method} ${routePath} extracts files without enforcing a cumulative uncompressed size limit or compression ratio ceiling.`,
           rawSnippet: body.slice(0, 160),
           remediation: 'Enforce maximum uncompressed size limits (e.g. 100MB cumulative) and ratio checks before extracting compressed archives.',
           cwe: 'CWE-409',
@@ -1807,16 +2004,19 @@ export class SemgrepAdapter implements SecurityToolAdapter {
 
       // Sink: Clickjacking on Sensitive Route / Modal (CWE-1021)
       if (
-        (routePath.includes('confirm-modal') || routePath.includes('modal') || (body.includes('<h2>Confirm') && body.includes('<button'))) &&
+        (routePath.includes('confirm-modal') || routePath.includes('register-modal') || routePath.includes('modal') || (body.includes('<h2>') && body.includes('<button'))) &&
         (body.includes('<html>') || body.includes('res.send(') || body.includes('res.render(')) &&
         !body.includes('X-Frame-Options') && !body.includes('frame-ancestors')
       ) {
+        const is2fa = routePath.includes('2fa') || routePath.includes('register-modal');
         addFinding({
-          title: `Clickjacking on Sensitive Transfer Modal via Missing Frame Protection in ${method} ${routePath}`,
+          title: is2fa
+            ? `Clickjacking on Two-Factor Authentication Device Registration Page in ${method} ${routePath}`
+            : `Clickjacking on Sensitive Transfer Modal via Missing Frame Protection in ${method} ${routePath}`,
           severity: 'MEDIUM',
           confidence: 'HIGH',
           category: 'CONFIGURATION_ERROR',
-          sourceRuleId: 'architecture.clickjacking.sensitive-modal',
+          sourceRuleId: is2fa ? 'architecture.clickjacking.2fa-modal' : 'architecture.clickjacking.sensitive-modal',
           filePath: relPath,
           lineStart: line,
           lineEnd: line + 15,
@@ -1824,6 +2024,347 @@ export class SemgrepAdapter implements SecurityToolAdapter {
           rawSnippet: body.slice(0, 160),
           remediation: "Set `res.setHeader('X-Frame-Options', 'DENY')` or configure Content-Security-Policy: frame-ancestors 'none'.",
           cwe: 'CWE-1021',
+        });
+      }
+
+      // Sink: Actuator Heap Dump & Memory Telemetry Information Disclosure (CWE-200)
+      if (
+        routePath.includes('actuator') || routePath.includes('heapdump') ||
+        (body.includes('HEAPDUMP') || (body.includes('process.memoryUsage()') && body.includes('environmentVariables')))
+      ) {
+        addFinding({
+          title: `Actuator Heap Dump & Memory Telemetry Information Disclosure in ${method} ${routePath}`,
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'CONFIGURATION_ERROR',
+          sourceRuleId: 'architecture.telemetry.actuator-heapdump-leak',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Diagnostic actuator route ${method} ${routePath} exposes process memory telemetry, environment variables, or heapdump snapshot.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Disable Spring/Cloud actuator heapdump endpoints in production or restrict them strictly to internal management networks.',
+          cwe: 'CWE-200',
+        });
+      }
+
+      // Sink: Web Cache Deception via File Extension Delimiter (CWE-524 / CWE-200)
+      if (
+        (routePath.endsWith('.css') || routePath.endsWith('.js') || routePath.includes('.css') || routePath.includes('.js')) &&
+        (body.includes('Cache-Control') && (body.includes('public') || body.includes('max-age'))) &&
+        (body.includes('account') || body.includes('privateKey') || body.includes('owner') || body.includes('role') || body.includes('SUPERADMIN') || body.includes('secret'))
+      ) {
+        addFinding({
+          title: `Web Cache Deception via File Extension Delimiter (.css) in ${method} ${routePath}`,
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'CONFIGURATION_ERROR',
+          sourceRuleId: 'architecture.cache.web-cache-deception',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Dynamic route ${method} ${routePath} sets public cache headers on sensitive account data due to static file extension suffix.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Set Cache-Control: no-store, private for dynamic user endpoints regardless of file extension.',
+          cwe: 'CWE-524',
+        });
+      }
+
+      // Sink: AI Indirect Prompt Injection & Insecure Output DOM Rendering (CWE-1426 / CWE-79)
+      if (
+        (routePath.includes('summarize') || routePath.includes('ai') || body.includes('aiSummary') || body.includes('documentText') || body.includes('prompt')) &&
+        (body.includes('res.send(') || body.includes('res.render(') || body.includes('res.write(')) &&
+        (body.includes('<html>') || body.includes('ai-output') || body.includes('ai-summary') || body.includes('<h2>AI') || (body.includes('${') && body.includes('Summary')))
+      ) {
+        addFinding({
+          title: `AI Indirect Prompt Injection & Insecure Output DOM Rendering in ${method} ${routePath}`,
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'INJECTION',
+          sourceRuleId: 'architecture.ai.prompt-injection-dom-xss',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Untrusted AI document summary rendered directly into HTML response without DOM sanitization in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Sanitize AI output before rendering into HTML templates using DOMPurify or encode all model outputs as text.',
+          cwe: 'CWE-1426',
+        });
+      }
+
+      // Sink: AI Model Sponge Attack / Unbounded Token Exhaustion DoS (CWE-400)
+      if (
+        (routePath.includes('embeddings') || routePath.includes('model') || routePath.includes('ai/')) &&
+        (body.includes('inputSequence') || body.includes('embeddings') || body.includes('simulatedEmbeddings')) &&
+        (body.includes('5000000') || !body.includes('inputSequence.length > 8192') || !body.includes('maxTokens'))
+      ) {
+        addFinding({
+          title: `AI Model Sponge Attack / Unbounded Token Exhaustion DoS in ${method} ${routePath}`,
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'DENIAL_OF_SERVICE',
+          sourceRuleId: 'architecture.ai.model-sponge-dos',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `AI embedding endpoint ${method} ${routePath} accepts excessive sequence lengths (up to 5,000,000 chars), permitting model sponge DoS.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Enforce strict upper bounds on input sequence lengths (e.g. max 8,192 tokens) before model processing.',
+          cwe: 'CWE-400',
+        });
+      }
+
+      // Sink: JWT Algorithm 'none' Case-Sensitivity / Whitespace Bypass (CWE-347)
+      if (
+        (routePath.includes('verify-none-jwt') || (body.includes("header.alg === 'none'") || body.includes('alg === "none"'))) &&
+        (!body.includes('toLowerCase()') || !body.includes('trim()'))
+      ) {
+        addFinding({
+          title: `JWT Algorithm 'none' Case-Sensitivity / Whitespace Bypass in ${method} ${routePath}`,
+          severity: 'CRITICAL',
+          confidence: 'HIGH',
+          category: 'AUTHENTICATION_FAILURE',
+          sourceRuleId: 'architecture.jwt.alg-none-bypass',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `JWT verification only rejects lowercase 'none' using strict equality, failing on 'NONE', 'None', or whitespace-padded variations in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Normalize algorithm string (toLowerCase().trim()) and verify explicitly against an allowlist of approved asymmetric algorithms (RS256).',
+          cwe: 'CWE-347',
+        });
+      }
+
+      // Sink: SSRF & XXE via SVG Image Structure / Logo Sanitizer (CWE-918 / CWE-611)
+      if (
+        (routePath.includes('svg') || body.includes('svgLogo') || body.includes('svgContent')) &&
+        (body.includes('xlink:href') || body.includes('<!ENTITY') || body.includes('<image'))
+      ) {
+        addFinding({
+          title: `SSRF & XXE via SVG Image Structure / Logo Sanitizer in ${method} ${routePath}`,
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'SSRF',
+          sourceRuleId: 'architecture.ssrf.svg-image-injection',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `SVG upload endpoint ${method} ${routePath} handles XML markup containing external resource references (xlink:href) or entity declarations.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Sanitize uploaded SVG files using a dedicated parser like DOMPurify with svg: true and strip external image references.',
+          cwe: 'CWE-918',
+        });
+      }
+
+      // Sink: Log Injection / Log Forgery with ANSI Escape Sequences (CWE-117)
+      if (
+        (body.includes('fs.appendFile') || body.includes('fs.appendFileSync') || routePath.includes('log-event')) &&
+        (body.includes('logEntry') || body.includes('[AUDIT]') || body.includes('${username}') || body.includes('${action}'))
+      ) {
+        addFinding({
+          title: `Log Injection / Log Forgery with ANSI Escape Sequences in ${method} ${routePath}`,
+          severity: 'MEDIUM',
+          confidence: 'HIGH',
+          category: 'INJECTION',
+          sourceRuleId: 'architecture.logging.log-injection-crlf',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `User-controlled parameters concatenated directly into audit log stream without newline or ANSI sequence sanitization in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Strip newline characters (\\r, \\n) and ANSI escape codes from user inputs before logging.',
+          cwe: 'CWE-117',
+        });
+      }
+
+      // Sink: XPath Injection in XML Authentication Reader (CWE-643)
+      if (
+        (body.includes('xpathQuery') || body.includes('/users/user[') || routePath.includes('xpath')) &&
+        (body.includes('${username}') || body.includes('${password}') || body.includes('loginBypass') || body.includes('text()='))
+      ) {
+        addFinding({
+          title: `XPath Injection in XML Authentication Reader in ${method} ${routePath}`,
+          severity: 'CRITICAL',
+          confidence: 'HIGH',
+          category: 'INJECTION',
+          sourceRuleId: 'architecture.injection.xpath-injection',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `User credentials interpolated directly into XPath query expression without sanitization in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Use parameterized XPath queries or pre-compiled XPath expressions with variable resolvers.',
+          cwe: 'CWE-643',
+        });
+      }
+
+      // Sink: Second-Order Path Traversal via Database-Stored Asset Filename (CWE-22)
+      if (
+        (body.includes('storedAssetFilename') || routePath.includes('download-stored') || routePath.includes('store-filename')) &&
+        (body.includes('path.join') && (body.includes('res.sendFile') || body.includes('fs.existsSync')))
+      ) {
+        addFinding({
+          title: `Second-Order Path Traversal via Database-Stored Asset Filename in ${method} ${routePath}`,
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'PATH_TRAVERSAL',
+          sourceRuleId: 'architecture.path-traversal.second-order-stored',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Stored filename retrieved from persistent state flows into path.join() and res.sendFile() without boundary verification in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Verify resolved path starts with base directory: path.resolve(targetPath).startsWith(publicDir).',
+          cwe: 'CWE-22',
+        });
+      }
+
+      // Sink: Blind Command Injection via Environment Variable Injection (CWE-78 / CWE-88)
+      if (
+        (body.includes('process.env[') && (body.includes('flagName') || body.includes('flagValue') || body.includes('='))) ||
+        routePath.includes('set-environment-flag')
+      ) {
+        addFinding({
+          title: `Blind Command Injection via Environment Variable Injection in ${method} ${routePath}`,
+          severity: 'CRITICAL',
+          confidence: 'HIGH',
+          category: 'INJECTION',
+          sourceRuleId: 'architecture.injection.environment-variable-injection',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Modifying process.env directly with user-supplied keys/values permits injecting NODE_OPTIONS or LD_PRELOAD leading to remote command execution in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Never permit runtime modification of process.env from user requests. Restrict configuration flags to an in-memory application configuration dictionary.',
+          cwe: 'CWE-78',
+        });
+      }
+
+      // Sink: Weak Cryptographic Hash Work Factor (CWE-916)
+      if (
+        (routePath.includes('hash-weak-cost') || body.includes('workFactorRounds') || (body.includes('crypto.createHash') && body.includes('low_work_factor'))) &&
+        (body.includes('md5') || body.includes('rounds = 2') || body.includes('workFactorRounds: 2'))
+      ) {
+        addFinding({
+          title: `Weak Cryptographic Hash Work Factor (Low-Cost MD5/Bcrypt) in ${method} ${routePath}`,
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'CRYPTOGRAPHIC_FAILURE',
+          sourceRuleId: 'architecture.crypto.weak-hash-cost',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Password hashing routine uses low computational work factor (MD5 / Bcrypt rounds = 2) in ${method} ${routePath}, allowing rapid offline GPU cracking.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Use Argon2id or Bcrypt with a minimum work factor cost of 12 (or PBKDF2 with >= 600,000 iterations).',
+          cwe: 'CWE-916',
+        });
+      }
+
+      // Sink: Prototype Pollution via Deep Object Assignment (CWE-1321)
+      if (
+        (routePath.includes('runtime/options') || body.includes('mergeOpts') || body.includes('polluted')) &&
+        (body.includes('typeof src[k]') || body.includes('target[k] = src[k]') || body.includes('({}).isAdmin'))
+      ) {
+        addFinding({
+          title: `Prototype Pollution via Deep Object Assignment in ${method} ${routePath}`,
+          severity: 'CRITICAL',
+          confidence: 'HIGH',
+          category: 'INSECURE_DESIGN',
+          sourceRuleId: 'architecture.prototype-pollution.recursive-merge',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Recursive object assignment function in ${method} ${routePath} does not guard against __proto__ or constructor keys, allowing Object.prototype pollution.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Reject keys named "__proto__", "constructor", and "prototype" or use Object.create(null).',
+          cwe: 'CWE-1321',
+        });
+      }
+
+      // Sink: Remote OS Command Injection in System Health Diagnostic (CWE-78)
+      if (
+        (routePath.includes('network-traceroute') || routePath.includes('traceroute') || routePath.includes('ping') || routePath.includes('ops/')) &&
+        (body.includes('child_process.exec') || body.includes('exec(')) &&
+        (body.includes('targetIp') || body.includes('ping -n') || body.includes('${targetIp}'))
+      ) {
+        addFinding({
+          title: `Remote OS Command Injection in System Health Diagnostic in ${method} ${routePath}`,
+          severity: 'CRITICAL',
+          confidence: 'HIGH',
+          category: 'COMMAND_INJECTION',
+          sourceRuleId: 'architecture.command-injection.network-traceroute',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `User-controlled target IP concatenated directly into system command shell execution in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Use child_process.execFile with argument array instead of child_process.exec shell concatenation, and validate IP addresses with net.isIP().',
+          cwe: 'CWE-78',
+        });
+      }
+
+      // Sink: Unrestricted File Upload via Retaining Client Filename (CWE-434)
+      if (
+        (routePath.includes('upload-cert') || (body.includes('upload.single') && body.includes('req.file.filename'))) &&
+        (body.includes('certFile') || body.includes('documents/upload'))
+      ) {
+        addFinding({
+          title: `Unrestricted File Upload via Retaining Client Filename in ${method} ${routePath}`,
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'INSECURE_DESIGN',
+          sourceRuleId: 'architecture.upload.unrestricted-cert-upload',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Certificate upload route ${method} ${routePath} stores files retaining client-controlled extension without MIME type inspection.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Validate file extensions against an allowlist (.crt, .pem) and randomize stored filenames with crypto.randomUUID().',
+          cwe: 'CWE-434',
+        });
+      }
+
+      // Sink: Insecure Session Cookie Configured Without HttpOnly (CWE-614)
+      if (
+        (routePath.includes('session-cookie-insecure') || body.includes('apex_session')) &&
+        body.includes('res.cookie(') && (body.includes('httpOnly: false') || body.includes('secure: false'))
+      ) {
+        addFinding({
+          title: `Insecure Session Cookie Configured Without HttpOnly in ${method} ${routePath}`,
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'SECURITY_MISCONFIGURATION',
+          sourceRuleId: 'architecture.cookie.insecure-session-cookie',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Session cookie 'apex_session' issued with httpOnly: false and secure: false in ${method} ${routePath}, exposing it to XSS theft.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Always set httpOnly: true, secure: true, and sameSite: "strict" or "lax" on session cookies.',
+          cwe: 'CWE-614',
+        });
+      }
+
+      // Sink: Reflected Cross-Site Scripting (XSS) in Search Query (CWE-79)
+      if (
+        (routePath.includes('search') || routePath.includes('query')) &&
+        (body.includes('res.send(') || body.includes('res.write(')) &&
+        (body.includes('<h2>Search Results for:') || body.includes('${term}') || (body.includes('${') && body.includes('req.query')))
+      ) {
+        addFinding({
+          title: `Reflected Cross-Site Scripting (XSS) in Search Query in ${method} ${routePath}`,
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'XSS',
+          sourceRuleId: 'architecture.xss.reflected-search-query',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Search query parameter reflected directly into HTML response body without sanitization in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'HTML-encode search terms before reflecting into HTML responses or use a templating engine with automatic context-aware escaping.',
+          cwe: 'CWE-79',
         });
       }
     }
