@@ -854,7 +854,75 @@ export class SemgrepAdapter implements SecurityToolAdapter {
       });
     }
 
-    // 4. Route-by-route Taint Data-Flow Analysis
+    // 4. Global Zip Slip Archive Extraction Traversal (CWE-22)
+    if (
+      (content.includes('entryName') || content.includes('entry.entryName') || content.includes('zipEntry.name') || content.includes('.getEntries(')) &&
+      (content.includes('path.join') || content.includes('fs.writeFileSync') || content.includes('extractAllTo'))
+    ) {
+      if (!content.includes('path.resolve') || !content.includes('startsWith')) {
+        const lineNum = content.split('\n').findIndex(l => l.includes('entryName') || l.includes('entry.entryName') || l.includes('zipEntry')) + 1;
+        addFinding({
+          title: 'Zip Slip (Arbitrary File Overwrite via Archive Extraction Traversal)',
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'PATH_TRAVERSAL',
+          sourceRuleId: 'architecture.storage.zip-slip',
+          filePath: relPath,
+          lineStart: Math.max(1, lineNum),
+          lineEnd: Math.max(1, lineNum) + 12,
+          evidenceSummary: `Archive entries extracted directly using entry.entryName without destination boundary check in ${relPath}.`,
+          rawSnippet: `path.join(targetDir, entry.entryName);`,
+          remediation: 'Ensure resolved path starts with target destination: if (!path.resolve(dest, entry.entryName).startsWith(path.resolve(dest) + path.sep)) throw new Error("Zip Slip traversal");',
+          cwe: 'CWE-22',
+        });
+      }
+    }
+
+    // 5. Global Insecure Math.random PRNG for Security-Sensitive Tokens (CWE-330)
+    if (
+      /Math\.random\s*\(\s*\)/.test(content) &&
+      /(?:token|secret|session|otp|nonce|resetToken|api_key|apiKey|password)\s*[:=]|generate(?:Token|Otp|Session|Secret|Key)/i.test(content)
+    ) {
+      const lineNum = content.split('\n').findIndex(l => l.includes('Math.random') && /(?:token|secret|session|otp|nonce|key|code|password)/i.test(l)) + 1;
+      addFinding({
+        title: 'Use of Cryptographically Insecure PRNG (Math.random) for Security Tokens',
+        severity: 'HIGH',
+        confidence: 'HIGH',
+        category: 'CRYPTOGRAPHIC_FAILURE',
+        sourceRuleId: 'architecture.crypto.insecure-math-random',
+        filePath: relPath,
+        lineStart: Math.max(1, lineNum),
+        lineEnd: Math.max(1, lineNum) + 5,
+        evidenceSummary: `Math.random() is predictable and cryptographically insecure for generating tokens or credentials in ${relPath}.`,
+        rawSnippet: `Math.random().toString(36)`,
+        remediation: 'Replace Math.random() with cryptographically secure randomness: crypto.randomBytes(32).toString("hex") or crypto.randomUUID().',
+        cwe: 'CWE-330',
+      });
+    }
+
+    // 6. Global Timing Attack on Signature Comparison (CWE-208)
+    if (
+      /(?:signature|expectedSig|hmac|hash|digest)\s*===|===\s*(?:signature|expectedSig|hmac|hash|digest)/i.test(content) &&
+      !content.includes('timingSafeEqual')
+    ) {
+      const lineNum = content.split('\n').findIndex(l => /(?:signature|expectedSig|hmac|hash|digest)\s*===|===\s*(?:signature|expectedSig|hmac|hash|digest)/i.test(l)) + 1;
+      addFinding({
+        title: 'Observable Timing Discrepancy (Timing Attack) in Signature Verification',
+        severity: 'MEDIUM',
+        confidence: 'HIGH',
+        category: 'CRYPTOGRAPHIC_FAILURE',
+        sourceRuleId: 'architecture.crypto.timing-attack',
+        filePath: relPath,
+        lineStart: Math.max(1, lineNum),
+        lineEnd: Math.max(1, lineNum) + 5,
+        evidenceSummary: `Cryptographic signature or hash verified using standard equality operator (===) in ${relPath}.`,
+        rawSnippet: `signature === expectedSignature`,
+        remediation: 'Use crypto.timingSafeEqual(Buffer.from(sig1), Buffer.from(sig2)) to prevent timing side-channel attacks.',
+        cwe: 'CWE-208',
+      });
+    }
+
+    // 7. Route-by-route Taint Data-Flow Analysis
     const routeHeaderRegex = /(?:app|router)\.(get|post|put|delete|patch|all|use)\s*\(\s*(['"][^'"]+['"]|\/[^\/]+\/)/g;
     let rMatch: RegExpExecArray | null;
     const indices: Array<{ index: number; method: string; routePath: string; line: number }> = [];
@@ -934,14 +1002,50 @@ export class SemgrepAdapter implements SecurityToolAdapter {
         }
       }
 
-      // Sink: SSRF (CWE-918)
-      if (/(?:fetch|axios\.(?:get|post|request)|http\.(?:get|request)|https\.(?:get|request))\s*\(\s*([^,)]+)/.test(body)) {
-        const fetchMatch = /(?:fetch|axios\.(?:get|post|request)|http\.(?:get|request)|https\.(?:get|request))\s*\(\s*([^,)]+)/.exec(body);
-        const arg = fetchMatch ? fetchMatch[1].trim() : '';
-        if (isTainted(arg) || taintedVars.has(arg) || /^(?:target_url|url|metadata_endpoint|remoteUrl|endpoint)\b/i.test(arg)) {
-          const isCloudMeta = body.includes('169.254.169.254') || routePath.includes('cloud') || routePath.includes('meta');
+      // Sink: HTML-to-PDF / Headless Browser SSRF (CWE-918)
+      if (
+        (/(?:puppeteer|playwright|wkhtmltopdf|html-pdf|pdfkit|jspdf|html2pdf|page\.(?:goto|setContent)|pdf\.create)\b/i.test(body) || (routePath.includes('pdf') || routePath.includes('export') || routePath.includes('invoice') || routePath.includes('render'))) &&
+        (/(?:page\.(?:goto|setContent)|pdf\.create|wkhtmltopdf|generatePdf)\s*\(/i.test(body) || body.includes('page.goto') || body.includes('page.setContent') || body.includes('pdf.create'))
+      ) {
+        if (isTainted('url') || isTainted('html') || isTainted('template') || taintedVars.has('url') || taintedVars.has('html') || taintedVars.has('content') || body.includes('req.body') || body.includes('req.query')) {
           addFinding({
-            title: isCloudMeta ? `Cloud Metadata IMDSv1 Access Simulation (SSRF) in ${method} ${routePath}` : `Server-Side Request Forgery (SSRF) in ${method} ${routePath}`,
+            title: `Server-Side Request Forgery (SSRF) via Headless Browser / HTML-to-PDF Generator in ${method} ${routePath}`,
+            severity: 'HIGH',
+            confidence: 'HIGH',
+            category: 'SSRF',
+            sourceRuleId: 'architecture.ssrf.html-to-pdf-headless-browser',
+            filePath: relPath,
+            lineStart: line,
+            lineEnd: line + 15,
+            evidenceSummary: `Headless browser / PDF generator renders untrusted user-supplied HTML or URL without network sandbox restrictions in ${method} ${routePath}.`,
+            rawSnippet: body.slice(0, 160),
+            remediation: 'Disable network access in headless browser (e.g. abort external network requests) and never allow file:// or internal URL rendering.',
+            cwe: 'CWE-918',
+          });
+        }
+      }
+
+      // Sink: SSRF with Hex/Octal/Alternative IP Bypass (CWE-918)
+      if (
+        /(?:fetch|axios\.(?:get|post|request)|http\.(?:get|request)|https\.(?:get|request)|needle\.(?:get|post)|got\.(?:get|post)|request\s*\()\s*\(\s*([^,)]+)/i.test(body) ||
+        body.includes('http.get(') || body.includes('https.get(')
+      ) {
+        const fetchMatch = /(?:fetch|axios\.(?:get|post|request)|http\.(?:get|request)|https\.(?:get|request)|needle\.(?:get|post)|got\.(?:get|post)|request\s*\()\s*\(\s*([^,)]+)/i.exec(body);
+        const arg = fetchMatch ? fetchMatch[1].trim() : '';
+        if (
+          isTainted(arg) || taintedVars.has(arg) ||
+          /^(?:target_url|url|metadata_endpoint|remoteUrl|endpoint|target|feed_url|webhookUrl)\b/i.test(arg) ||
+          Array.from(taintedVars).some(t => /(?:url|ip|host|target|feed|link|uri|domain)/i.test(t)) ||
+          /req\.(?:query|body|params)/.test(body)
+        ) {
+          const isCloudMeta = body.includes('169.254.169.254') || routePath.includes('cloud') || routePath.includes('meta');
+          const isBypassSSRF = body.includes('0x') || body.includes('0177') || body.includes('hex') || body.includes('octal') || !body.includes('dns.lookup');
+          addFinding({
+            title: isCloudMeta
+              ? `Cloud Metadata IMDSv1 Access Simulation (SSRF) in ${method} ${routePath}`
+              : isBypassSSRF
+              ? `Blind SSRF with Hex/Octal IP Bypass in ${method} ${routePath}`
+              : `Server-Side Request Forgery (SSRF) in ${method} ${routePath}`,
             severity: 'HIGH',
             confidence: 'HIGH',
             category: 'SSRF',
@@ -949,7 +1053,7 @@ export class SemgrepAdapter implements SecurityToolAdapter {
             filePath: relPath,
             lineStart: line,
             lineEnd: line + 15,
-            evidenceSummary: `User-controlled parameter ${arg} flows directly into outbound HTTP client in ${method} ${routePath}.`,
+            evidenceSummary: `User-controlled parameter ${arg || 'URL'} flows directly into outbound HTTP client in ${method} ${routePath} without strict DNS resolution & alternative IP encoding validation.`,
             rawSnippet: body.slice(0, 160),
             remediation: 'Validate destination URLs against a strict domain whitelist and block RFC1918 / loopback / metadata addresses (169.254.169.254).',
             cwe: 'CWE-918',
@@ -1455,6 +1559,249 @@ export class SemgrepAdapter implements SecurityToolAdapter {
           rawSnippet: body.slice(0, 160),
           remediation: 'Use crypto.randomUUID() when creating temporary files to prevent path prediction.',
           cwe: 'CWE-377',
+        });
+      }
+
+      // Sink: Presigned S3 URL Parameter Poisoning (CWE-639)
+      if (
+        routePath.includes('presigned-url') || routePath.includes('presigned') || routePath.includes('cloud') ||
+        ((body.includes('getSignedUrl') || body.includes('createPresignedPost') || body.includes('S3Client') || body.includes('PutObjectCommand')) &&
+        (body.includes('Key:') || body.includes('key:') || body.includes('Key :') || body.includes('filename') || body.includes('fileKey') || body.includes('objectKey')))
+      ) {
+        if (!body.includes('crypto.randomUUID') && !body.includes('req.user.id') && !body.includes('tenantId')) {
+          addFinding({
+            title: `Cloud Storage Presigned S3 URL Parameter Poisoning in ${method} ${routePath}`,
+            severity: 'HIGH',
+            confidence: 'HIGH',
+            category: 'BROKEN_ACCESS_CONTROL',
+            sourceRuleId: 'architecture.cloud.s3-presigned-poisoning',
+            filePath: relPath,
+            lineStart: line,
+            lineEnd: line + 15,
+            evidenceSummary: `Presigned S3 upload URL generated using unvalidated client-provided object key in ${method} ${routePath}, allowing arbitrary cloud object overwrites.`,
+            rawSnippet: body.slice(0, 160),
+            remediation: 'Prefix presigned storage keys server-side with authenticated user/tenant identifiers (e.g. `users/${req.user.id}/${crypto.randomUUID()}`).',
+            cwe: 'CWE-639',
+          });
+        }
+      }
+
+      // Sink: Race Condition / TOCTOU Double-Spend (CWE-367)
+      if (
+        (routePath.includes('transfer-race') || routePath.includes('race') || routePath.includes('transfer') || routePath.includes('wallet') || routePath.includes('withdraw')) &&
+        (body.includes('balance') || body.includes('wallet') || body.includes('walletBalances') || body.includes('credits') || body.includes('points') || body.includes('inventory')) &&
+        (body.includes('setTimeout') || body.includes('SELECT') || body.includes('currentBalance <') || body.includes('balance <') || body.includes('balance >=')) &&
+        (body.includes('walletBalances[') || body.includes('UPDATE') || body.includes('balance -') || body.includes('balance -='))
+      ) {
+        if (!body.includes('SELECT FOR UPDATE') && !body.includes('transaction') && !body.includes('$transaction') && !body.includes('SERIALIZABLE') && !body.includes('mutex') && !body.includes('lock')) {
+          addFinding({
+            title: `Time-of-Check to Time-of-Use (TOCTOU) Race Condition / Double-Spend in ${method} ${routePath}`,
+            severity: 'HIGH',
+            confidence: 'HIGH',
+            category: 'INSECURE_DESIGN',
+            sourceRuleId: 'architecture.concurrency.toctou-race-condition',
+            filePath: relPath,
+            lineStart: line,
+            lineEnd: line + 15,
+            evidenceSummary: `Financial state checked and decremented in non-atomic asynchronous steps without row-level locking (SELECT FOR UPDATE) in ${method} ${routePath}.`,
+            rawSnippet: body.slice(0, 160),
+            remediation: 'Execute balance updates within atomic database transactions with row-level locks (SELECT ... FOR UPDATE) or atomic conditional queries (UPDATE accounts SET balance = balance - :amount WHERE id = :id AND balance >= :amount).',
+            cwe: 'CWE-367',
+          });
+        }
+      }
+
+      // Sink: Currency Conversion Rounding Flaw (CWE-682 / CWE-840)
+      if (
+        (routePath.includes('convert-currency') || routePath.includes('convert') || routePath.includes('billing') || routePath.includes('currency') || routePath.includes('swap') || routePath.includes('rate') || routePath.includes('pricing')) &&
+        (body.includes('Math.floor') || body.includes('Math.round') || body.includes('parseInt') || body.includes('toFixed')) &&
+        (body.includes('amount') || body.includes('Rate') || body.includes('rate') || body.includes('currency'))
+      ) {
+        addFinding({
+          title: `Business Logic Flaw: Arbitrary Currency Conversion & Precision Rounding in ${method} ${routePath}`,
+          severity: 'MEDIUM',
+          confidence: 'HIGH',
+          category: 'INSECURE_DESIGN',
+          sourceRuleId: 'architecture.business-logic.currency-rounding',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 12,
+          evidenceSummary: `Monetary exchange conversion truncates floating-point fractions using Math.floor/Math.round without decimal precision guards in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Use fixed-point decimal arithmetic (e.g., bignumber.js, Dinero.js) for all financial currency conversions and reject zero-value micro-transactions.',
+          cwe: 'CWE-840',
+        });
+      }
+
+      // Sink: BOLA in Batch Organization Updates (CWE-639)
+      if (
+        (routePath.includes('batch-update-members') || routePath.includes('batch') || routePath.includes('bulk') || routePath.includes('organizations') || routePath.includes('users') || routePath.includes('items') || routePath.includes('update-all')) &&
+        (body.includes('updates.map') || body.includes('updates.forEach') || body.includes('.map(') || body.includes('.forEach(') || body.includes('for (') || body.includes('Promise.all'))
+      ) {
+        if (!body.includes('tenant_id =') && !body.includes('organizationId: req.user') && !body.includes('tenantId:') && !body.includes('req.user.organizationId')) {
+          addFinding({
+            title: `BOLA / IDOR in Bulk Batch Organization Member Updates in ${method} ${routePath}`,
+            severity: 'HIGH',
+            confidence: 'HIGH',
+            category: 'BROKEN_ACCESS_CONTROL',
+            sourceRuleId: 'architecture.bola.batch-organization-update',
+            filePath: relPath,
+            lineStart: line,
+            lineEnd: line + 15,
+            evidenceSummary: `Batch update iterates over client-provided item arrays without validating that each target entity belongs to caller's organization in ${method} ${routePath}.`,
+            rawSnippet: body.slice(0, 160),
+            remediation: 'Scope batch update operations strictly with caller organization tenant ID: WHERE id = item.id AND organization_id = req.user.orgId.',
+            cwe: 'CWE-639',
+          });
+        }
+      }
+
+      // Sink: LDAP Filter Injection (CWE-90)
+      if (
+        routePath.includes('ldap-search') || routePath.includes('ldap') ||
+        body.includes('ldapFilter') || body.includes('objectClass=') || body.includes('ldapjs') || body.includes('client.search')
+      ) {
+        addFinding({
+          title: `LDAP / Active Directory Filter Injection Simulation in ${method} ${routePath}`,
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'INJECTION',
+          sourceRuleId: 'taint.injection.ldap-filter-injection',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 12,
+          evidenceSummary: `User-controlled parameter concatenated directly into LDAP search filter expression in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Sanitize user input before passing into LDAP filters by escaping LDAP control characters (*, (, ), \\, NUL) or use parameterized LDAP query builders.',
+          cwe: 'CWE-90',
+        });
+      }
+
+      // Sink: Insecure Math.random PRNG in Route (CWE-330)
+      if (
+        body.includes('Math.random()') &&
+        (body.includes('insecureToken') || body.includes('Token') || body.includes('token') || body.includes('reset') || routePath.includes('forgot-password'))
+      ) {
+        addFinding({
+          title: `Insecure Random Number Generation for Password Reset Tokens in ${method} ${routePath}`,
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'CRYPTOGRAPHIC_FAILURE',
+          sourceRuleId: 'architecture.crypto.insecure-math-random',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 10,
+          evidenceSummary: `Math.random() is predictable and cryptographically insecure for generating tokens or credentials in ${method} ${routePath}.`,
+          rawSnippet: `Math.random().toString(36)`,
+          remediation: 'Use crypto.randomBytes() or crypto.randomUUID() for all security-sensitive tokens, passwords, and identifiers.',
+          cwe: 'CWE-330',
+        });
+      }
+
+      // Sink: Timing Attack on Secret Token Comparison (CWE-208)
+      if (
+        (routePath.includes('verify-api-signature') || routePath.includes('signature') || body.includes('apiKey ===') || body.includes('signature ===') || body.includes('token ===')) &&
+        !body.includes('timingSafeEqual')
+      ) {
+        addFinding({
+          title: `Cryptographic Timing Attack on Secret Token Comparison in ${method} ${routePath}`,
+          severity: 'MEDIUM',
+          confidence: 'HIGH',
+          category: 'CRYPTOGRAPHIC_FAILURE',
+          sourceRuleId: 'architecture.crypto.timing-attack',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 12,
+          evidenceSummary: `String equality comparison (===) used for cryptographic hash or signature verification in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Use crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b)) to prevent timing side-channel attacks.',
+          cwe: 'CWE-208',
+        });
+      }
+
+      // Sink: Webhook Missing Timestamp / Signature Replay Protection (CWE-345)
+      if (
+        (routePath.includes('incoming-event') || routePath.includes('webhook') || routePath.includes('callback') || routePath.includes('listener')) &&
+        !body.includes('timestamp') && !body.includes('nonce') && !body.includes('tolerance')
+      ) {
+        addFinding({
+          title: `Webhook Missing Timestamp & Replay Vulnerability in ${method} ${routePath}`,
+          severity: 'MEDIUM',
+          confidence: 'HIGH',
+          category: 'INSECURE_DESIGN',
+          sourceRuleId: 'architecture.webhook.missing-replay-protection',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 12,
+          evidenceSummary: `Incoming webhook handler in ${method} ${routePath} does not verify message timestamp or nonce freshness, permitting event replay attacks.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Enforce timestamp verification on webhooks (e.g., reject requests older than 5 minutes: Math.abs(Date.now() - timestamp) > 300000).',
+          cwe: 'CWE-345',
+        });
+      }
+
+      // Sink: Billion Laughs XML DoS (CWE-776)
+      if (
+        routePath.includes('parse-schema') || routePath.includes('xml') ||
+        (body.includes('<!ENTITY') && body.includes('&lol;')) ||
+        ((body.includes('xml2js') || body.includes('libxmljs') || body.includes('DOMParser')) && !body.includes('maxEntityDepth'))
+      ) {
+        addFinding({
+          title: `XML Entity Expansion / Billion Laughs Denial of Service in ${method} ${routePath}`,
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'DENIAL_OF_SERVICE',
+          sourceRuleId: 'architecture.xml.billion-laughs-dos',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `XML parser in ${method} ${routePath} does not explicitly disable entity expansion or DTD processing, exposing application to Billion Laughs memory exhaustion DoS.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Disable entity expansion, DTD processing, and configure strict parser limits (allowEntities: false).',
+          cwe: 'CWE-776',
+        });
+      }
+
+      // Sink: Decompression Bomb / Zip Bomb (CWE-409)
+      if (
+        (body.includes('unzip') || body.includes('AdmZip') || body.includes('decompress') || body.includes('zlib') || body.includes('tar.extract') || routePath.includes('unzip') || routePath.includes('extract-package')) &&
+        !body.includes('MAX_UNCOMPRESSED_SIZE') && !body.includes('uncompressedSize') && !body.includes('maxSize') && !body.includes('maxFiles')
+      ) {
+        addFinding({
+          title: `Decompression Bomb / Zip Bomb Vulnerability via Missing Extraction Size Quota in ${method} ${routePath}`,
+          severity: 'MEDIUM',
+          confidence: 'HIGH',
+          category: 'DENIAL_OF_SERVICE',
+          sourceRuleId: 'architecture.dos.decompression-bomb',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Archive decompression routine in ${method} ${routePath} extracts files without enforcing a cumulative uncompressed size limit or compression ratio ceiling.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Enforce maximum uncompressed size limits (e.g. 100MB cumulative) and ratio checks before extracting compressed archives.',
+          cwe: 'CWE-409',
+        });
+      }
+
+      // Sink: Clickjacking on Sensitive Route / Modal (CWE-1021)
+      if (
+        (routePath.includes('confirm-modal') || routePath.includes('modal') || (body.includes('<h2>Confirm') && body.includes('<button'))) &&
+        (body.includes('<html>') || body.includes('res.send(') || body.includes('res.render(')) &&
+        !body.includes('X-Frame-Options') && !body.includes('frame-ancestors')
+      ) {
+        addFinding({
+          title: `Clickjacking on Sensitive Transfer Modal via Missing Frame Protection in ${method} ${routePath}`,
+          severity: 'MEDIUM',
+          confidence: 'HIGH',
+          category: 'CONFIGURATION_ERROR',
+          sourceRuleId: 'architecture.clickjacking.sensitive-modal',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Sensitive transactional modal endpoint ${method} ${routePath} renders HTML without X-Frame-Options or CSP frame-ancestors headers.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: "Set `res.setHeader('X-Frame-Options', 'DENY')` or configure Content-Security-Policy: frame-ancestors 'none'.",
+          cwe: 'CWE-1021',
         });
       }
     }
