@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { SecurityToolAdapter, ToolInput, ToolExecutionResult, RawToolFinding } from './security-tool.interface';
+import { threatIntelSyncService, DependencyItem } from '../services/threat-intel-sync.service';
 
 interface OsvAdvisory {
   package: string;
@@ -13,7 +14,7 @@ interface OsvAdvisory {
   fixedVersion: string;
 }
 
-const OSV_ADVISORIES: OsvAdvisory[] = [
+const STATIC_OSV_ADVISORIES: OsvAdvisory[] = [
   {
     package: 'jsonwebtoken',
     vulnId: 'GHSA-hjrf-2m68-5959',
@@ -83,7 +84,7 @@ const OSV_ADVISORIES: OsvAdvisory[] = [
 
 export class OsvScannerAdapter implements SecurityToolAdapter {
   readonly name = 'OSV_SCANNER';
-  readonly version = 'v1.7.0';
+  readonly version = 'v2.0.0-ThreatIntel';
   readonly supportedTargetTypes: Array<'URL' | 'FILE_ZIP' | 'HYBRID'> = ['URL', 'FILE_ZIP', 'HYBRID'];
 
   async isAvailable(): Promise<boolean> {
@@ -102,59 +103,89 @@ export class OsvScannerAdapter implements SecurityToolAdapter {
     const resultPath = path.join(resultsDir, `scan-${input.scanId}-osv.json`);
 
     try {
-      const searchFiles = [
-        path.join(input.sourcePath || '', 'package.json'),
-        path.join(input.sourcePath || '', 'package-lock.json'),
-        path.join(process.cwd(), 'package.json'),
-        path.join(process.cwd(), 'package-lock.json'),
+      const searchDirs = [input.sourcePath || '', process.cwd()].filter(Boolean);
+      const manifestNames = [
+        'package.json',
+        'package-lock.json',
+        'requirements.txt',
+        'composer.json',
+        'composer.lock',
+        'go.mod',
+        'pom.xml',
       ];
 
+      const discoveredDeps: Array<DependencyItem & { manifestPath: string }> = [];
       const auditedPackages = new Map<string, string>();
 
-      for (const fp of searchFiles) {
-        if (fs.existsSync(fp)) {
-          try {
-            const raw = JSON.parse(fs.readFileSync(fp, 'utf8'));
-            if (raw.dependencies) {
-              for (const [k, v] of Object.entries(raw.dependencies)) {
-                auditedPackages.set(k, String(v));
+      for (const dir of searchDirs) {
+        for (const mName of manifestNames) {
+          const fp = path.join(dir, mName);
+          if (fs.existsSync(fp)) {
+            try {
+              const content = fs.readFileSync(fp, 'utf8');
+              const parsed = threatIntelSyncService.parseManifest(mName, content);
+              for (const dep of parsed) {
+                discoveredDeps.push({ ...dep, manifestPath: path.relative(dir, fp) || mName });
+                auditedPackages.set(dep.name, dep.version);
               }
-            }
-            if (raw.devDependencies) {
-              for (const [k, v] of Object.entries(raw.devDependencies)) {
-                auditedPackages.set(k, String(v));
-              }
-            }
-            if (raw.packages) {
-              for (const [pkgKey, pkgVal] of Object.entries(raw.packages)) {
-                const cleanName = pkgKey.replace(/^node_modules\//, '');
-                if (cleanName && typeof pkgVal === 'object' && (pkgVal as any).version) {
-                  auditedPackages.set(cleanName, (pkgVal as any).version);
-                }
-              }
-            }
-          } catch {}
+            } catch {}
+          }
         }
       }
 
-      // Match against OSV vulnerability database
-      for (const adv of OSV_ADVISORIES) {
-        if (auditedPackages.has(adv.package)) {
-          const ver = auditedPackages.get(adv.package)!;
-          if (adv.affectedVersionCheck(ver)) {
+      // 1. Live Threat Intelligence query (OSV.dev + GitHub Advisories)
+      if (discoveredDeps.length > 0) {
+        try {
+          const liveResult = await threatIntelSyncService.batchScanDependencies(
+            discoveredDeps.map(d => ({ name: d.name, version: d.version, ecosystem: d.ecosystem }))
+          );
+
+          for (const adv of liveResult.advisories) {
+            const cveAlias = adv.aliases.find(a => a.startsWith('CVE-')) || adv.id;
+            const relManifest =
+              discoveredDeps.find(d => d.name === adv.affectedPackage)?.manifestPath || 'package.json';
+
             findings.push({
-              title: `OSV Advisory: ${adv.title}`,
+              title: `OSV Advisory: ${adv.summary}`,
               severity: adv.severity,
               confidence: 'CONFIRMED',
               category: 'VULNERABLE_DEPENDENCY',
-              sourceRuleId: `osv.${adv.vulnId}`,
-              filePath: 'package.json',
-              evidenceSummary: `Detected dependency ${adv.package}@${ver} affected by ${adv.cve} (${adv.vulnId}). Fixed in ${adv.fixedVersion}.`,
-              rawSnippet: `Dependency: "${adv.package}": "${ver}"\nAdvisory: ${adv.vulnId}\nCVE: ${adv.cve}\nDatabase: Google OSV (Open Source Vulnerabilities)\nFixed Version: ${adv.fixedVersion}`,
-              remediation: `Upgrade "${adv.package}" to version ${adv.fixedVersion} or higher in package manifest.`,
-              cwe: adv.cwe,
-              cve: adv.cve,
+              sourceRuleId: `osv.${adv.id}`,
+              filePath: relManifest,
+              evidenceSummary: `Detected dependency ${adv.affectedPackage}@${adv.targetVersion} (${adv.ecosystem}) affected by ${cveAlias} (${adv.id}). ${adv.fixedVersion ? `Fixed in ${adv.fixedVersion}.` : ''}`,
+              rawSnippet: `Dependency: "${adv.affectedPackage}": "${adv.targetVersion}"\nEcosystem: ${adv.ecosystem}\nAdvisory: ${adv.id}\nCVE: ${cveAlias}\nDatabase: Live Google OSV / GitHub Security Advisories\nFixed Version: ${adv.fixedVersion || 'Unfixed / Workaround'}`,
+              remediation: adv.fixedVersion
+                ? `Upgrade "${adv.affectedPackage}" to version ${adv.fixedVersion} or higher in ${relManifest}.`
+                : `Review advisory ${adv.id} for recommended mitigation.`,
+              cwe: adv.cweIds[0] || 'CWE-1395',
+              cve: cveAlias,
             });
+          }
+        } catch (liveErr) {
+          console.warn('[OsvScannerAdapter] Live threat intel scan encountered error, falling back to static:', (liveErr as Error).message);
+        }
+      }
+
+      // 2. Static Advisory Fallback (if no live findings detected, ensure static coverage)
+      if (findings.length === 0) {
+        for (const adv of STATIC_OSV_ADVISORIES) {
+          if (auditedPackages.has(adv.package)) {
+            const ver = auditedPackages.get(adv.package)!;
+            if (adv.affectedVersionCheck(ver)) {
+              findings.push({
+                title: `OSV Advisory: ${adv.title}`,
+                severity: adv.severity,
+                confidence: 'CONFIRMED',
+                category: 'VULNERABLE_DEPENDENCY',
+                sourceRuleId: `osv.${adv.vulnId}`,
+                filePath: 'package.json',
+                evidenceSummary: `Detected dependency ${adv.package}@${ver} affected by ${adv.cve} (${adv.vulnId}). Fixed in ${adv.fixedVersion}.`,
+                rawSnippet: `Dependency: "${adv.package}": "${ver}"\nAdvisory: ${adv.vulnId}\nCVE: ${adv.cve}\nDatabase: Google OSV (Open Source Vulnerabilities)\nFixed Version: ${adv.fixedVersion}`,
+                remediation: `Upgrade "${adv.package}" to version ${adv.fixedVersion} or higher in package manifest.`,
+                cwe: adv.cwe,
+                cve: adv.cve,
+              });
+            }
           }
         }
       }

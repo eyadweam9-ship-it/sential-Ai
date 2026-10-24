@@ -28,6 +28,8 @@ storage/tool-results/*
 !storage/tool-results/.gitkeep
 storage/extracted-sources/*
 !storage/extracted-sources/.gitkeep
+storage/cache/*
+!storage/cache/.gitkeep
 
 # Logs
 *.log

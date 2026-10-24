@@ -656,7 +656,10 @@ export class SemgrepAdapter implements SecurityToolAdapter {
           const isExecutableSource =
             nameLower.startsWith('.env') ||
             ['.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.py', '.php', '.java', '.go', '.rb', '.cs'].includes(ext) ||
-            ['.html', '.htm', '.vue'].includes(ext);
+            ['.html', '.htm', '.vue'].includes(ext) ||
+            nameLower === 'dockerfile' ||
+            nameLower.endsWith('.dockerfile') ||
+            ['.tf', '.tfvars', '.yaml', '.yml'].includes(ext);
 
           if (isExecutableSource) {
             this.scanFile(fullPath, findings, root);
@@ -696,6 +699,16 @@ export class SemgrepAdapter implements SecurityToolAdapter {
         ext === '.cjs' ||
         ext === '.php' ||
         ext === '.py' ||
+        ext === '.java' ||
+        ext === '.go' ||
+        ext === '.rb' ||
+        ext === '.cs' ||
+        ext === '.tf' ||
+        ext === '.tfvars' ||
+        ext === '.yaml' ||
+        ext === '.yml' ||
+        nameLower === 'dockerfile' ||
+        nameLower.endsWith('.dockerfile') ||
         nameLower.startsWith('.env');
 
       // Dynamically load active rules from Central Knowledge Base if present
