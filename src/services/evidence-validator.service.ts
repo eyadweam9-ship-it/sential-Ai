@@ -44,10 +44,18 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
     cwe === 'CWE-95' ||
     cwe === 'CWE-918' ||
     cwe === 'CWE-639' ||
+    cwe === 'CWE-1336' ||
+    cwe === 'CWE-1321' ||
+    cwe === 'CWE-943' ||
+    cwe === 'CWE-502' ||
+    cwe === 'CWE-611' ||
+    cwe === 'CWE-915' ||
     category === 'SQL_INJECTION' ||
     category === 'COMMAND_INJECTION' ||
     category === 'CROSS_SITE_SCRIPTING' ||
-    category === 'PATH_TRAVERSAL';
+    category === 'PATH_TRAVERSAL' ||
+    category === 'INJECTION' ||
+    category === 'INSECURE_DESERIALIZATION';
 
   if (isNonExecutableDoc && isCodeExecutionFlaw) {
     return {

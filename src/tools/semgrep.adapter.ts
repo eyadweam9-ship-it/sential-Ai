@@ -230,6 +230,140 @@ const BACKEND_RULES: SastRule[] = [
     regex: /(?:JWT_SECRET|INTERNAL_API_KEY|PAYMENT_GATEWAY_SECRET|db_password|admin_password)\s*[:=]\s*['"][^'"\r\n\s]{4,128}['"]/i,
     remediation: 'Never store plaintext passwords in source code. Extract credentials into secure environment variables or vault.',
   },
+
+  // =========================================================================
+  // ENTERPRISE EXTENDED SAST RULES (OWASP Top 10 & CWE Top 25)
+  // =========================================================================
+
+  // 1. Server-Side Template Injection (SSTI - CWE-1336)
+  {
+    id: 'javascript.express.security.ssti.template-render',
+    title: 'Server-Side Template Injection (SSTI) in View Rendering Engine',
+    severity: 'CRITICAL',
+    category: 'INJECTION',
+    cwe: 'CWE-1336',
+    regex: /(?:(?:ejs|pug|handlebars|nunjucks|eta|dot|swig|mustache)\.render\s*\(\s*(?:req\.|query|body|params|`.*?\$)|(?:res\.render|renderString|compile)\s*\(\s*(?:req\.query|req\.body|req\.params))/i,
+    remediation: 'Never pass user-controlled input directly into template compilation or rendering functions. Pass data strictly via template context objects with contextual escaping.',
+  },
+
+  // 2. Prototype Pollution (CWE-1321)
+  {
+    id: 'javascript.lang.security.prototype-pollution.deep-merge',
+    title: 'Prototype Pollution via Unsafe Object Merge or Key Assignment',
+    severity: 'HIGH',
+    category: 'INSECURE_DESIGN',
+    cwe: 'CWE-1321',
+    regex: /(?:(?:Object\.assign|_\.merge|lodash\.merge|mergeDeep|deepMerge|cloneDeep)\s*\([^)]*?(?:req\.body|req\.query|payload|JSON\.parse)|\[['"]__proto__['"]\]|\[['"]constructor['"]\]\s*\[['"]prototype['"]\])/i,
+    remediation: 'Validate incoming object keys against an allowlist, freeze prototypes via Object.freeze(Object.prototype), or use Object.create(null) for unprototyped key-value dictionaries.',
+  },
+
+  // 3. NoSQL Injection (MongoDB / Mongoose / Document Store - CWE-943)
+  {
+    id: 'javascript.express.security.nosqli.query-injection',
+    title: 'NoSQL Injection via Unsanitized Object Query Filter',
+    severity: 'CRITICAL',
+    category: 'SQL_INJECTION',
+    cwe: 'CWE-943',
+    regex: /(?:(?:\.find|\.findOne|\.countDocuments|\.deleteMany|\.updateOne|\.updateMany)\s*\(\s*(?:req\.body|req\.query|req\.params)\b|(?:\$where|\$ne|\$regex|\$gt|\$gte)\s*[:=]\s*(?:req\.|query|body))/i,
+    remediation: 'Sanitize query inputs using mongo-sanitize or express-mongo-sanitize, and validate input types strictly to primitive strings rather than raw query filter objects.',
+  },
+
+  // 4. Insecure Deserialization (CWE-502)
+  {
+    id: 'javascript.lang.security.insecure-deserialization',
+    title: 'Insecure Deserialization via Dangerous Object Loader',
+    severity: 'CRITICAL',
+    category: 'INSECURE_DESERIALIZATION',
+    cwe: 'CWE-502',
+    regex: /(?:(?:node-serialize|serialize-javascript|unserialize)\s*\(|(?:js-yaml|yaml)\.load\s*\(\s*(?:req\.|query|body|data))/i,
+    remediation: 'Avoid deserializing untrusted data with executable serializers. Use standard, safe JSON.parse() or schema-validated formats (JSON Schema/Zod).',
+  },
+
+  // 5. XML External Entity (XXE - CWE-611)
+  {
+    id: 'javascript.lang.security.xxe.xml-parsing',
+    title: 'XML External Entity (XXE) Injection via Unsafe XML Parser Configuration',
+    severity: 'HIGH',
+    category: 'XML_INJECTION',
+    cwe: 'CWE-611',
+    regex: /(?:parseXml|libxmljs\.parseXml|DOMParser|xml2js\.parseString|fast-xml-parser)\s*\([^)]*?(?:noent\s*:\s*true|dtd\s*:\s*true|resolveEntities\s*:\s*true)/i,
+    remediation: 'Disable external entity resolution (DTD) and entity expansion in XML parser configurations before parsing untrusted XML streams.',
+  },
+
+  // 6. Mass Assignment / Object Over-Posting (CWE-915)
+  {
+    id: 'javascript.express.security.mass-assignment',
+    title: 'Mass Assignment / Over-Posting on Sensitive Domain Model',
+    severity: 'HIGH',
+    category: 'BROKEN_ACCESS_CONTROL',
+    cwe: 'CWE-915',
+    regex: /(?:User|Account|Profile|Customer|Admin|Role|Order)\.(?:create|update|findOneAndUpdate|build)\s*\(\s*(?:req\.body|req\.query)\s*\)/i,
+    remediation: 'Explicitly specify allowed fields using DTOs or pick/whitelist utility before passing input to model persistence layer.',
+  },
+
+  // 7. Weak Cryptography & Insecure Randomness (CWE-327 / CWE-338)
+  {
+    id: 'javascript.lang.security.weak-crypto-hash',
+    title: 'Weak Cryptographic Hash Algorithm (MD5 / SHA1)',
+    severity: 'MEDIUM',
+    category: 'CRYPTOGRAPHIC_FAILURE',
+    cwe: 'CWE-327',
+    regex: /crypto\.createHash\s*\(\s*['"](?:md5|sha1|rc4|des)['"]/i,
+    remediation: 'Upgrade to modern cryptographic algorithms such as SHA-256, SHA-512, or argon2/bcrypt for credential hashing and data integrity checks.',
+  },
+  {
+    id: 'javascript.lang.security.insecure-random',
+    title: 'Insecure Pseudo-Random Number Generation for Sensitive Context',
+    severity: 'MEDIUM',
+    category: 'CRYPTOGRAPHIC_FAILURE',
+    cwe: 'CWE-338',
+    regex: /Math\.random\s*\(\s*\)\s*.*?(?:token|secret|session|otp|key|auth|password|csrf)/i,
+    remediation: 'Use cryptographically secure pseudorandom number generators like crypto.randomBytes() or crypto.randomUUID() for security-sensitive tokens.',
+  },
+
+  // 8. Regular Expression Denial of Service (ReDoS - CWE-1333)
+  {
+    id: 'javascript.lang.security.redos.dynamic-regex',
+    title: 'Regular Expression Denial of Service (ReDoS) via Dynamic User Pattern',
+    severity: 'MEDIUM',
+    category: 'DENIAL_OF_SERVICE',
+    cwe: 'CWE-1333',
+    regex: /new\s+RegExp\s*\(\s*(?:req\.query|req\.body|req\.params)/i,
+    remediation: 'Avoid constructing Regular Expressions from untrusted user input, or sanitize patterns with escape-string-regexp and enforce regex evaluation timeouts.',
+  },
+
+  // 9. Sensitive Information Exposure in Stack Traces & Debug Responses (CWE-209)
+  {
+    id: 'javascript.express.security.leak.stack-trace-leak',
+    title: 'Sensitive Technical Information Leaked in Error Response (Stack Trace)',
+    severity: 'LOW',
+    category: 'SECURITY_MISCONFIGURATION',
+    cwe: 'CWE-209',
+    regex: /res\.(?:status\s*\(\s*\d+\s*\)\s*\.)?(?:json|send)\s*\(\s*\{\s*.*?(?:err\.stack|error\.stack|stack\s*:\s*(?:err|error))/i,
+    remediation: 'Ensure stack traces are never exposed in HTTP responses in production environments. Log errors internally and return sanitized user messages.',
+  },
+
+  // 10. Insecure WebSockets / Missing Origin Check (CWE-346)
+  {
+    id: 'javascript.express.security.websocket.missing-origin-check',
+    title: 'Cross-Site WebSocket Hijacking (CSWSH) via Missing Origin Verification',
+    severity: 'MEDIUM',
+    category: 'BROKEN_ACCESS_CONTROL',
+    cwe: 'CWE-346',
+    regex: /(?:new\s+WebSocketServer|new\s+ws\.Server|io\.on\s*\(\s*['"]connection['"])\s*(?!.*verifyClient)/i,
+    remediation: 'Enforce strict origin validation (verifyClient or allowRequest) on all WebSocket handshakes to prevent Cross-Site WebSocket Hijacking.',
+  },
+
+  // 11. GraphQL Introspection Enabled (CWE-200)
+  {
+    id: 'javascript.graphql.security.introspection-enabled',
+    title: 'GraphQL Introspection Query Enabled in Production',
+    severity: 'LOW',
+    category: 'SECURITY_MISCONFIGURATION',
+    cwe: 'CWE-200',
+    regex: /introspection\s*:\s*true/i,
+    remediation: 'Disable GraphQL schema introspection in production environments to avoid disclosing schema structure and internal types.',
+  },
 ];
 
 const DOM_SAST_RULES: SastRule[] = [

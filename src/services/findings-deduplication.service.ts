@@ -183,7 +183,37 @@ function getRootCauseGroupKey(finding: {
     return `ROOT_MISCONFIG:${normPath}`;
   }
 
-  // 8. Infrastructure & Container Misconfigurations
+  // 8. Server-Side Template Injection (SSTI - CWE-1336)
+  if (cwe === 'CWE-1336' || title.includes('template injection') || title.includes('ssti')) {
+    return `ROOT_SSTI:${normPath}`;
+  }
+
+  // 9. Prototype Pollution (CWE-1321)
+  if (cwe === 'CWE-1321' || title.includes('prototype pollution')) {
+    return `ROOT_PROTO_POLLUTION:${normPath}`;
+  }
+
+  // 10. NoSQL Injection (CWE-943)
+  if (cwe === 'CWE-943' || title.includes('nosql')) {
+    return `ROOT_NOSQLI:${normPath}`;
+  }
+
+  // 11. Insecure Deserialization (CWE-502)
+  if (cwe === 'CWE-502' || title.includes('deserialization')) {
+    return `ROOT_DESERIALIZATION:${normPath}`;
+  }
+
+  // 12. XML External Entity (XXE - CWE-611)
+  if (cwe === 'CWE-611' || title.includes('xxe') || title.includes('xml external entity')) {
+    return `ROOT_XXE:${normPath}`;
+  }
+
+  // 13. Mass Assignment / Over-Posting (CWE-915)
+  if (cwe === 'CWE-915' || title.includes('mass assignment') || title.includes('over-posting')) {
+    return `ROOT_MASS_ASSIGNMENT:${normPath}`;
+  }
+
+  // 14. Infrastructure & Container Misconfigurations
   if (category.includes('IAC') || category.includes('MISCONFIG')) {
     const ruleKey = (finding.sourceRuleId || title).toLowerCase();
     return `ROOT_IAC:${ruleKey}:${normPath}`;

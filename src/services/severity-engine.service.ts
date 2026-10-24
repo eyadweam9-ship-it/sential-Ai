@@ -120,10 +120,18 @@ export function evaluateFindingRisk(finding: RawToolFinding): SeverityEngineEval
     cwe === 'CWE-95' ||
     cwe === 'CWE-918' ||
     cwe === 'CWE-639' ||
+    cwe === 'CWE-1336' ||
+    cwe === 'CWE-1321' ||
+    cwe === 'CWE-943' ||
+    cwe === 'CWE-502' ||
+    cwe === 'CWE-611' ||
+    cwe === 'CWE-915' ||
     category === 'SQL_INJECTION' ||
     category === 'COMMAND_INJECTION' ||
     category === 'CROSS_SITE_SCRIPTING' ||
-    category === 'PATH_TRAVERSAL';
+    category === 'PATH_TRAVERSAL' ||
+    category === 'INJECTION' ||
+    category === 'INSECURE_DESERIALIZATION';
 
   if (isNonExecutableDoc && isCodeExecutionFlaw) {
     return {
@@ -523,6 +531,134 @@ export function evaluateFindingRisk(finding: RawToolFinding): SeverityEngineEval
       rationale: 'Defense-in-depth security header baseline recommendation. The absence of this header alone is not an active exploit.',
       exploitabilityNote: 'Theoretical exploitability: requires an independent primary vulnerability (such as reflected XSS or MITM).',
       impactNote: 'Reduces browser-enforced defense-in-depth controls.',
+      isFalsePositive: false,
+    };
+  }
+
+  // F. Server-Side Template Injection (SSTI - CWE-1336)
+  if (cwe === 'CWE-1336' || title.includes('template injection') || title.includes('ssti')) {
+    const cvss = calculateCvss31Base({ av: 'N', ac: 'L', pr: 'N', ui: 'N', scope: 'C', c: 'H', i: 'H', a: 'H' });
+    return {
+      severity: 'CRITICAL',
+      confidence: 'CONFIRMED',
+      workflowStatus: 'CONFIRMED',
+      cvssScore: 9.8,
+      cvssVector: cvss.vector,
+      rationale: 'Server-Side Template Injection (SSTI): User-controlled input evaluated by server template engine, leading to Remote Code Execution.',
+      exploitabilityNote: 'Remotely exploitable without credentials by injecting template expression payloads.',
+      impactNote: 'Total host compromise: arbitrary server-side code execution under web process permissions.',
+      isFalsePositive: false,
+    };
+  }
+
+  // G. Prototype Pollution (CWE-1321)
+  if (cwe === 'CWE-1321' || title.includes('prototype pollution')) {
+    const cvss = calculateCvss31Base({ av: 'N', ac: 'L', pr: 'N', ui: 'N', scope: 'U', c: 'H', i: 'H', a: 'H' });
+    return {
+      severity: 'HIGH',
+      confidence: 'CONFIRMED',
+      workflowStatus: 'CONFIRMED',
+      cvssScore: 8.2,
+      cvssVector: cvss.vector,
+      rationale: 'Prototype Pollution: Unrestricted object attribute modification allows altering Object.prototype properties, risking DoS or privilege escalation.',
+      exploitabilityNote: 'Exploitable by injecting __proto__ or constructor.prototype JSON keys in request body.',
+      impactNote: 'Allows property injection affecting all running objects across the Node.js application process.',
+      isFalsePositive: false,
+    };
+  }
+
+  // H. NoSQL Injection (CWE-943)
+  if (cwe === 'CWE-943' || title.includes('nosql')) {
+    const cvss = calculateCvss31Base({ av: 'N', ac: 'L', pr: 'N', ui: 'N', scope: 'U', c: 'H', i: 'H', a: 'H' });
+    return {
+      severity: 'CRITICAL',
+      confidence: 'CONFIRMED',
+      workflowStatus: 'CONFIRMED',
+      cvssScore: 9.8,
+      cvssVector: cvss.vector,
+      rationale: 'NoSQL Injection: Unsanitized object filter passed directly into document database query, allowing authentication bypass or data leakage.',
+      exploitabilityNote: 'Remotely exploitable using MongoDB query operators ($ne, $gt, $where).',
+      impactNote: 'Complete database record disclosure, document manipulation, or authentication circumvention.',
+      isFalsePositive: false,
+    };
+  }
+
+  // I. Insecure Deserialization (CWE-502)
+  if (cwe === 'CWE-502' || title.includes('deserialization')) {
+    const cvss = calculateCvss31Base({ av: 'N', ac: 'L', pr: 'N', ui: 'N', scope: 'C', c: 'H', i: 'H', a: 'H' });
+    return {
+      severity: 'CRITICAL',
+      confidence: 'CONFIRMED',
+      workflowStatus: 'CONFIRMED',
+      cvssScore: 9.8,
+      cvssVector: cvss.vector,
+      rationale: 'Insecure Deserialization: Parsing untrusted serialized streams can execute embedded functions and lead to Remote Code Execution.',
+      exploitabilityNote: 'Exploitable by sending crafted serialization payloads (e.g. node-serialize IIFE gadgets).',
+      impactNote: 'Immediate arbitrary code execution on backend application host.',
+      isFalsePositive: false,
+    };
+  }
+
+  // J. XML External Entity (XXE - CWE-611)
+  if (cwe === 'CWE-611' || title.includes('xxe') || title.includes('xml external entity')) {
+    const cvss = calculateCvss31Base({ av: 'N', ac: 'L', pr: 'N', ui: 'N', scope: 'U', c: 'H', i: 'L', a: 'N' });
+    return {
+      severity: 'HIGH',
+      confidence: 'CONFIRMED',
+      workflowStatus: 'CONFIRMED',
+      cvssScore: 8.2,
+      cvssVector: cvss.vector,
+      rationale: 'XML External Entity (XXE): Parser configured to expand external DTD entities, allowing local file disclosure or SSRF.',
+      exploitabilityNote: 'Exploitable by uploading or posting XML payloads referencing external system entities.',
+      impactNote: 'Unauthorized access to host filesystem (/etc/passwd, win.ini) or internal network probing.',
+      isFalsePositive: false,
+    };
+  }
+
+  // K. Mass Assignment / Over-Posting (CWE-915)
+  if (cwe === 'CWE-915' || title.includes('mass assignment') || title.includes('over-posting')) {
+    const cvss = calculateCvss31Base({ av: 'N', ac: 'L', pr: 'L', ui: 'N', scope: 'U', c: 'H', i: 'H', a: 'N' });
+    return {
+      severity: 'HIGH',
+      confidence: 'CONFIRMED',
+      workflowStatus: 'CONFIRMED',
+      cvssScore: 7.5,
+      cvssVector: cvss.vector,
+      rationale: 'Mass Assignment: Unfiltered request body fields passed directly to model create/update functions.',
+      exploitabilityNote: 'Exploitable by appending privileged fields (e.g. isAdmin, role, balance) in JSON payloads.',
+      impactNote: 'Unauthorized privilege escalation or unauthorized data modification.',
+      isFalsePositive: false,
+    };
+  }
+
+  // L. Cryptographic Weakness & Insecure Randomness (CWE-327 / CWE-338)
+  if (cwe === 'CWE-327' || cwe === 'CWE-338' || title.includes('weak cryptographic') || title.includes('insecure pseudo-random')) {
+    const cvss = calculateCvss31Base({ av: 'N', ac: 'H', pr: 'N', ui: 'N', scope: 'U', c: 'L', i: 'L', a: 'N' });
+    return {
+      severity: 'MEDIUM',
+      confidence: 'CONFIRMED',
+      workflowStatus: 'DETECTED',
+      cvssScore: 5.3,
+      cvssVector: cvss.vector,
+      rationale: 'Cryptographic Weakness: Deprecated hashing algorithm or predictable PRNG used for security tokens.',
+      exploitabilityNote: 'Attacker can predict generated tokens or perform hash collision / rainbow table attacks.',
+      impactNote: 'Potential compromise of password hashes or forgery of reset/session tokens.',
+      isFalsePositive: false,
+    };
+  }
+
+  // M. Regular Expression Denial of Service (ReDoS - CWE-1333)
+  if (cwe === 'CWE-1333' || title.includes('redos')) {
+    const cvss = calculateCvss31Base({ av: 'N', ac: 'L', pr: 'N', ui: 'N', scope: 'U', c: 'N', i: 'N', a: 'H' });
+    return {
+      severity: 'MEDIUM',
+      confidence: 'CONFIRMED',
+      workflowStatus: 'DETECTED',
+      cvssScore: 5.3,
+      cvssVector: cvss.vector,
+      rationale: 'ReDoS: Catastrophic polynomial/exponential backtracking pattern in dynamic Regular Expression evaluation.',
+      exploitabilityNote: 'Remotely exploitable by sending crafted long input strings causing event loop starvation.',
+      impactNote: 'CPU exhaustion leading to application Denial of Service for all concurrent users.',
       isFalsePositive: false,
     };
   }

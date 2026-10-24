@@ -807,6 +807,88 @@ export class ZapAdapter implements SecurityToolAdapter {
             }
           }
         } catch {}
+
+        // K. Dynamic Server-Side Template Injection (SSTI) Probing
+        try {
+          const sstiPayload = '{{7*7}}';
+          const sstiSearchUrl = `${originUrl}/search?q=${encodeURIComponent(sstiPayload)}`;
+          const sstiResp = await fetch(sstiSearchUrl, {
+            headers: baseReqHeaders,
+            signal: AbortSignal.timeout(5000),
+          }).catch(() => null);
+
+          if (sstiResp && sstiResp.status === 200) {
+            const sstiBody = await sstiResp.text().catch(() => '');
+            if (sstiBody.includes('49') && !sstiBody.includes('{{7*7}}')) {
+              findings.push({
+                title: 'Server-Side Template Injection (SSTI) Detected',
+                severity: 'CRITICAL',
+                confidence: 'CONFIRMED',
+                category: 'INJECTION',
+                sourceRuleId: 'SSTI-001',
+                targetUrl: sstiSearchUrl,
+                evidenceSummary: 'Template expression "{{7*7}}" was evaluated dynamically on the server and rendered as "49".',
+                rawSnippet: 'Evaluated response contains: 49',
+                remediation: 'Disable arbitrary expression evaluation in template engines and enforce strict context escaping.',
+                cwe: 'CWE-1336',
+              });
+            }
+          }
+        } catch {}
+
+        // L. Dynamic NoSQL Injection Probing
+        try {
+          const nosqlResp = await fetch(`${originUrl}/api/auth/login`, {
+            method: 'POST',
+            headers: { ...baseReqHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: { '$ne': null }, password: { '$ne': null } }),
+            signal: AbortSignal.timeout(5000),
+          }).catch(() => null);
+
+          if (nosqlResp) {
+            const nosqlData = await nosqlResp.json().catch(() => null);
+            if (nosqlResp.status === 200 && nosqlData && nosqlData.user) {
+              findings.push({
+                title: 'NoSQL Injection (Authentication Bypass via $ne Operator)',
+                severity: 'CRITICAL',
+                confidence: 'CONFIRMED',
+                category: 'SQL_INJECTION',
+                sourceRuleId: 'NOSQLI-001',
+                targetUrl: `${originUrl}/api/auth/login`,
+                evidenceSummary: 'Authentication successfully bypassed using NoSQL "$ne" operator injection in JSON body payload.',
+                rawSnippet: JSON.stringify(nosqlData).slice(0, 160),
+                remediation: 'Sanitize JSON inputs using mongo-sanitize and strictly validate that username and password are primitive strings.',
+                cwe: 'CWE-943',
+              });
+            }
+          }
+        } catch {}
+
+        // M. Dynamic HTTP Method Tampering & Verb Manipulation
+        try {
+          const methodResp = await fetch(`${originUrl}/api/debug/system-info`, {
+            method: 'OPTIONS',
+            headers: baseReqHeaders,
+            signal: AbortSignal.timeout(5000),
+          }).catch(() => null);
+
+          if (methodResp) {
+            const allowHeader = methodResp.headers.get('allow') || methodResp.headers.get('access-control-allow-methods');
+            if (allowHeader && (allowHeader.includes('PUT') || allowHeader.includes('DELETE') || allowHeader.includes('PATCH'))) {
+              findings.push({
+                title: 'Overly Permissive HTTP Methods Enabled on Administrative / Sensitive Route',
+                severity: 'LOW',
+                confidence: 'CONFIRMED',
+                category: 'SECURITY_MISCONFIGURATION',
+                sourceRuleId: 'METHOD-TAMPER-001',
+                targetUrl: `${originUrl}/api/debug/system-info`,
+                evidenceSummary: `Endpoint advertises permissive HTTP methods (${allowHeader}) which expands attack surface.`,
+                remediation: 'Disable unused HTTP methods (e.g. PUT, DELETE, TRACE) on public routes via reverse proxy or middleware.',
+                cwe: 'CWE-693',
+              });
+            }
+          }
+        } catch {}
       } catch (dastErr) {
         console.warn('[OWASP ZAP] DAST benchmark probe notice:', (dastErr as Error).message);
       }
