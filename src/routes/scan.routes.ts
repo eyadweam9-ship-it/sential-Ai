@@ -10,19 +10,23 @@ import { checkAuthorizationGate, extractHostname } from '../services/authorizati
 import { evaluateScope, normalizeScopePath, ScopeRule } from '../services/scope.service';
 import { orchestrateScan } from '../services/scan-orchestrator.service';
 import { countFilesAndLines } from '../utils/file-counter';
+import { optionalAuth, AuthenticatedRequest } from '../middlewares/auth.middleware';
 
 export const scanRouter = Router();
 
-// Ensure upload directory exists
+// Ensure base upload directories exist
 const uploadDir = path.join(process.cwd(), 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+const tempUploadDir = path.join(uploadDir, 'temp');
+const usersUploadDir = path.join(uploadDir, 'users');
 
-// Configure Multer for Development File / Folder / ZIP upload
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+if (!fs.existsSync(tempUploadDir)) fs.mkdirSync(tempUploadDir, { recursive: true });
+if (!fs.existsSync(usersUploadDir)) fs.mkdirSync(usersUploadDir, { recursive: true });
+
+// Configure Multer for Development File / Folder / ZIP upload using temporary staging
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, uploadDir);
+    cb(null, tempUploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
@@ -51,32 +55,56 @@ const folderUpload = multer({
 });
 
 /**
+ * Helper to resolve user-isolated storage workspace directory:
+ * uploads/users/user_{userId}/projects/project_{projectId}/{folderName}
+ */
+function resolveUserStorageWorkspace(userId?: number | null, projectId?: number | null): string {
+  const userSegment = userId ? `user_${userId}` : 'guest';
+  const projectSegment = projectId ? `project_${projectId}` : 'default';
+  const workspacePath = path.join(uploadDir, 'users', userSegment, 'projects', projectSegment);
+  if (!fs.existsSync(workspacePath)) {
+    fs.mkdirSync(workspacePath, { recursive: true });
+  }
+  return workspacePath;
+}
+
+/**
  * POST /api/scans/upload
  * Development Environment: Upload project code archive (ZIP or source file) for SAST static scan
- * Automatically unzips archives so tools can scan individual files and lines.
+ * Stored inside user-isolated workspace: uploads/users/user_{id}/projects/project_{id}/
  */
-scanRouter.post('/upload', upload.single('file'), (req: Request, res: Response): void => {
+scanRouter.post('/upload', optionalAuth, upload.single('file'), (req: Request, res: Response): void => {
   try {
     if (!req.file) {
       res.status(400).json({ success: false, error: 'No file was uploaded.' });
       return;
     }
 
-    const { originalname, filename, size, path: filePath } = req.file;
+    const { originalname, filename, size, path: tempFilePath } = req.file;
     const ext = path.extname(originalname).toLowerCase();
 
-    let finalStagedPath = filePath;
+    // Multi-tenant user isolation
+    const authReq = req as AuthenticatedRequest;
+    const userId = authReq.user?.id || (req.body.userId ? Number(req.body.userId) : null);
+    const projectId = req.body.projectId ? Number(req.body.projectId) : null;
+    const userWorkspaceDir = resolveUserStorageWorkspace(userId, projectId);
+
+    let finalStagedPath = tempFilePath;
     let filesCount = 1;
     let totalLines = 0;
 
-    // Automatically unpack ZIP archives into target extraction directory
+    // Automatically unpack ZIP archives into user-isolated workspace
     if (ext === '.zip' || req.file.mimetype.includes('zip') || req.file.mimetype.includes('octet-stream')) {
       try {
-        const zip = new AdmZip(filePath);
-        const extractDir = path.join(uploadDir, 'extracted', `${Date.now()}-${originalname.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/\.zip$/i, '')}`);
+        const zip = new AdmZip(tempFilePath);
+        const extractFolderName = `${Date.now()}-${originalname.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/\.zip$/i, '')}`;
+        const extractDir = path.join(userWorkspaceDir, extractFolderName);
         fs.mkdirSync(extractDir, { recursive: true });
         zip.extractAllTo(extractDir, true);
         finalStagedPath = extractDir;
+
+        // Clean up temporary upload zip file
+        try { fs.unlinkSync(tempFilePath); } catch {}
 
         const stats = countFilesAndLines(extractDir);
         filesCount = stats.files;
@@ -85,24 +113,31 @@ scanRouter.post('/upload', upload.single('file'), (req: Request, res: Response):
         console.warn('ZIP extraction notice:', (zipErr as Error).message);
       }
     } else {
-      // Single code file
+      // Single code file - move to user-isolated workspace
       try {
-        const content = fs.readFileSync(filePath, 'utf8');
+        const destFile = path.join(userWorkspaceDir, `${Date.now()}-${filename}`);
+        fs.copyFileSync(tempFilePath, destFile);
+        try { fs.unlinkSync(tempFilePath); } catch {}
+        finalStagedPath = destFile;
+
+        const content = fs.readFileSync(destFile, 'utf8');
         totalLines = content.split('\n').length;
       } catch {}
     }
 
     res.status(200).json({
       success: true,
-      message: `Project file uploaded and staged successfully (${filesCount} file(s), ${totalLines.toLocaleString()} lines of code indexed).`,
+      message: `Project file uploaded and staged in user-isolated workspace (${filesCount} file(s), ${totalLines.toLocaleString()} lines of code indexed).`,
       file: {
         originalName: originalname,
-        storedName: filename,
+        storedName: path.basename(finalStagedPath),
         size,
         path: finalStagedPath,
         fileType: ext,
         filesCount,
         totalLines,
+        userId: userId || null,
+        workspace: path.relative(process.cwd(), userWorkspaceDir).replace(/\\/g, '/'),
       },
     });
   } catch (error) {
@@ -113,9 +148,9 @@ scanRouter.post('/upload', upload.single('file'), (req: Request, res: Response):
 
 /**
  * POST /api/scans/upload-folder
- * Upload entire folder with relative directory paths preserved
+ * Upload entire folder with relative directory paths preserved inside user-isolated workspace
  */
-scanRouter.post('/upload-folder', folderUpload.array('files', 1000), (req: Request, res: Response): void => {
+scanRouter.post('/upload-folder', optionalAuth, folderUpload.array('files', 1000), (req: Request, res: Response): void => {
   try {
     const files = req.files as Express.Multer.File[];
     if (!files || files.length === 0) {
@@ -123,8 +158,13 @@ scanRouter.post('/upload-folder', folderUpload.array('files', 1000), (req: Reque
       return;
     }
 
+    const authReq = req as AuthenticatedRequest;
+    const userId = authReq.user?.id || (req.body.userId ? Number(req.body.userId) : null);
+    const projectId = req.body.projectId ? Number(req.body.projectId) : null;
+    const userWorkspaceDir = resolveUserStorageWorkspace(userId, projectId);
+
     const folderName = (req.body.folderName || 'project_source').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const extractDir = path.join(uploadDir, 'extracted', `${Date.now()}-${folderName}`);
+    const extractDir = path.join(userWorkspaceDir, `${Date.now()}-${folderName}`);
     fs.mkdirSync(extractDir, { recursive: true });
 
     let pathsList: string[] = [];
@@ -164,7 +204,7 @@ scanRouter.post('/upload-folder', folderUpload.array('files', 1000), (req: Reque
 
     res.status(200).json({
       success: true,
-      message: `Folder "${folderName}" uploaded successfully (${savedCount} files, ${totalLines.toLocaleString()} lines of code indexed).`,
+      message: `Folder "${folderName}" uploaded successfully into user workspace (${savedCount} files, ${totalLines.toLocaleString()} lines of code indexed).`,
       file: {
         originalName: folderName,
         storedName: path.basename(extractDir),
@@ -173,6 +213,8 @@ scanRouter.post('/upload-folder', folderUpload.array('files', 1000), (req: Reque
         fileType: 'folder',
         filesCount: savedCount,
         totalLines,
+        userId: userId || null,
+        workspace: path.relative(process.cwd(), userWorkspaceDir).replace(/\\/g, '/'),
       },
     });
   } catch (error) {
@@ -522,7 +564,7 @@ const SAST_FINDINGS = [
 ];
 
 /**
- * Helper to ensure a target exists in database
+ * Helper to ensure a target exists in database within user-isolated project workspace
  */
 async function getOrCreateTarget(options: {
   url: string;
@@ -532,37 +574,72 @@ async function getOrCreateTarget(options: {
   filePath?: string;
   scope?: string;
   isAuthorized: boolean;
+  userId?: number | null;
+  projectId?: number | null;
 }) {
-  let project = await prisma.project.findFirst();
-  if (!project) {
-    let admin = await prisma.user.findFirst({ where: { role: 'ADMIN' } });
-    if (!admin) {
-      admin = await prisma.user.create({
+  let project: any = null;
+
+  // 1. Direct project resolution
+  if (options.projectId) {
+    project = await prisma.project.findUnique({
+      where: { id: options.projectId },
+    });
+  }
+
+  // 2. Resolve or create user's personal security workspace
+  if (!project && options.userId) {
+    project = await prisma.project.findFirst({
+      where: { userId: options.userId },
+      orderBy: { id: 'asc' },
+    });
+
+    if (!project) {
+      project = await prisma.project.create({
         data: {
-          name: 'Super Admin',
-          email: 'admin@scanner.local',
-          passwordHash: '$2b$10$fKjUub9m2Zc3wi6ItCkFQOwjy1QI5oMswwwv5Tqk0exM7xxtQS3re',
-          role: 'ADMIN',
+          userId: options.userId,
+          name: 'Personal Security Workspace',
+          description: 'Default personal workspace for security assessments',
         },
       });
     }
-    project = await prisma.project.create({
-      data: {
-        userId: admin.id,
-        name: 'Default Security Workspace',
-        description: 'Auto-created workspace for automated scans',
-      },
+  }
+
+  // 3. Fallback to default system workspace
+  if (!project) {
+    project = await prisma.project.findFirst({
+      where: { name: 'Default Security Workspace' },
     });
+    if (!project) {
+      let admin = await prisma.user.findFirst({ where: { role: 'ADMIN' } });
+      if (!admin) {
+        admin = await prisma.user.create({
+          data: {
+            name: 'Super Admin',
+            email: 'admin@scanner.local',
+            passwordHash: '$2b$10$fKjUub9m2Zc3wi6ItCkFQOwjy1QI5oMswwwv5Tqk0exM7xxtQS3re',
+            role: 'ADMIN',
+          },
+        });
+      }
+      project = await prisma.project.create({
+        data: {
+          userId: admin.id,
+          name: 'Default Security Workspace',
+          description: 'Auto-created workspace for automated scans',
+        },
+      });
+    }
   }
 
   const normalizedEnv = options.environment.toUpperCase();
   const isDevTarget = options.targetType === 'FILE_ZIP' || normalizedEnv === 'DEVELOPMENT';
   const targetIdentifier = isDevTarget ? (options.filePath || options.name || 'uploaded_project.zip') : (options.url || 'https://app.northstar.io');
 
-  // Check if this domain already has an authorized target
+  // Check if this domain already has an authorized target within this user's project
   const hostname = extractHostname(options.url || '');
   const existingDomainApproval = hostname ? await prisma.target.findFirst({
     where: {
+      projectId: project.id,
       url: { contains: hostname },
       isAuthorized: true,
       OR: [{ authorizationStatus: 'APPROVED' }, { authorizationStatus: 'VERIFIED' }]
@@ -574,6 +651,7 @@ async function getOrCreateTarget(options: {
 
   let target = await prisma.target.findFirst({
     where: {
+      projectId: project.id,
       url: targetIdentifier,
       environment: normalizedEnv,
     },
@@ -622,8 +700,11 @@ async function getOrCreateTarget(options: {
  * 3. Optional Source Code Upload: ZIP upload or Git repo URL in Staging/Production for Hybrid DAST + SAST
  * 4. Scan Configuration Persistence: Saves configuration in Prisma ScanConfiguration
  */
-scanRouter.post(['/create', '/start'], async (req: Request, res: Response): Promise<void> => {
+scanRouter.post(['/create', '/start'], optionalAuth, async (req: Request, res: Response): Promise<void> => {
   try {
+    const authReq = req as AuthenticatedRequest;
+    const currentUserId = authReq.user?.id || (req.body.userId ? Number(req.body.userId) : null);
+    const currentProjectId = req.body.projectId ? Number(req.body.projectId) : null;
     const {
       url,
       name,
@@ -757,6 +838,8 @@ scanRouter.post(['/create', '/start'], async (req: Request, res: Response): Prom
       filePath: isDevelopment ? targetLocation : (attachedCodePath || undefined),
       scope: JSON.stringify(scopeObj),
       isAuthorized: true,
+      userId: currentUserId,
+      projectId: currentProjectId,
     });
 
     // 7. Save Scan Configuration in Database (Prisma ScanConfiguration)
@@ -849,23 +932,43 @@ scanRouter.post(['/create', '/start'], async (req: Request, res: Response): Prom
 
 /**
  * GET /api/scans/progress
- * Returns scan progress, stages, and logs respecting scan_mode, scan_profile, and environment:
- * - Includes Website Discovery & Crawling results
- * - Supports URL-Based DAST and Hybrid (DAST + SAST) stages
- * - Respects scan_only vs scan_fix_test
+ * Returns scan progress, stages, and logs respecting scan_mode, scan_profile, and environment.
+ * Multi-tenant isolation: ensures regular users only access their own scan progress.
  */
-scanRouter.get('/progress', async (req: Request, res: Response): Promise<void> => {
+scanRouter.get('/progress', optionalAuth, async (req: Request, res: Response): Promise<void> => {
   try {
-    const scanId = Number(req.query.scan_id || 1);
-    let scan = await prisma.scan.findUnique({
-      where: { id: scanId },
-      include: { target: true },
-    });
+    const authReq = req as AuthenticatedRequest;
+    const user = authReq.user;
+    const isAdmin = user && user.role?.toUpperCase() === 'ADMIN';
 
-    if (!scan) {
+    let scan: any = null;
+
+    if (req.query.scan_id) {
+      const scanId = Number(req.query.scan_id);
+      scan = await prisma.scan.findUnique({
+        where: { id: scanId },
+        include: { target: { include: { project: true } } },
+      });
+
+      if (scan && !isAdmin && user && scan.target?.project?.userId !== user.id) {
+        res.status(403).json({ success: false, error: 'Forbidden: Access denied to this assessment.' });
+        return;
+      }
+    } else {
+      let whereClause: any = {};
+      if (!isAdmin && user) {
+        whereClause = {
+          target: {
+            project: {
+              userId: user.id,
+            },
+          },
+        };
+      }
       scan = await prisma.scan.findFirst({
+        where: whereClause,
         orderBy: { id: 'desc' },
-        include: { target: true },
+        include: { target: { include: { project: true } } },
       });
     }
 
@@ -1081,15 +1184,41 @@ scanRouter.get('/progress', async (req: Request, res: Response): Promise<void> =
 
 /**
  * GET /api/scans/history
- * Returns the history of all assessments / scans with findings count, target info, environment, and date
+ * Returns assessment history respecting user isolation:
+ * - Admin: sees all assessments (or filtered by ?userId=)
+ * - Regular user: sees only assessments attached to their own projects
  */
-scanRouter.get('/history', async (req: Request, res: Response): Promise<void> => {
+scanRouter.get('/history', optionalAuth, async (req: Request, res: Response): Promise<void> => {
   try {
+    const authReq = req as AuthenticatedRequest;
+    const user = authReq.user;
+    const isAdmin = user && user.role?.toUpperCase() === 'ADMIN';
+
+    let whereClause: any = {};
+    if (!isAdmin && user) {
+      whereClause = {
+        target: {
+          project: {
+            userId: user.id,
+          },
+        },
+      };
+    } else if (isAdmin && req.query.userId) {
+      whereClause = {
+        target: {
+          project: {
+            userId: Number(req.query.userId),
+          },
+        },
+      };
+    }
+
     const scans = await prisma.scan.findMany({
+      where: whereClause,
       orderBy: { id: 'desc' },
-      take: 25,
+      take: 50,
       include: {
-        target: true,
+        target: { include: { project: true } },
         vulnerabilities: true,
       },
     });
@@ -1110,6 +1239,7 @@ scanRouter.get('/history', async (req: Request, res: Response): Promise<void> =>
         high_count: highCount,
         total_findings: totalCount,
         created_at: s.startedAt || s.createdAt || new Date(),
+        userId: s.target?.project?.userId || null,
       };
     });
 
@@ -1122,12 +1252,31 @@ scanRouter.get('/history', async (req: Request, res: Response): Promise<void> =>
 
 /**
  * DELETE /api/scans/history/all
- * Clears all scan assessments from history
+ * Clears assessments from history respecting user isolation:
+ * - Regular user: only clears assessments belonging to their projects
+ * - Admin: clears all assessments
  */
-scanRouter.delete('/history/all', async (req: Request, res: Response): Promise<void> => {
+scanRouter.delete('/history/all', optionalAuth, async (req: Request, res: Response): Promise<void> => {
   try {
-    await prisma.scan.deleteMany({});
-    res.json({ success: true, message: 'All assessment history cleared successfully.' });
+    const authReq = req as AuthenticatedRequest;
+    const user = authReq.user;
+    const isAdmin = user && user.role?.toUpperCase() === 'ADMIN';
+
+    if (!isAdmin && user) {
+      await prisma.scan.deleteMany({
+        where: {
+          target: {
+            project: {
+              userId: user.id,
+            },
+          },
+        },
+      });
+      res.json({ success: true, message: 'Your assessment history cleared successfully.' });
+    } else {
+      await prisma.scan.deleteMany({});
+      res.json({ success: true, message: 'All assessment history cleared successfully.' });
+    }
   } catch (error) {
     console.error('Clear all history error:', error);
     res.status(500).json({ success: false, error: 'Failed to clear assessment history.' });
@@ -1136,9 +1285,9 @@ scanRouter.delete('/history/all', async (req: Request, res: Response): Promise<v
 
 /**
  * DELETE /api/scans/:id
- * Deletes a single scan assessment from history
+ * Deletes a single scan assessment with IDOR ownership validation
  */
-scanRouter.delete('/:id', async (req: Request, res: Response): Promise<void> => {
+scanRouter.delete('/:id', optionalAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const idParam = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const scanId = parseInt(idParam as string, 10);
@@ -1146,6 +1295,26 @@ scanRouter.delete('/:id', async (req: Request, res: Response): Promise<void> => 
       res.status(400).json({ success: false, error: 'Invalid scan ID.' });
       return;
     }
+
+    const authReq = req as AuthenticatedRequest;
+    const user = authReq.user;
+    const isAdmin = user && user.role?.toUpperCase() === 'ADMIN';
+
+    if (!isAdmin && user) {
+      const scan = await prisma.scan.findUnique({
+        where: { id: scanId },
+        include: { target: { include: { project: true } } },
+      });
+      if (!scan) {
+        res.status(404).json({ success: false, error: `Assessment #${scanId} not found.` });
+        return;
+      }
+      if (scan.target?.project?.userId !== user.id) {
+        res.status(403).json({ success: false, error: 'Forbidden: You do not have permission to delete this assessment.' });
+        return;
+      }
+    }
+
     await prisma.scan.deleteMany({ where: { id: scanId } });
     res.json({ success: true, message: `Assessment #${scanId} deleted successfully.` });
   } catch (error) {
@@ -1628,15 +1797,35 @@ scanRouter.get('/reports/assessment', async (req: Request, res: Response): Promi
 
 /**
  * GET /api/scans/:id/tasks or GET /api/scans/tasks?scanId=...
- * Multi-Tool Task execution status matrix (OWASP_ZAP, SEMGREP, GITLEAKS, TRIVY, NPM_AUDIT)
+ * Multi-Tool Task execution status matrix with tenant ownership verification
  */
-scanRouter.get('/tasks', async (req: Request, res: Response): Promise<void> => {
+scanRouter.get('/tasks', optionalAuth, async (req: Request, res: Response): Promise<void> => {
   try {
+    const authReq = req as AuthenticatedRequest;
+    const user = authReq.user;
+    const isAdmin = user && user.role?.toUpperCase() === 'ADMIN';
+
     const scanId = Number(req.query.scan_id || req.query.scanId);
     let targetScanId = scanId;
     if (!targetScanId) {
-      const latest = await prisma.scan.findFirst({ orderBy: { id: 'desc' } });
+      let whereClause: any = {};
+      if (!isAdmin && user) {
+        whereClause = { target: { project: { userId: user.id } } };
+      }
+      const latest = await prisma.scan.findFirst({
+        where: whereClause,
+        orderBy: { id: 'desc' },
+      });
       targetScanId = latest ? latest.id : 0;
+    } else if (!isAdmin && user) {
+      const scan = await prisma.scan.findUnique({
+        where: { id: targetScanId },
+        include: { target: { include: { project: true } } },
+      });
+      if (scan && scan.target?.project?.userId !== user.id) {
+        res.status(403).json({ success: false, error: 'Forbidden: Access denied to this assessment tasks.' });
+        return;
+      }
     }
 
     const tasks = await prisma.scanTask.findMany({
@@ -1656,9 +1845,24 @@ scanRouter.get('/tasks', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-scanRouter.get('/:id/tasks', async (req: Request, res: Response): Promise<void> => {
+scanRouter.get('/:id/tasks', optionalAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const scanId = Number(req.params.id);
+    const authReq = req as AuthenticatedRequest;
+    const user = authReq.user;
+    const isAdmin = user && user.role?.toUpperCase() === 'ADMIN';
+
+    if (!isAdmin && user) {
+      const scan = await prisma.scan.findUnique({
+        where: { id: scanId },
+        include: { target: { include: { project: true } } },
+      });
+      if (scan && scan.target?.project?.userId !== user.id) {
+        res.status(403).json({ success: false, error: 'Forbidden: Access denied to this assessment tasks.' });
+        return;
+      }
+    }
+
     const tasks = await prisma.scanTask.findMany({
       where: { scanId },
       include: { executions: true },
@@ -1678,11 +1882,26 @@ scanRouter.get('/:id/tasks', async (req: Request, res: Response): Promise<void> 
 
 /**
  * GET /api/scans/:id/findings
- * Unified findings for a scan
+ * Unified findings for a scan with tenant ownership verification
  */
-scanRouter.get('/:id/findings', async (req: Request, res: Response): Promise<void> => {
+scanRouter.get('/:id/findings', optionalAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const scanId = Number(req.params.id);
+    const authReq = req as AuthenticatedRequest;
+    const user = authReq.user;
+    const isAdmin = user && user.role?.toUpperCase() === 'ADMIN';
+
+    if (!isAdmin && user) {
+      const scan = await prisma.scan.findUnique({
+        where: { id: scanId },
+        include: { target: { include: { project: true } } },
+      });
+      if (scan && scan.target?.project?.userId !== user.id) {
+        res.status(403).json({ success: false, error: 'Forbidden: Access denied to this assessment findings.' });
+        return;
+      }
+    }
+
     let findings = await prisma.finding.findMany({
       where: { scanId, status: { not: 'FALSE_POSITIVE' } },
       include: { evidences: true, occurrences: true, aiAnalyses: true },

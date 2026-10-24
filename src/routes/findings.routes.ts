@@ -1,22 +1,53 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../config/db';
 import { analyzeFindingWithAI } from '../services/ai-analysis.service';
+import { optionalAuth, AuthenticatedRequest } from '../middlewares/auth.middleware';
 
 export const findingsRouter = Router();
+
+// Apply optionalAuth to resolve JWT tokens and req.user for tenant-safe filtering
+findingsRouter.use(optionalAuth);
 
 /**
  * GET /api/findings/list
  * Filter unified findings by severity, toolName, status, or scanId
  */
-findingsRouter.get('/list', async (req: Request, res: Response): Promise<void> => {
+findingsRouter.get('/list', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const rawScanId = req.query.scanId || req.query.scan_id;
     const { toolName, severity, status } = req.query;
 
+    const user = req.user;
+    const isAdmin = user && user.role && user.role.toUpperCase() === 'ADMIN';
+
     let targetScanId: number | null = rawScanId ? Number(rawScanId) : null;
-    if (!targetScanId || isNaN(targetScanId)) {
-      const latestScan = await prisma.scan.findFirst({ orderBy: { id: 'desc' } });
-      targetScanId = latestScan ? latestScan.id : null;
+    if (targetScanId && !isNaN(targetScanId)) {
+      // If user is authenticated and not admin, verify ownership of this scan
+      if (user && !isAdmin) {
+        const scan = await prisma.scan.findUnique({
+          where: { id: targetScanId },
+          include: { target: { include: { project: true } } },
+        });
+        if (!scan) {
+          res.status(404).json({ success: false, error: 'Scan not found.' });
+          return;
+        }
+        if (scan.target?.project?.userId && scan.target.project.userId !== user.id) {
+          res.status(403).json({ success: false, error: 'Access denied: You do not have permission to view findings for this scan.' });
+          return;
+        }
+      }
+    } else {
+      if (user && !isAdmin) {
+        const latestScan = await prisma.scan.findFirst({
+          where: { target: { project: { userId: user.id } } },
+          orderBy: { id: 'desc' },
+        });
+        targetScanId = latestScan ? latestScan.id : null;
+      } else {
+        const latestScan = await prisma.scan.findFirst({ orderBy: { id: 'desc' } });
+        targetScanId = latestScan ? latestScan.id : null;
+      }
     }
 
     if (!targetScanId) {
@@ -132,13 +163,35 @@ findingsRouter.get('/list', async (req: Request, res: Response): Promise<void> =
  * GET /api/findings/export-csv
  * Export CSV strictly isolated to the specified or latest scan
  */
-findingsRouter.get('/export-csv', async (req: Request, res: Response): Promise<void> => {
+findingsRouter.get('/export-csv', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const rawScanId = req.query.scan_id || req.query.scanId;
+    const user = req.user;
+    const isAdmin = user && user.role && user.role.toUpperCase() === 'ADMIN';
+
     let targetScanId: number | null = rawScanId ? Number(rawScanId) : null;
-    if (!targetScanId || isNaN(targetScanId)) {
-      const latestScan = await prisma.scan.findFirst({ orderBy: { id: 'desc' } });
-      targetScanId = latestScan ? latestScan.id : null;
+    if (targetScanId && !isNaN(targetScanId)) {
+      if (user && !isAdmin) {
+        const scan = await prisma.scan.findUnique({
+          where: { id: targetScanId },
+          include: { target: { include: { project: true } } },
+        });
+        if (scan && scan.target?.project?.userId && scan.target.project.userId !== user.id) {
+          res.status(403).send('Access denied: You do not have permission to export findings for this scan.');
+          return;
+        }
+      }
+    } else {
+      if (user && !isAdmin) {
+        const latestScan = await prisma.scan.findFirst({
+          where: { target: { project: { userId: user.id } } },
+          orderBy: { id: 'desc' },
+        });
+        targetScanId = latestScan ? latestScan.id : null;
+      } else {
+        const latestScan = await prisma.scan.findFirst({ orderBy: { id: 'desc' } });
+        targetScanId = latestScan ? latestScan.id : null;
+      }
     }
 
     let items: any[] = [];
@@ -199,7 +252,7 @@ findingsRouter.get('/export-csv', async (req: Request, res: Response): Promise<v
  * GET /api/findings/detail or GET /api/findings/:id
  * Retrieve single finding with attached evidence and AI threat intelligence
  */
-findingsRouter.get('/detail', async (req: Request, res: Response): Promise<void> => {
+findingsRouter.get('/detail', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const findingId = Number(req.query.id || req.query.finding_id);
     if (!findingId || isNaN(findingId)) {
@@ -207,13 +260,16 @@ findingsRouter.get('/detail', async (req: Request, res: Response): Promise<void>
       return;
     }
 
+    const user = req.user;
+    const isAdmin = user && user.role && user.role.toUpperCase() === 'ADMIN';
+
     let finding: any = await prisma.finding.findUnique({
       where: { id: findingId },
       include: {
         evidences: true,
         aiAnalyses: true,
         scan: {
-          include: { target: true },
+          include: { target: { include: { project: true } } },
         },
       },
     });
@@ -221,7 +277,7 @@ findingsRouter.get('/detail', async (req: Request, res: Response): Promise<void>
     if (!finding) {
       const dbVuln: any = await prisma.vulnerability.findUnique({
         where: { id: findingId },
-        include: { scan: { include: { target: true } } },
+        include: { scan: { include: { target: { include: { project: true } } } } },
       });
       if (dbVuln) {
         finding = {
@@ -261,6 +317,11 @@ findingsRouter.get('/detail', async (req: Request, res: Response): Promise<void>
 
     if (!finding) {
       res.status(404).json({ success: false, error: 'Finding not found.' });
+      return;
+    }
+
+    if (user && !isAdmin && finding.scan?.target?.project?.userId && finding.scan.target.project.userId !== user.id) {
+      res.status(403).json({ success: false, error: 'Access denied: You do not have permission to view this finding.' });
       return;
     }
 
@@ -274,7 +335,7 @@ findingsRouter.get('/detail', async (req: Request, res: Response): Promise<void>
   }
 });
 
-findingsRouter.get('/:id', async (req: Request, res: Response): Promise<void> => {
+findingsRouter.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const idParam = req.params.id;
     const findingId = idParam === 'detail' ? Number(req.query.id) : Number(idParam);
@@ -283,13 +344,16 @@ findingsRouter.get('/:id', async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
+    const user = req.user;
+    const isAdmin = user && user.role && user.role.toUpperCase() === 'ADMIN';
+
     let finding: any = await prisma.finding.findUnique({
       where: { id: findingId },
       include: {
         evidences: true,
         aiAnalyses: true,
         scan: {
-          include: { target: true },
+          include: { target: { include: { project: true } } },
         },
       },
     });
@@ -297,7 +361,7 @@ findingsRouter.get('/:id', async (req: Request, res: Response): Promise<void> =>
     if (!finding) {
       const dbVuln: any = await prisma.vulnerability.findUnique({
         where: { id: findingId },
-        include: { scan: { include: { target: true } } },
+        include: { scan: { include: { target: { include: { project: true } } } } },
       });
       if (dbVuln) {
         finding = {
@@ -337,6 +401,11 @@ findingsRouter.get('/:id', async (req: Request, res: Response): Promise<void> =>
 
     if (!finding) {
       res.status(404).json({ success: false, error: 'Finding not found.' });
+      return;
+    }
+
+    if (user && !isAdmin && finding.scan?.target?.project?.userId && finding.scan.target.project.userId !== user.id) {
+      res.status(403).json({ success: false, error: 'Access denied: You do not have permission to view this finding.' });
       return;
     }
 
@@ -354,12 +423,23 @@ findingsRouter.get('/:id', async (req: Request, res: Response): Promise<void> =>
  * POST /api/findings/:id/ai-analyze
  * Run or regenerate AI Threat Intelligence for a specific finding
  */
-findingsRouter.post('/:id/ai-analyze', async (req: Request, res: Response): Promise<void> => {
+findingsRouter.post('/:id/ai-analyze', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const findingId = Number(req.params.id);
-    const finding = await prisma.finding.findUnique({ where: { id: findingId } });
+    const user = req.user;
+    const isAdmin = user && user.role && user.role.toUpperCase() === 'ADMIN';
+
+    const finding = await prisma.finding.findUnique({
+      where: { id: findingId },
+      include: { scan: { include: { target: { include: { project: true } } } } },
+    });
     if (!finding) {
       res.status(404).json({ success: false, error: 'Finding not found.' });
+      return;
+    }
+
+    if (user && !isAdmin && finding.scan?.target?.project?.userId && finding.scan.target.project.userId !== user.id) {
+      res.status(403).json({ success: false, error: 'Access denied: You do not have permission to analyze this finding.' });
       return;
     }
 
@@ -379,13 +459,30 @@ findingsRouter.post('/:id/ai-analyze', async (req: Request, res: Response): Prom
  * POST /api/findings/:id/status
  * Update status of finding (OPEN, FIXED, FALSE_POSITIVE, MUTED)
  */
-findingsRouter.post('/:id/status', async (req: Request, res: Response): Promise<void> => {
+findingsRouter.post('/:id/status', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const findingId = Number(req.params.id);
     const { status } = req.body;
 
     if (!['OPEN', 'FIXED', 'FALSE_POSITIVE', 'MUTED'].includes(status)) {
       res.status(400).json({ success: false, error: 'Invalid status. Must be OPEN, FIXED, FALSE_POSITIVE, or MUTED.' });
+      return;
+    }
+
+    const user = req.user;
+    const isAdmin = user && user.role && user.role.toUpperCase() === 'ADMIN';
+
+    const finding = await prisma.finding.findUnique({
+      where: { id: findingId },
+      include: { scan: { include: { target: { include: { project: true } } } } },
+    });
+    if (!finding) {
+      res.status(404).json({ success: false, error: 'Finding not found.' });
+      return;
+    }
+
+    if (user && !isAdmin && finding.scan?.target?.project?.userId && finding.scan.target.project.userId !== user.id) {
+      res.status(403).json({ success: false, error: 'Access denied: You do not have permission to modify this finding.' });
       return;
     }
 

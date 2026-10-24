@@ -69,14 +69,14 @@ class KnowledgeBaseService {
 
   public loadKnowledgeBase(): void {
     try {
-      const kbPath = path.join(process.cwd(), 'src', 'data', 'sentinelai_vulnerability_knowledge_base.json');
-      const distKbPath = path.join(process.cwd(), 'dist', 'data', 'sentinelai_vulnerability_knowledge_base.json');
-
-      const targetPath = fs.existsSync(kbPath)
-        ? kbPath
-        : fs.existsSync(distKbPath)
-        ? distKbPath
-        : null;
+      const candidatePaths = [
+        path.join(__dirname, '..', 'data', 'sentinelai_vulnerability_knowledge_base.json'),
+        path.join(__dirname, '..', '..', 'src', 'data', 'sentinelai_vulnerability_knowledge_base.json'),
+        path.join(process.cwd(), 'src', 'data', 'sentinelai_vulnerability_knowledge_base.json'),
+        path.join(process.cwd(), 'dist', 'data', 'sentinelai_vulnerability_knowledge_base.json'),
+        'D:\\Sential AI\\src\\data\\sentinelai_vulnerability_knowledge_base.json',
+      ];
+      const targetPath = candidatePaths.find(p => fs.existsSync(p)) || null;
 
       if (!targetPath) {
         console.warn('[SentinelAI KB] Knowledge Base JSON file not found on disk, running with embedded fallbacks.');

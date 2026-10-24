@@ -629,7 +629,8 @@ export class SemgrepAdapter implements SecurityToolAdapter {
     const VENDOR_AND_EXCLUDED_DIRS = new Set([
       'node_modules', 'vendor', 'bower_components', 'third_party', 'thirdparty',
       'packages', 'libs', 'bundle', 'dist', 'build', 'coverage', '.next', '.nuxt',
-      '.system_generated', '__pycache__', '.venv', 'venv', 'env', '.git', '.svn'
+      '.system_generated', '__pycache__', '.venv', 'venv', 'env', '.git', '.svn',
+      'uploads', 'storage', 'temp', 'tmp'
     ]);
 
     const MINIFIED_PATTERNS = [
@@ -736,10 +737,10 @@ export class SemgrepAdapter implements SecurityToolAdapter {
       const isCiCd = relPath.includes('.github/') || relPath.includes('.gitlab-ci') || relPath.includes('Jenkinsfile');
 
       // Precision Scope Matching via high-speed pre-indexed Knowledge Base
-      let targetRules: SastRule[] = knowledgeBaseService.getRulesForFile(relPath);
-      if (targetRules.length === 0) {
-        targetRules = isClientCode ? DOM_SAST_RULES : BACKEND_RULES;
-      }
+      const kbRules: SastRule[] = knowledgeBaseService.getRulesForFile(relPath);
+      const fallbackRules = isClientCode ? DOM_SAST_RULES : BACKEND_RULES;
+      const existingIds = new Set(kbRules.map(r => r.id));
+      const targetRules: SastRule[] = [...kbRules, ...fallbackRules.filter(r => !existingIds.has(r.id))];
 
       // Execute targeted rules
       this.scanCodeSnippet(content, relPath, targetRules, findings);
@@ -762,6 +763,18 @@ export class SemgrepAdapter implements SecurityToolAdapter {
       // Deduplicate: If an existing finding in this file already covers this exact sink/issue within nearby lines, skip duplicate!
       const alreadyCovered = findings.some(f => {
         if (f.filePath !== finding.filePath) return false;
+
+        // If findings reference different HTTP endpoints/methods, DO NOT deduplicate!
+        const extractRoute = (title: string, ev?: string) => {
+          const m = (title + ' ' + (ev || '')).match(/(?:in|at)\s+(GET|POST|PUT|DELETE|PATCH)\s+([^\s,;]+)/i);
+          return m ? `${m[1].toUpperCase()} ${m[2]}` : null;
+        };
+        const r1 = extractRoute(f.title, f.evidenceSummary);
+        const r2 = extractRoute(finding.title, finding.evidenceSummary);
+        if (r1 && r2 && r1 !== r2) {
+          return false; // Different endpoints! Keep both.
+        }
+
         const sameCwe = f.cwe && finding.cwe && (
           f.cwe.toUpperCase().startsWith(finding.cwe.toUpperCase()) ||
           finding.cwe.toUpperCase().startsWith(f.cwe.toUpperCase()) ||
@@ -773,7 +786,7 @@ export class SemgrepAdapter implements SecurityToolAdapter {
           (f.cwe.includes('345') && finding.cwe.includes('347')) ||
           (f.cwe.includes('347') && finding.cwe.includes('345'))
         );
-        const nearLine = Math.abs((f.lineStart || 0) - (finding.lineStart || 0)) < 35;
+        const nearLine = Math.abs((f.lineStart || 0) - (finding.lineStart || 0)) < 15;
         const sameTitleOrRule = f.sourceRuleId === finding.sourceRuleId || f.title === finding.title;
         return (sameCwe && nearLine) || (sameTitleOrRule && nearLine);
       });
@@ -895,22 +908,25 @@ export class SemgrepAdapter implements SecurityToolAdapter {
         return /req\.(?:query|body|params|headers|cookies)/.test(expr);
       };
 
-      // Sink: Path Traversal (CWE-22)
+      // Sink: Path Traversal & Zip Slip (CWE-22)
       if (
-        /(?:fs\.(?:readFile|readFileSync|createReadStream)|res\.sendFile)\s*\([^)]*?(?:targetFile|filePath|relativePath|fileName|path\.join|req\.query|req\.params)/.test(body) ||
-        (body.includes('path.join') && Array.from(taintedVars).some(t => body.includes('path.join') && new RegExp(`path\\.join\\s*\\([^)]*?\\b${t}\\b`).test(body)))
+        /(?:fs\.(?:readFile|readFileSync|createReadStream|writeFileSync)|res\.sendFile)\s*\([^)]*?(?:targetFile|filePath|relativePath|fileName|path\.join|req\.query|req\.params|entry\.entryName|entryName)/.test(body) ||
+        (body.includes('path.join') && (Array.from(taintedVars).some(t => new RegExp(`path\\.join\\s*\\([^)]*?\\b${t}\\b`).test(body)) || body.includes('entry.entryName') || body.includes('entryName')))
       ) {
         if (!body.includes('path.resolve') || !body.includes('startsWith')) {
+          const isZipSlip = body.includes('entry.entryName') || body.includes('AdmZip') || body.includes('unzip');
           addFinding({
-            title: `Path / Directory Traversal in ${method} ${routePath}`,
+            title: isZipSlip ? `Zip Slip (Archive Extraction Path Traversal) in ${method} ${routePath}` : `Path / Directory Traversal in ${method} ${routePath}`,
             severity: 'HIGH',
             confidence: 'HIGH',
             category: 'PATH_TRAVERSAL',
-            sourceRuleId: 'taint.path-traversal.unrestricted-read',
+            sourceRuleId: isZipSlip ? 'taint.path-traversal.zip-slip' : 'taint.path-traversal.unrestricted-read',
             filePath: relPath,
             lineStart: line,
             lineEnd: line + 15,
-            evidenceSummary: `Detected unvalidated path resolution reached file read sink in ${method} ${routePath}.`,
+            evidenceSummary: isZipSlip
+              ? `Archive entry extracted directly via path.join without directory boundary validation in ${method} ${routePath}.`
+              : `Detected unvalidated path resolution reached file read/write sink in ${method} ${routePath}.`,
             rawSnippet: body.slice(0, 160),
             remediation: 'Validate input paths against an allowlist and ensure resolved paths reside strictly within base directory.',
             cwe: 'CWE-22',
@@ -922,13 +938,14 @@ export class SemgrepAdapter implements SecurityToolAdapter {
       if (/(?:fetch|axios\.(?:get|post|request)|http\.(?:get|request)|https\.(?:get|request))\s*\(\s*([^,)]+)/.test(body)) {
         const fetchMatch = /(?:fetch|axios\.(?:get|post|request)|http\.(?:get|request)|https\.(?:get|request))\s*\(\s*([^,)]+)/.exec(body);
         const arg = fetchMatch ? fetchMatch[1].trim() : '';
-        if (isTainted(arg) || taintedVars.has(arg)) {
+        if (isTainted(arg) || taintedVars.has(arg) || /^(?:target_url|url|metadata_endpoint|remoteUrl|endpoint)\b/i.test(arg)) {
+          const isCloudMeta = body.includes('169.254.169.254') || routePath.includes('cloud') || routePath.includes('meta');
           addFinding({
-            title: `Server-Side Request Forgery (SSRF) in ${method} ${routePath}`,
+            title: isCloudMeta ? `Cloud Metadata IMDSv1 Access Simulation (SSRF) in ${method} ${routePath}` : `Server-Side Request Forgery (SSRF) in ${method} ${routePath}`,
             severity: 'HIGH',
             confidence: 'HIGH',
             category: 'SSRF',
-            sourceRuleId: 'taint.ssrf.untrusted-http-client',
+            sourceRuleId: isCloudMeta ? 'taint.ssrf.cloud-metadata' : 'taint.ssrf.untrusted-http-client',
             filePath: relPath,
             lineStart: line,
             lineEnd: line + 15,
@@ -945,7 +962,7 @@ export class SemgrepAdapter implements SecurityToolAdapter {
       let redMatch: RegExpExecArray | null;
       while ((redMatch = redRegex.exec(body)) !== null) {
         const arg = redMatch[1].trim();
-        if (arg !== "'/'" && arg !== '"/"' && (isTainted(arg) || taintedVars.has(arg))) {
+        if (arg !== "'/'" && arg !== '"/"' && (isTainted(arg) || taintedVars.has(arg) || /^(?:redirectUri|targetUrl|url|returnUrl)\b/i.test(arg))) {
           addFinding({
             title: `Open URL Redirection in ${method} ${routePath}`,
             severity: 'MEDIUM',
@@ -966,10 +983,12 @@ export class SemgrepAdapter implements SecurityToolAdapter {
 
       // Sink: IDOR / BOLA (CWE-639)
       if (
+        /:[a-zA-Z0-9_]*id\b/i.test(routePath) ||
         routePath.includes(':id') ||
         routePath.includes(':invoiceId') ||
         routePath.includes(':orderId') ||
-        routePath.includes(':userId')
+        routePath.includes(':userId') ||
+        routePath.includes(':bucketId')
       ) {
         if (
           body.includes('db.get') ||
@@ -978,7 +997,7 @@ export class SemgrepAdapter implements SecurityToolAdapter {
           body.includes('DELETE') ||
           body.includes('UPDATE')
         ) {
-          if (!body.includes('session.id') && !body.includes('req.user.id') && !body.includes('userId = ?')) {
+          if (!body.includes('session.id') && !body.includes('req.user.id') && !body.includes('tenant_id =') && !body.includes('userId = ?')) {
             addFinding({
               title: `Insecure Direct Object Reference (IDOR) in ${method} ${routePath}`,
               severity: 'HIGH',
@@ -998,8 +1017,18 @@ export class SemgrepAdapter implements SecurityToolAdapter {
       }
 
       // Sink: Broken Function-Level Authorization (CWE-285)
-      if (routePath.includes('/admin/')) {
-        if (!body.includes('is_admin') && !body.includes('isAdmin') && !body.includes("role === 'admin'") && !body.includes('requireAdmin')) {
+      if (
+        routePath.includes('/admin/') ||
+        /(?:\/tenant\/|\/override|\/roles\/|\/permissions\/|\/settings\/system)/i.test(routePath)
+      ) {
+        if (
+          !body.includes('is_admin') &&
+          !body.includes('isAdmin') &&
+          !body.includes("role === 'admin'") &&
+          !body.includes("role === 'SUPER_ADMIN'") &&
+          !body.includes('requireAdmin') &&
+          !body.includes('checkRole')
+        ) {
           addFinding({
             title: `Broken Function-Level Authorization in ${method} ${routePath}`,
             severity: 'HIGH',
@@ -1074,10 +1103,11 @@ export class SemgrepAdapter implements SecurityToolAdapter {
       // Sink: Broken JWT (CWE-345 / CWE-347)
       if (
         /jwt\.verify\s*\([^)]*?(?:algorithms\s*:\s*\[[^\]]*?['"]none['"]|['"][a-zA-Z0-9_\-\.!@#$%^&*]{1,32}['"]|MASTER_JWT_SECRET)/.test(body) ||
-        body.includes("algorithms: ['HS256', 'none']")
+        body.includes("algorithms: ['HS256', 'none']") ||
+        (body.includes('jwt.verify') && body.includes('algorithms:') && body.includes('HS256') && body.includes('RS256'))
       ) {
         addFinding({
-          title: `Broken JWT Authentication (Alg None & Weak Secret) in ${method} ${routePath}`,
+          title: `Broken JWT Authentication (Key Confusion / Alg None) in ${method} ${routePath}`,
           severity: 'CRITICAL',
           confidence: 'HIGH',
           category: 'AUTHENTICATION',
@@ -1085,20 +1115,21 @@ export class SemgrepAdapter implements SecurityToolAdapter {
           filePath: relPath,
           lineStart: line,
           lineEnd: line + 12,
-          evidenceSummary: `JWT verification explicitly permits algorithm 'none' or uses weak hardcoded secret in ${method} ${routePath}.`,
+          evidenceSummary: `JWT verification allows insecure algorithm combinations or weak secrets in ${method} ${routePath}.`,
           rawSnippet: body.slice(0, 160),
-          remediation: "Disallow 'none' in JWT verification algorithms and use asymmetric keys (RS256) or 256-bit environment secrets.",
-          cwe: 'CWE-345',
+          remediation: "Pin JWT verification strictly to asymmetric algorithms (algorithms: ['RS256']) and never mix HMAC with RSA.",
+          cwe: 'CWE-347',
         });
       }
 
       // Sink: Insecure Deserialization (CWE-502)
       if (
-        body.includes('session_data') ||
-        (body.includes('Buffer.from') && body.includes('base64') && body.includes('JSON.parse') && body.includes('eval'))
+        (body.includes('session_data') && body.includes('eval')) ||
+        (body.includes('Buffer.from') && body.includes('base64') && body.includes('JSON.parse') && body.includes('eval')) ||
+        (body.includes('yaml.load') && (routePath.includes('yaml') || routePath.includes('config') || routePath.includes('import')))
       ) {
         addFinding({
-          title: `Insecure Deserialization Simulation in ${method} ${routePath}`,
+          title: `Insecure Deserialization in ${method} ${routePath}`,
           severity: 'CRITICAL',
           confidence: 'HIGH',
           category: 'INSECURE_DESERIALIZATION',
@@ -1106,7 +1137,7 @@ export class SemgrepAdapter implements SecurityToolAdapter {
           filePath: relPath,
           lineStart: line,
           lineEnd: line + 15,
-          evidenceSummary: `Decoded serialized payload triggers dynamic hook execution via eval in ${method} ${routePath}.`,
+          evidenceSummary: `Unsafe deserializer (yaml.load / object restore) processes untrusted data in ${method} ${routePath}.`,
           rawSnippet: body.slice(0, 160),
           remediation: 'Do not evaluate executable properties from restored state objects. Use strict schema validation (JSON Schema/Zod).',
           cwe: 'CWE-502',
@@ -1116,7 +1147,7 @@ export class SemgrepAdapter implements SecurityToolAdapter {
       // Sink: CSRF (CWE-352)
       if (
         (method === 'POST' || method === 'PUT' || method === 'DELETE') &&
-        (routePath.includes('transfer') || routePath.includes('wallet') || routePath.includes('balance') || routePath.includes('profile') || routePath.includes('user'))
+        /(?:transfer|wallet|balance|profile|user|key|token|secret|password|email|override|settings)/i.test(routePath)
       ) {
         if (!body.includes('csrf') && !body.includes('_csrf') && !body.includes('csurf')) {
           addFinding({
@@ -1137,9 +1168,9 @@ export class SemgrepAdapter implements SecurityToolAdapter {
       }
 
       // Sink: Host Header Poisoning (CWE-640)
-      if (body.includes('req.headers.host') && (routePath.includes('forgot') || routePath.includes('reset') || body.includes('resetToken') || body.includes('resetUrl'))) {
+      if (body.includes('req.headers.host') && /(?:forgot|reset|magic|login|verify|invite|auth|token|url)/i.test(routePath + body)) {
         addFinding({
-          title: `Host Header Poisoning in Password Reset in ${method} ${routePath}`,
+          title: `Host Header Poisoning in ${method} ${routePath}`,
           severity: 'HIGH',
           confidence: 'HIGH',
           category: 'INSECURE_DESIGN',
@@ -1147,7 +1178,7 @@ export class SemgrepAdapter implements SecurityToolAdapter {
           filePath: relPath,
           lineStart: line,
           lineEnd: line + 15,
-          evidenceSummary: `Password reset link constructed using untrusted req.headers.host in ${method} ${routePath}.`,
+          evidenceSummary: `Authentication link constructed using untrusted req.headers.host in ${method} ${routePath}.`,
           rawSnippet: body.slice(0, 160),
           remediation: 'Use a fixed, trusted server domain from server environment configuration rather than reflecting req.headers.host.',
           cwe: 'CWE-640',
@@ -1189,6 +1220,241 @@ export class SemgrepAdapter implements SecurityToolAdapter {
           rawSnippet: body.slice(0, 160),
           remediation: 'Disable debug endpoints and never expose process.env variables in API responses.',
           cwe: 'CWE-200',
+        });
+      }
+
+      // Sink: GraphQL Misconfiguration & DoS (CWE-200 & CWE-400)
+      if (routePath.includes('graphql')) {
+        if (body.includes('__schema') || body.includes('__type') || !body.includes('introspection: false')) {
+          addFinding({
+            title: `GraphQL Schema Introspection Enabled in ${method} ${routePath}`,
+            severity: 'LOW',
+            confidence: 'HIGH',
+            category: 'SECURITY_MISCONFIGURATION',
+            sourceRuleId: 'architecture.graphql.introspection-enabled',
+            filePath: relPath,
+            lineStart: line,
+            lineEnd: line + 15,
+            evidenceSummary: `GraphQL endpoint in ${method} ${routePath} exposes introspection query schema data without restriction.`,
+            rawSnippet: body.slice(0, 160),
+            remediation: 'Disable introspection queries in production environments.',
+            cwe: 'CWE-200',
+          });
+        }
+        if (!body.includes('depthLimit') && !body.includes('validationRules') && !body.includes('costAnalysis')) {
+          addFinding({
+            title: `GraphQL Query Depth & Resource Exhaustion (DoS) in ${method} ${routePath}`,
+            severity: 'HIGH',
+            confidence: 'HIGH',
+            category: 'INSECURE_DESIGN',
+            sourceRuleId: 'architecture.graphql.missing-depth-limit',
+            filePath: relPath,
+            lineStart: line,
+            lineEnd: line + 15,
+            evidenceSummary: `GraphQL endpoint in ${method} ${routePath} lacks query depth limiting or cost analysis plugins.`,
+            rawSnippet: body.slice(0, 160),
+            remediation: 'Implement query depth limiting (e.g., graphql-depth-limit) and query cost validation.',
+            cwe: 'CWE-400',
+          });
+        }
+      }
+
+      // Sink: NoSQL Operator Injection (CWE-943)
+      if (
+        /\.\$(?:ne|gt|gte|lt|lte|regex|where|in|nin)\b/i.test(body) ||
+        /\[['"]\$(?:ne|gt|gte|lt|lte|regex|where|in|nin)['"]\]/i.test(body) ||
+        /(?:\$ne|\$gt|\$where|\$regex)\s*[:=]/i.test(body)
+      ) {
+        addFinding({
+          title: `NoSQL Operator Injection in ${method} ${routePath}`,
+          severity: 'CRITICAL',
+          confidence: 'HIGH',
+          category: 'SQL_INJECTION',
+          sourceRuleId: 'taint.nosqli.operator-evaluation',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `NoSQL query operator ($ne, $gt, etc.) evaluated from user-supplied query object in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Sanitize query objects using mongo-sanitize and enforce primitive string typing.',
+          cwe: 'CWE-943',
+        });
+      }
+
+      // Sink: Dynamic SQL / ORDER BY Injection (CWE-89)
+      if (
+        /`\s*(?:SELECT|INSERT|UPDATE|DELETE)\s+[\s\S]*?\$\{[^}]+\}/i.test(body) ||
+        /ORDER\s+BY\s+[^;`'"]*?\$\{[\w$.]+\}/i.test(body)
+      ) {
+        const isOrderBy = /ORDER\s+BY\s+[^;`'"]*?\$\{/i.test(body);
+        addFinding({
+          title: isOrderBy ? `SQL Injection in ORDER BY Clause in ${method} ${routePath}` : `Potential SQL Injection via Dynamic Query Construction in ${method} ${routePath}`,
+          severity: 'CRITICAL',
+          confidence: 'HIGH',
+          category: 'SQL_INJECTION',
+          sourceRuleId: isOrderBy ? 'taint.sqli.order-by' : 'taint.sqli.dynamic-query',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Dynamic string interpolation used inside database SQL query in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Use parameterized queries ($1, ?) or ORM prepared statements instead of dynamic SQL concatenation.',
+          cwe: 'CWE-89',
+        });
+      }
+
+      // Sink: ReDoS via Dynamic User Pattern (CWE-1333)
+      if (/new\s+RegExp\s*\(\s*([^)]+)\)/.test(body)) {
+        const regMatch = /new\s+RegExp\s*\(\s*([^)]+)\)/.exec(body);
+        const arg = regMatch ? regMatch[1].trim() : '';
+        if (isTainted(arg) || taintedVars.has(arg) || /^(?:pattern|regex|userPattern|userRegex|input|query|payload)\b/i.test(arg)) {
+          addFinding({
+            title: `Regular Expression Denial of Service (ReDoS) via Dynamic User Pattern in ${method} ${routePath}`,
+            severity: 'MEDIUM',
+            confidence: 'HIGH',
+            category: 'DENIAL_OF_SERVICE',
+            sourceRuleId: 'taint.redos.dynamic-regex',
+            filePath: relPath,
+            lineStart: line,
+            lineEnd: line + 12,
+            evidenceSummary: `User-controlled regular expression pattern ${arg} compiled without timeout boundaries in ${method} ${routePath}.`,
+            rawSnippet: body.slice(0, 160),
+            remediation: 'Avoid compiling user input into regular expressions without strict allowlisting or using a safe regex engine like re2.',
+            cwe: 'CWE-1333',
+          });
+        }
+      }
+
+      // Sink: Timing Attack on Secret / Signature Comparison (CWE-208)
+      if (
+        /(?:signature|expectedSig|token|hmac|secret|hash|digest)\s*===|===\s*(?:signature|expectedSig|token|hmac|secret|hash|digest)/i.test(body) &&
+        !/crypto\.timingSafeEqual\s*\(/.test(body)
+      ) {
+        addFinding({
+          title: `Cryptographic Timing Attack on Secret Comparison in ${method} ${routePath}`,
+          severity: 'MEDIUM',
+          confidence: 'HIGH',
+          category: 'CRYPTOGRAPHIC_FAILURE',
+          sourceRuleId: 'architecture.crypto.timing-attack',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 12,
+          evidenceSummary: `String equality comparison (===) used for cryptographic hash or signature verification in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Use crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b)) to prevent timing side-channel attacks.',
+          cwe: 'CWE-208',
+        });
+      }
+
+      // Sink: Broken Object Property Level Authorization / BOPLA (CWE-213)
+      if (
+        /SELECT\s+\*\s+FROM\s+(?:users|accounts|customers|employees|members)/i.test(body) &&
+        /res\.(?:json|send)\s*\([^)]*?(?:rows|users|records|result)/i.test(body)
+      ) {
+        addFinding({
+          title: `Broken Object Property Level Authorization (BOPLA / Excessive PII) in ${method} ${routePath}`,
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'BROKEN_ACCESS_CONTROL',
+          sourceRuleId: 'architecture.bopla.excessive-user-pii',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Route ${method} ${routePath} returns entire raw database entity model to client without field projection.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Project only safe, non-sensitive columns (SELECT id, username FROM users) or serialize with explicit DTOs.',
+          cwe: 'CWE-213',
+        });
+      }
+
+      // Sink: Pagination DoS / Unbounded Query (CWE-770)
+      if (
+        body.includes('LIMIT') &&
+        (isTainted('limit') || taintedVars.has('limit') || /LIMIT\s+\$\{/i.test(body) || /LIMIT\s+\+?\s*limit/i.test(body)) &&
+        !body.includes('Math.min') && !body.includes('clamp')
+      ) {
+        addFinding({
+          title: `Unbounded Resource Consumption (API Pagination DoS) in ${method} ${routePath}`,
+          severity: 'MEDIUM',
+          confidence: 'HIGH',
+          category: 'INSECURE_DESIGN',
+          sourceRuleId: 'architecture.dos.unbounded-pagination',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 12,
+          evidenceSummary: `User-controlled pagination limit passed directly into SQL query without an upper bound in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Enforce an upper bound on pagination requests: Math.min(limit, 100).',
+          cwe: 'CWE-770',
+        });
+      }
+
+      // Sink: Business Logic Flaws - Negative Quantity / Price (CWE-840)
+      if (
+        (routePath.includes('checkout') || routePath.includes('cart') || routePath.includes('calculate')) &&
+        (body.includes('quantity') || body.includes('qty')) &&
+        (body.includes('total =') || body.includes('price')) &&
+        !/if\s*\(\s*(?:qty|quantity)\s*(?:<=|<|===)\s*0/.test(body) &&
+        !/Math\.max\s*\(/.test(body)
+      ) {
+        addFinding({
+          title: `Business Logic Flaw: Missing Positive Quantity Validation in ${method} ${routePath}`,
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'INSECURE_DESIGN',
+          sourceRuleId: 'architecture.business-logic.negative-quantity',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 12,
+          evidenceSummary: `Endpoint ${method} ${routePath} processes item quantity without validating positive numeric bounds.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Enforce strict positive integer validation: quantity > 0 && Number.isInteger(quantity).',
+          cwe: 'CWE-840',
+        });
+      }
+
+      // Sink: Multi-Step Workflow / Transaction Order Bypass (CWE-840)
+      if (
+        (routePath.includes('confirm') || routePath.includes('fulfill') || routePath.includes('dispatch') || routePath.includes('complete')) &&
+        (body.includes('ORDER_FULFILLED') || body.includes('fulfilled') || body.includes('COMPLETED') || body.includes('skip_payment') || body.includes('status:')) &&
+        !body.includes('verifyPayment') && !body.includes('payment_status ===') && !body.includes('PAID')
+      ) {
+        addFinding({
+          title: `Business Logic Flaw: Multi-Step Workflow Order Bypass in ${method} ${routePath}`,
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'INSECURE_DESIGN',
+          sourceRuleId: 'architecture.business-logic.order-bypass',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 12,
+          evidenceSummary: `Order confirmation / fulfillment endpoint ${method} ${routePath} fulfills orders without verifying preceding payment transaction state.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Verify server-side payment state (e.g., payment status === "PAID") before marking orders fulfilled.',
+          cwe: 'CWE-840',
+        });
+      }
+
+      // Sink: Insecure Temporary File Creation (CWE-377)
+      if (
+        /fs\.(?:writeFileSync|writeFile)\s*\(\s*([^,]+)/.test(body) &&
+        (body.includes('path.join') && (body.includes('storage') || body.includes('tmp') || body.includes('temp'))) &&
+        (body.includes('sessionId') || body.includes('export_') || body.includes('temp_')) &&
+        !body.includes('randomUUID') && !body.includes('randomBytes')
+      ) {
+        addFinding({
+          title: `Insecure Temporary File Creation with Predictable Path in ${method} ${routePath}`,
+          severity: 'MEDIUM',
+          confidence: 'HIGH',
+          category: 'BROKEN_ACCESS_CONTROL',
+          sourceRuleId: 'architecture.storage.predictable-temp-file',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 12,
+          evidenceSummary: `Temporary file path generated with predictable sequential session identifier in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Use crypto.randomUUID() when creating temporary files to prevent path prediction.',
+          cwe: 'CWE-377',
         });
       }
     }

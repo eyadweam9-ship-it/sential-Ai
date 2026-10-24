@@ -72,3 +72,24 @@ export const requireAuth = (req: AuthenticatedRequest, res: Response, next: Next
     });
   }
 };
+
+/**
+ * Optional Authentication:
+ * Extracts user details from Bearer token if present, but does not block requests without token.
+ * Populates req.user for multi-tenancy and data isolation.
+ */
+export const optionalAuth = (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+  const authHeader = req.headers.authorization;
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET) as AuthUserPayload;
+      req.user = decoded;
+    } catch {
+      // Invalid/expired token - proceed as guest
+    }
+  }
+
+  next();
+};
