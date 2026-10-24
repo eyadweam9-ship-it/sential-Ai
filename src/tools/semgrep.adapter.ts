@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { SecurityToolAdapter, ToolInput, ToolExecutionResult, RawToolFinding } from './security-tool.interface';
+import { knowledgeBaseService } from '../services/knowledge-base.service';
 
 interface SastRule {
   id: string;
@@ -697,13 +698,19 @@ export class SemgrepAdapter implements SecurityToolAdapter {
         ext === '.py' ||
         nameLower.startsWith('.env');
 
-      // Server code gets scanned ONLY with BACKEND_RULES (prevents DOM XSS on server.js)
+      // Dynamically load active rules from Central Knowledge Base if present
+      const kbRules = knowledgeBaseService.getExecutableSastRules();
+      const activeBackendRules = kbRules.length > 0
+        ? kbRules.filter(r => r.scope !== 'FRONTEND')
+        : BACKEND_RULES;
+
+      // Server code gets scanned ONLY with activeBackendRules (prevents DOM XSS on server.js)
       if (isBackendCode && !isClientCode) {
-        this.scanCodeSnippet(content, relPath, BACKEND_RULES, findings);
+        this.scanCodeSnippet(content, relPath, activeBackendRules, findings);
       } else if (isClientCode) {
         this.scanCodeSnippet(content, relPath, DOM_SAST_RULES, findings);
       } else {
-        this.scanCodeSnippet(content, relPath, BACKEND_RULES, findings);
+        this.scanCodeSnippet(content, relPath, activeBackendRules, findings);
       }
     } catch {}
   }

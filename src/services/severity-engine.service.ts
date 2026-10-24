@@ -112,28 +112,7 @@ export function evaluateFindingRisk(finding: RawToolFinding): SeverityEngineEval
     filePath.endsWith('.pdf') ||
     filePath.includes('vulnerabilities.json');
 
-  const isCodeExecutionFlaw =
-    cwe === 'CWE-89' ||
-    cwe === 'CWE-78' ||
-    cwe === 'CWE-79' ||
-    cwe === 'CWE-22' ||
-    cwe === 'CWE-95' ||
-    cwe === 'CWE-918' ||
-    cwe === 'CWE-639' ||
-    cwe === 'CWE-1336' ||
-    cwe === 'CWE-1321' ||
-    cwe === 'CWE-943' ||
-    cwe === 'CWE-502' ||
-    cwe === 'CWE-611' ||
-    cwe === 'CWE-915' ||
-    category === 'SQL_INJECTION' ||
-    category === 'COMMAND_INJECTION' ||
-    category === 'CROSS_SITE_SCRIPTING' ||
-    category === 'PATH_TRAVERSAL' ||
-    category === 'INJECTION' ||
-    category === 'INSECURE_DESERIALIZATION';
-
-  if (isNonExecutableDoc && isCodeExecutionFlaw) {
+  if (isNonExecutableDoc && category !== 'HARDCODED_CREDENTIAL' && category !== 'HARDCODED_SECRET') {
     return {
       severity: 'INFORMATIONAL',
       confidence: 'INFORMATIONAL',

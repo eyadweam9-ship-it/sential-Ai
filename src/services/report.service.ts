@@ -3,6 +3,7 @@ import path from 'path';
 import { prisma } from '../config/db';
 import { generateScanExecutiveSummary } from './ai-analysis.service';
 import { compareWithPreviousScan } from './findings-deduplication.service';
+import { knowledgeBaseService } from './knowledge-base.service';
 
 const SEVERITY_SCORES: Record<string, number> = {
   CRITICAL: 5,
@@ -328,6 +329,28 @@ function generatePrintableHtmlReport(data: GeneratedReportData): string {
           <b>🛡️ Recommended Remediation Guidance (Advisory):</b>
           <p style="margin:4px 0 0 0; color:#166534;">${rem}</p>
         </div>
+
+        ${(() => {
+          const kbDiff = knowledgeBaseService.getRemediationDiff(f.cwe || f.title);
+          if (kbDiff && kbDiff.vulnerable_code && kbDiff.secure_code) {
+            const escapeCode = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return `
+            <div style="margin-top:12px; padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;">
+              <div style="font-size:12px; font-weight:700; color:#0f172a; margin-bottom:8px;">🔧 Drop-in Code Remediation (Before vs After):</div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                <div>
+                  <div style="font-size:11px; font-weight:700; color:#dc2626; margin-bottom:4px;">❌ Insecure Implementation:</div>
+                  <pre class="code-snippet" style="background:#450a0a; color:#fca5a5; font-size:11px; margin:0;">${escapeCode(kbDiff.vulnerable_code)}</pre>
+                </div>
+                <div>
+                  <div style="font-size:11px; font-weight:700; color:#16a34a; margin-bottom:4px;">✅ Drop-in Secure Replacement:</div>
+                  <pre class="code-snippet" style="background:#052e16; color:#86efac; font-size:11px; margin:0;">${escapeCode(kbDiff.secure_code)}</pre>
+                </div>
+              </div>
+            </div>`;
+          }
+          return '';
+        })()}
       </div>
     `}).join('')}
   </div>
