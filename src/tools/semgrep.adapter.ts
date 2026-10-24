@@ -711,20 +711,47 @@ export class SemgrepAdapter implements SecurityToolAdapter {
         nameLower.endsWith('.dockerfile') ||
         nameLower.startsWith('.env');
 
+      const isDockerfile = nameLower === 'dockerfile' || nameLower.endsWith('.dockerfile');
+      const isTerraform = ext === '.tf' || ext === '.tfvars';
+      const isKubernetes = (ext === '.yaml' || ext === '.yml') && (content.includes('apiVersion:') || content.includes('kind:'));
+      const isCiCd = relPath.includes('.github/') || relPath.includes('.gitlab-ci') || relPath.includes('Jenkinsfile');
+
       // Dynamically load active rules from Central Knowledge Base if present
       const kbRules = knowledgeBaseService.getExecutableSastRules();
-      const activeBackendRules = kbRules.length > 0
-        ? kbRules.filter(r => r.scope !== 'FRONTEND')
-        : BACKEND_RULES;
 
-      // Server code gets scanned with activeBackendRules + Deep Taint & Architectural Analysis
-      if (isBackendCode && !isClientCode) {
-        this.scanCodeSnippet(content, relPath, activeBackendRules, findings);
-        this.runTaintAndArchitecturalAnalysis(content, relPath, findings);
+      // Precision Scope Matching: Ensure Dockerfile / IaC rules never bleed into application source code
+      let targetRules: SastRule[] = [];
+
+      if (isDockerfile) {
+        targetRules = kbRules.filter(r => r.scope === 'DOCKERFILE' || r.scope === 'CONTAINER');
+      } else if (isTerraform) {
+        targetRules = kbRules.filter(r => r.scope === 'TERRAFORM');
+      } else if (isKubernetes) {
+        targetRules = kbRules.filter(r => r.scope === 'KUBERNETES');
+      } else if (isCiCd) {
+        targetRules = kbRules.filter(r => r.scope === 'CI_CD');
       } else if (isClientCode) {
-        this.scanCodeSnippet(content, relPath, DOM_SAST_RULES, findings);
+        targetRules = DOM_SAST_RULES;
       } else {
-        this.scanCodeSnippet(content, relPath, activeBackendRules, findings);
+        // Application code (.js, .ts, .php, .py, .java, .go, etc.)
+        targetRules = kbRules.length > 0
+          ? kbRules.filter(r =>
+              r.scope !== 'FRONTEND' &&
+              r.scope !== 'DOCKERFILE' &&
+              r.scope !== 'CONTAINER' &&
+              r.scope !== 'DOCKER_COMPOSE' &&
+              r.scope !== 'KUBERNETES' &&
+              r.scope !== 'TERRAFORM' &&
+              r.scope !== 'CI_CD'
+            )
+          : BACKEND_RULES;
+      }
+
+      // Execute targeted rules
+      this.scanCodeSnippet(content, relPath, targetRules, findings);
+
+      // Deep Taint & Architectural Analysis runs on server application code
+      if (isBackendCode && !isClientCode && !isDockerfile && !isTerraform && !isKubernetes && !isCiCd) {
         this.runTaintAndArchitecturalAnalysis(content, relPath, findings);
       }
     } catch {}

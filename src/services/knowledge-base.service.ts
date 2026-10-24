@@ -6,7 +6,7 @@ export interface KbSastRuleDef {
   title: string;
   severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
   pattern: string;
-  scope?: 'BACKEND' | 'FRONTEND' | 'GLOBAL';
+  scope?: 'BACKEND' | 'FRONTEND' | 'GLOBAL' | 'DOCKERFILE' | 'DOCKER_COMPOSE' | 'KUBERNETES' | 'TERRAFORM' | 'CI_CD' | string;
 }
 
 export interface KbDastProbeDef {
@@ -52,7 +52,7 @@ export interface ExecutableSastRule {
   cwe: string;
   regex: RegExp;
   remediation: string;
-  scope: 'BACKEND' | 'FRONTEND' | 'GLOBAL';
+  scope: string;
 }
 
 class KnowledgeBaseService {
