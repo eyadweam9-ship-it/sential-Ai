@@ -1004,10 +1004,10 @@ export class SemgrepAdapter implements SecurityToolAdapter {
 
       // Sink: HTML-to-PDF / Headless Browser SSRF (CWE-918)
       if (
-        (/(?:puppeteer|playwright|wkhtmltopdf|html-pdf|pdfkit|jspdf|html2pdf|page\.(?:goto|setContent)|pdf\.create)\b/i.test(body) || (routePath.includes('pdf') || routePath.includes('export') || routePath.includes('invoice') || routePath.includes('render'))) &&
-        (/(?:page\.(?:goto|setContent)|pdf\.create|wkhtmltopdf|generatePdf)\s*\(/i.test(body) || body.includes('page.goto') || body.includes('page.setContent') || body.includes('pdf.create'))
+        (routePath.includes('pdf') || routePath.includes('export') || routePath.includes('invoice') || routePath.includes('render') || /(?:puppeteer|playwright|wkhtmltopdf|html-pdf|pdfkit|jspdf|html2pdf)\b/i.test(body)) &&
+        (/(?:page\.(?:goto|setContent)|pdf\.create|wkhtmltopdf|generatePdf|(?:httpModule|client|http|https)\.(?:get|request))\s*\(/i.test(body) || body.includes('remoteUrl') || body.includes('rawHtml') || body.includes('page.goto') || body.includes('page.setContent') || body.includes('pdf.create'))
       ) {
-        if (isTainted('url') || isTainted('html') || isTainted('template') || taintedVars.has('url') || taintedVars.has('html') || taintedVars.has('content') || body.includes('req.body') || body.includes('req.query')) {
+        if (isTainted('url') || isTainted('html') || isTainted('template') || taintedVars.has('url') || taintedVars.has('html') || taintedVars.has('content') || body.includes('req.body') || body.includes('req.query') || body.includes('remoteUrl') || body.includes('rawHtml')) {
           addFinding({
             title: `Server-Side Request Forgery (SSRF) via Headless Browser / HTML-to-PDF Generator in ${method} ${routePath}`,
             severity: 'HIGH',
@@ -1027,8 +1027,8 @@ export class SemgrepAdapter implements SecurityToolAdapter {
 
       // Sink: SSRF with Hex/Octal/Alternative IP Bypass (CWE-918)
       if (
-        /(?:fetch|axios\.(?:get|post|request)|http\.(?:get|request)|https\.(?:get|request)|needle\.(?:get|post)|got\.(?:get|post)|request\s*\()\s*\(\s*([^,)]+)/i.test(body) ||
-        body.includes('http.get(') || body.includes('https.get(')
+        /(?:fetch|axios\.(?:get|post|request)|(?:http|https|httpModule|client|request|needle|got)\.(?:get|post|request)\s*\()\s*\(\s*([^,)]+)/i.test(body) ||
+        body.includes('http.get(') || body.includes('https.get(') || body.includes('client.get(') || body.includes('httpModule.get(')
       ) {
         const fetchMatch = /(?:fetch|axios\.(?:get|post|request)|http\.(?:get|request)|https\.(?:get|request)|needle\.(?:get|post)|got\.(?:get|post)|request\s*\()\s*\(\s*([^,)]+)/i.exec(body);
         const arg = fetchMatch ? fetchMatch[1].trim() : '';
@@ -1593,7 +1593,8 @@ export class SemgrepAdapter implements SecurityToolAdapter {
         (body.includes('setTimeout') || body.includes('SELECT') || body.includes('currentBalance <') || body.includes('balance <') || body.includes('balance >=')) &&
         (body.includes('walletBalances[') || body.includes('UPDATE') || body.includes('balance -') || body.includes('balance -='))
       ) {
-        if (!body.includes('SELECT FOR UPDATE') && !body.includes('transaction') && !body.includes('$transaction') && !body.includes('SERIALIZABLE') && !body.includes('mutex') && !body.includes('lock')) {
+        const codeOnly = body.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
+        if (!codeOnly.includes('SELECT FOR UPDATE') && !/(?:db\.transaction|\$transaction|SERIALIZABLE|mutex\.acquire|lock\.acquire)\b/i.test(codeOnly)) {
           addFinding({
             title: `Time-of-Check to Time-of-Use (TOCTOU) Race Condition / Double-Spend in ${method} ${routePath}`,
             severity: 'HIGH',
@@ -1630,6 +1631,27 @@ export class SemgrepAdapter implements SecurityToolAdapter {
           rawSnippet: body.slice(0, 160),
           remediation: 'Use fixed-point decimal arithmetic (e.g., bignumber.js, Dinero.js) for all financial currency conversions and reject zero-value micro-transactions.',
           cwe: 'CWE-840',
+        });
+      }
+
+      // Sink: Verbose Error Leaks & Stack Trace Exposure (CWE-209)
+      if (
+        (body.includes('.stack') || body.includes('err.stack') || body.includes('error.stack') || body.includes('stack: err') || body.includes('stack: error')) &&
+        (body.includes('res.status(500)') || body.includes('res.json(') || body.includes('res.send(') || body.includes('res.status('))
+      ) {
+        addFinding({
+          title: `Sensitive Technical Information Leaked in Error Response (Stack Trace) in ${method} ${routePath}`,
+          severity: 'LOW',
+          confidence: 'HIGH',
+          category: 'SECURITY_MISCONFIGURATION',
+          sourceRuleId: 'architecture.leak.stack-trace-leak',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Unhandled exception exposes internal error.stack or process memory directly in HTTP error response in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Ensure stack traces are never exposed in HTTP responses in production. Log errors internally and return sanitized user messages.',
+          cwe: 'CWE-209',
         });
       }
 
