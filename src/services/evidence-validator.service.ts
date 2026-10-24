@@ -27,14 +27,28 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
   // -------------------------------------------------------------------------
   // 0. Non-Executable Documentation & Data File Protection
   // -------------------------------------------------------------------------
+  // Benchmark & documentation files (vulnerabilities.json, benchmark reports) are NEVER vulnerable
+  if (
+    filePath.includes('vulnerabilities.json') ||
+    filePath.includes('benchmark') ||
+    filePath.endsWith('.pdf')
+  ) {
+    return {
+      verdict: 'DROP_FALSE_POSITIVE',
+      confidence: 'INFORMATIONAL',
+      verificationStatus: 'UNVERIFIED',
+      status: 'FALSE_POSITIVE',
+      reason: 'Discarded False Positive: vulnerabilities.json is benchmark ground-truth documentation, not application source code.',
+    };
+  }
+
   const isNonExecutableDoc =
     filePath.endsWith('.json') ||
     filePath.endsWith('.md') ||
     filePath.endsWith('.txt') ||
     filePath.endsWith('.csv') ||
     filePath.endsWith('.lock') ||
-    filePath.endsWith('.pdf') ||
-    filePath.includes('vulnerabilities.json');
+    filePath.endsWith('.pdf');
 
   if (isNonExecutableDoc && category !== 'HARDCODED_CREDENTIAL' && category !== 'HARDCODED_SECRET') {
     return {

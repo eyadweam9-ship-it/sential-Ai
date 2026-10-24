@@ -103,14 +103,32 @@ export function evaluateFindingRisk(finding: RawToolFinding): SeverityEngineEval
   // -------------------------------------------------------------------------
   // Benchmark and documentation files (e.g. vulnerabilities.json, README.md, package-lock.json)
   // contain sample codes in strings, not executable application logic. Never report code injection on them!
+  // Benchmark & documentation files (vulnerabilities.json, benchmark reports) are NEVER vulnerable
+  if (
+    filePath.includes('vulnerabilities.json') ||
+    filePath.includes('benchmark') ||
+    filePath.endsWith('.pdf')
+  ) {
+    return {
+      severity: 'INFORMATIONAL',
+      confidence: 'INFORMATIONAL',
+      workflowStatus: 'FALSE_POSITIVE',
+      cvssScore: 0.0,
+      cvssVector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N',
+      rationale: 'Discarded False Positive: vulnerabilities.json is benchmark ground-truth documentation, not application source code.',
+      exploitabilityNote: 'Unexploitable: Benchmark documentation file.',
+      impactNote: 'Zero impact: Non-executable documentation.',
+      isFalsePositive: true,
+    };
+  }
+
   const isNonExecutableDoc =
     filePath.endsWith('.json') ||
     filePath.endsWith('.md') ||
     filePath.endsWith('.txt') ||
     filePath.endsWith('.csv') ||
     filePath.endsWith('.lock') ||
-    filePath.endsWith('.pdf') ||
-    filePath.includes('vulnerabilities.json');
+    filePath.endsWith('.pdf');
 
   if (isNonExecutableDoc && category !== 'HARDCODED_CREDENTIAL' && category !== 'HARDCODED_SECRET') {
     return {

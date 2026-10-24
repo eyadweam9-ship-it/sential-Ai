@@ -463,6 +463,19 @@ export class GitleaksAdapter implements SecurityToolAdapter {
       const stats = fs.statSync(filePath);
       if (stats.size > 3 * 1024 * 1024) return;
 
+      const nameLower = path.basename(filePath).toLowerCase();
+      const ext = path.extname(nameLower);
+
+      // Strictly skip documentation, benchmark ground truth, and package lock files
+      if (
+        nameLower === 'vulnerabilities.json' ||
+        nameLower.includes('benchmark') ||
+        ['.md', '.txt', '.csv', '.lock', '.pdf', '.map'].includes(ext) ||
+        nameLower === 'package-lock.json'
+      ) {
+        return;
+      }
+
       const content = fs.readFileSync(filePath, 'utf8');
       const relPath = baseDir ? path.relative(baseDir, filePath).replace(/\\/g, '/') : path.basename(filePath);
       this.scanTextContent(content, relPath, path.basename(filePath), findings);
