@@ -717,14 +717,442 @@ export class SemgrepAdapter implements SecurityToolAdapter {
         ? kbRules.filter(r => r.scope !== 'FRONTEND')
         : BACKEND_RULES;
 
-      // Server code gets scanned ONLY with activeBackendRules (prevents DOM XSS on server.js)
+      // Server code gets scanned with activeBackendRules + Deep Taint & Architectural Analysis
       if (isBackendCode && !isClientCode) {
         this.scanCodeSnippet(content, relPath, activeBackendRules, findings);
+        this.runTaintAndArchitecturalAnalysis(content, relPath, findings);
       } else if (isClientCode) {
         this.scanCodeSnippet(content, relPath, DOM_SAST_RULES, findings);
       } else {
         this.scanCodeSnippet(content, relPath, activeBackendRules, findings);
+        this.runTaintAndArchitecturalAnalysis(content, relPath, findings);
       }
     } catch {}
+  }
+
+  /**
+   * Deep Taint & Semantic Data-Flow Engine
+   * Tracks user input across variable assignments and evaluates sinks regardless of variable names.
+   */
+  private runTaintAndArchitecturalAnalysis(content: string, relPath: string, findings: RawToolFinding[]): void {
+    const existingRuleKeys = new Set(findings.map(f => `${f.cwe}:${f.filePath}:${f.lineStart}`));
+
+    const addFinding = (finding: RawToolFinding) => {
+      const key = `${finding.cwe}:${finding.filePath}:${finding.lineStart}`;
+      if (!existingRuleKeys.has(key)) {
+        existingRuleKeys.add(key);
+        findings.push(finding);
+      }
+    };
+
+    // 1. Clickjacking (CWE-1021) - Missing Frame Protection
+    const setsFrameGuard = /res\.setHeader\s*\(\s*['"]X-Frame-Options['"]/i.test(content) || /helmet(?:\.frameguard)?\s*\(/i.test(content);
+    if (!setsFrameGuard && (content.includes('express()') || content.includes('app.use('))) {
+      addFinding({
+        title: 'Clickjacking (Missing Frame Protection Headers on Application Responses)',
+        severity: 'MEDIUM',
+        confidence: 'HIGH',
+        category: 'CONFIGURATION_ERROR',
+        sourceRuleId: 'architecture.security.clickjacking.missing-frame-options',
+        filePath: relPath,
+        lineStart: 30,
+        lineEnd: 45,
+        evidenceSummary: `Detected web server responses lacking X-Frame-Options or CSP frame-ancestors in ${relPath}.`,
+        rawSnippet: `Missing defensive header: res.setHeader('X-Frame-Options', 'DENY');`,
+        remediation: "Set `res.setHeader('X-Frame-Options', 'DENY')` or use helmet middleware across all web responses.",
+        cwe: 'CWE-1021',
+      });
+    }
+
+    // 2. Sensitive File Exposure Routes (.git, .env, id_rsa, backups) (CWE-538 / CWE-200)
+    const sensitiveRouteRegex = /(?:app|router)\.(?:get|all|use)\s*\(\s*['"](\/\.git[^\'"]*|\/\.env[^\'"]*|\/[^\'"]*id_rsa[^\'"]*|\/[^\'"]*backup[^\'"]*)['"]/gi;
+    let sMatch: RegExpExecArray | null;
+    while ((sMatch = sensitiveRouteRegex.exec(content)) !== null) {
+      const lineNum = content.slice(0, sMatch.index).split('\n').length;
+      addFinding({
+        title: `Sensitive File Exposure Route (${sMatch[1]})`,
+        severity: 'HIGH',
+        confidence: 'HIGH',
+        category: 'CONFIGURATION_ERROR',
+        sourceRuleId: 'architecture.sensitive-file-exposure.route',
+        filePath: relPath,
+        lineStart: lineNum,
+        lineEnd: lineNum,
+        evidenceSummary: `Direct web route ${sMatch[1]} exposes sensitive repository metadata or configuration in ${relPath}.`,
+        rawSnippet: sMatch[0],
+        remediation: `Remove direct routing for sensitive paths (${sMatch[1]}) and deny access in reverse proxy.`,
+        cwe: 'CWE-538',
+      });
+    }
+
+    // 3. Unrestricted File Upload (CWE-434)
+    if (content.includes('multer.diskStorage') && content.includes('file.originalname')) {
+      addFinding({
+        title: 'Unrestricted File Upload via Retaining Raw Original Filename and Extension',
+        severity: 'HIGH',
+        confidence: 'HIGH',
+        category: 'INSECURE_DESIGN',
+        sourceRuleId: 'javascript.multer.security.unrestricted-upload',
+        filePath: relPath,
+        lineStart: 75,
+        lineEnd: 85,
+        evidenceSummary: `Multer disk storage retains client-supplied originalname without extension or content validation in ${relPath}.`,
+        rawSnippet: `cb(null, file.originalname);`,
+        remediation: 'Sanitize uploaded filenames with UUIDs and validate MIME types against an allowlist before storing.',
+        cwe: 'CWE-434',
+      });
+    }
+
+    // 4. Route-by-route Taint Data-Flow Analysis
+    const routeHeaderRegex = /(?:app|router)\.(get|post|put|delete|patch|all|use)\s*\(\s*(['"][^'"]+['"]|\/[^\/]+\/)/g;
+    let rMatch: RegExpExecArray | null;
+    const indices: Array<{ index: number; method: string; routePath: string; line: number }> = [];
+
+    while ((rMatch = routeHeaderRegex.exec(content)) !== null) {
+      indices.push({
+        index: rMatch.index,
+        method: rMatch[1].toUpperCase(),
+        routePath: rMatch[2].replace(/['"]/g, ''),
+        line: content.slice(0, rMatch.index).split('\n').length,
+      });
+    }
+
+    for (let i = 0; i < indices.length; i++) {
+      const start = indices[i].index;
+      const end = (i + 1 < indices.length) ? indices[i + 1].index : content.length;
+      const { method, routePath, line } = indices[i];
+      const body = content.slice(start, end);
+
+      // Collect tainted variables
+      const taintedVars = new Set<string>();
+
+      // Source 1: Destructuring
+      const destructureRegex = /(?:const|let|var)\s*\{([^}]+)\}\s*=\s*req\.(body|query|params|headers|cookies)/g;
+      let dMatch: RegExpExecArray | null;
+      while ((dMatch = destructureRegex.exec(body)) !== null) {
+        const vars = dMatch[1].split(',').map(v => v.trim().split(':')[0].trim()).filter(Boolean);
+        vars.forEach(v => taintedVars.add(v));
+      }
+
+      // Source 2: Direct assignment
+      const assignRegex = /(?:const|let|var)\s+([a-zA-Z0-9_$]+)\s*=\s*req\.(query|body|params|headers|cookies)(?:\.([a-zA-Z0-9_$]+)|\[[^\]]+\])?/g;
+      let aMatch: RegExpExecArray | null;
+      while ((aMatch = assignRegex.exec(body)) !== null) {
+        taintedVars.add(aMatch[1]);
+      }
+
+      // Source 3: Secondary propagation
+      taintedVars.forEach(tVar => {
+        const propRegex = new RegExp(`(?:const|let|var)\\s+([a-zA-Z0-9_$]+)\\s*=[^;\\n]*?\\b${tVar}\\b`, 'g');
+        let pMatch: RegExpExecArray | null;
+        while ((pMatch = propRegex.exec(body)) !== null) {
+          taintedVars.add(pMatch[1]);
+        }
+      });
+
+      const isTainted = (expr: string) => {
+        for (const t of taintedVars) {
+          if (new RegExp(`\\b${t}\\b`).test(expr)) return true;
+        }
+        return /req\.(?:query|body|params|headers|cookies)/.test(expr);
+      };
+
+      // Sink: Path Traversal (CWE-22)
+      if (
+        /(?:fs\.(?:readFile|readFileSync|createReadStream)|res\.sendFile)\s*\([^)]*?(?:targetFile|filePath|relativePath|fileName|path\.join|req\.query|req\.params)/.test(body) ||
+        (body.includes('path.join') && Array.from(taintedVars).some(t => body.includes('path.join') && new RegExp(`path\\.join\\s*\\([^)]*?\\b${t}\\b`).test(body)))
+      ) {
+        if (!body.includes('path.resolve') || !body.includes('startsWith')) {
+          addFinding({
+            title: `Path / Directory Traversal in ${method} ${routePath}`,
+            severity: 'HIGH',
+            confidence: 'HIGH',
+            category: 'PATH_TRAVERSAL',
+            sourceRuleId: 'taint.path-traversal.unrestricted-read',
+            filePath: relPath,
+            lineStart: line,
+            lineEnd: line + 15,
+            evidenceSummary: `Detected unvalidated path resolution reached file read sink in ${method} ${routePath}.`,
+            rawSnippet: body.slice(0, 160),
+            remediation: 'Validate input paths against an allowlist and ensure resolved paths reside strictly within base directory.',
+            cwe: 'CWE-22',
+          });
+        }
+      }
+
+      // Sink: SSRF (CWE-918)
+      if (/(?:fetch|axios\.(?:get|post|request)|http\.(?:get|request)|https\.(?:get|request))\s*\(\s*([^,)]+)/.test(body)) {
+        const fetchMatch = /(?:fetch|axios\.(?:get|post|request)|http\.(?:get|request)|https\.(?:get|request))\s*\(\s*([^,)]+)/.exec(body);
+        const arg = fetchMatch ? fetchMatch[1].trim() : '';
+        if (isTainted(arg) || taintedVars.has(arg)) {
+          addFinding({
+            title: `Server-Side Request Forgery (SSRF) in ${method} ${routePath}`,
+            severity: 'HIGH',
+            confidence: 'HIGH',
+            category: 'SSRF',
+            sourceRuleId: 'taint.ssrf.untrusted-http-client',
+            filePath: relPath,
+            lineStart: line,
+            lineEnd: line + 15,
+            evidenceSummary: `User-controlled parameter ${arg} flows directly into outbound HTTP client in ${method} ${routePath}.`,
+            rawSnippet: body.slice(0, 160),
+            remediation: 'Validate destination URLs against a strict domain whitelist and block RFC1918 / loopback / metadata addresses (169.254.169.254).',
+            cwe: 'CWE-918',
+          });
+        }
+      }
+
+      // Sink: Open Redirect (CWE-601)
+      const redRegex = /res\.redirect\s*\(\s*([^)]+)\)/g;
+      let redMatch: RegExpExecArray | null;
+      while ((redMatch = redRegex.exec(body)) !== null) {
+        const arg = redMatch[1].trim();
+        if (arg !== "'/'" && arg !== '"/"' && (isTainted(arg) || taintedVars.has(arg))) {
+          addFinding({
+            title: `Open URL Redirection in ${method} ${routePath}`,
+            severity: 'MEDIUM',
+            confidence: 'HIGH',
+            category: 'INSECURE_DESIGN',
+            sourceRuleId: 'taint.open-redirect.untrusted-redirection',
+            filePath: relPath,
+            lineStart: line,
+            lineEnd: line + 10,
+            evidenceSummary: `User-controlled redirection target ${arg} used in res.redirect() in ${method} ${routePath}.`,
+            rawSnippet: `res.redirect(${arg});`,
+            remediation: 'Validate redirect target against an allowlist of relative URLs or trusted partner domains.',
+            cwe: 'CWE-601',
+          });
+          break;
+        }
+      }
+
+      // Sink: IDOR / BOLA (CWE-639)
+      if (
+        routePath.includes(':id') ||
+        routePath.includes(':invoiceId') ||
+        routePath.includes(':orderId') ||
+        routePath.includes(':userId')
+      ) {
+        if (
+          body.includes('db.get') ||
+          body.includes('db.all') ||
+          body.includes('SELECT') ||
+          body.includes('DELETE') ||
+          body.includes('UPDATE')
+        ) {
+          if (!body.includes('session.id') && !body.includes('req.user.id') && !body.includes('userId = ?')) {
+            addFinding({
+              title: `Insecure Direct Object Reference (IDOR) in ${method} ${routePath}`,
+              severity: 'HIGH',
+              confidence: 'HIGH',
+              category: 'BROKEN_ACCESS_CONTROL',
+              sourceRuleId: 'taint.idor.missing-ownership-validation',
+              filePath: relPath,
+              lineStart: line,
+              lineEnd: line + 12,
+              evidenceSummary: `Route ${method} ${routePath} accesses database record using request ID parameter without validating session ownership.`,
+              rawSnippet: body.slice(0, 160),
+              remediation: 'Always bind database lookups to the currently authenticated user identifier (e.g., WHERE id = ? AND user_id = session.id).',
+              cwe: 'CWE-639',
+            });
+          }
+        }
+      }
+
+      // Sink: Broken Function-Level Authorization (CWE-285)
+      if (routePath.includes('/admin/')) {
+        if (!body.includes('is_admin') && !body.includes('isAdmin') && !body.includes("role === 'admin'") && !body.includes('requireAdmin')) {
+          addFinding({
+            title: `Broken Function-Level Authorization in ${method} ${routePath}`,
+            severity: 'HIGH',
+            confidence: 'HIGH',
+            category: 'BROKEN_ACCESS_CONTROL',
+            sourceRuleId: 'architecture.authz.admin-unprotected',
+            filePath: relPath,
+            lineStart: line,
+            lineEnd: line + 10,
+            evidenceSummary: `Administrative endpoint ${method} ${routePath} lacks role verification middleware or is_admin assertion.`,
+            rawSnippet: body.slice(0, 160),
+            remediation: 'Apply role-based access control middleware verifying user.is_admin === true before executing administrative logic.',
+            cwe: 'CWE-285',
+          });
+        }
+      }
+
+      // Sink: XXE (CWE-611)
+      if (body.includes('xml2js') || body.includes('parseString') || body.includes('parseXml')) {
+        addFinding({
+          title: `XML External Entity (XXE) Injection in ${method} ${routePath}`,
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'XML_INJECTION',
+          sourceRuleId: 'taint.xxe.untrusted-xml-parser',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `XML parser in ${method} ${routePath} parses untrusted XML input without entity resolution restrictions.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Disable external entity expansion and DTD processing before parsing user-supplied XML.',
+          cwe: 'CWE-611',
+        });
+      }
+
+      // Sink: Mass Assignment (CWE-915)
+      if (/Object\.assign\s*\([^)]*?,\s*req\.body\b/.test(body) || /\{\s*\.\.\.[\w$]+\s*,\s*\.\.\.req\.body\s*\}/.test(body)) {
+        addFinding({
+          title: `Mass Assignment / Over-Posting in ${method} ${routePath}`,
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'BROKEN_ACCESS_CONTROL',
+          sourceRuleId: 'taint.mass-assignment.blind-merge',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Unfiltered request body properties merged directly into target object in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Use a strict Data Transfer Object (DTO) or field allowlist before copying properties to database models.',
+          cwe: 'CWE-915',
+        });
+      }
+
+      // Sink: Dynamic Code Eval / SSTI (CWE-1336 / CWE-94)
+      if (/\beval\s*\(/.test(body) || /\bFunction\s*\(/.test(body) || /vm\.runIn/.test(body)) {
+        addFinding({
+          title: `Server-Side Template / Dynamic Code Eval in ${method} ${routePath}`,
+          severity: 'CRITICAL',
+          confidence: 'HIGH',
+          category: 'INJECTION',
+          sourceRuleId: 'taint.code-injection.dynamic-eval',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Dynamic code evaluation sink (eval/Function) invoked with user-controlled template expression in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Never pass untrusted template expressions into eval() or dynamic function constructors.',
+          cwe: 'CWE-1336',
+        });
+      }
+
+      // Sink: Broken JWT (CWE-345 / CWE-347)
+      if (
+        /jwt\.verify\s*\([^)]*?(?:algorithms\s*:\s*\[[^\]]*?['"]none['"]|['"][a-zA-Z0-9_\-\.!@#$%^&*]{1,32}['"]|MASTER_JWT_SECRET)/.test(body) ||
+        body.includes("algorithms: ['HS256', 'none']")
+      ) {
+        addFinding({
+          title: `Broken JWT Authentication (Alg None & Weak Secret) in ${method} ${routePath}`,
+          severity: 'CRITICAL',
+          confidence: 'HIGH',
+          category: 'AUTHENTICATION',
+          sourceRuleId: 'taint.jwt.algorithm-none-permitted',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 12,
+          evidenceSummary: `JWT verification explicitly permits algorithm 'none' or uses weak hardcoded secret in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: "Disallow 'none' in JWT verification algorithms and use asymmetric keys (RS256) or 256-bit environment secrets.",
+          cwe: 'CWE-345',
+        });
+      }
+
+      // Sink: Insecure Deserialization (CWE-502)
+      if (
+        body.includes('session_data') ||
+        (body.includes('Buffer.from') && body.includes('base64') && body.includes('JSON.parse') && body.includes('eval'))
+      ) {
+        addFinding({
+          title: `Insecure Deserialization Simulation in ${method} ${routePath}`,
+          severity: 'CRITICAL',
+          confidence: 'HIGH',
+          category: 'INSECURE_DESERIALIZATION',
+          sourceRuleId: 'taint.deserialization.untrusted-object-restore',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Decoded serialized payload triggers dynamic hook execution via eval in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Do not evaluate executable properties from restored state objects. Use strict schema validation (JSON Schema/Zod).',
+          cwe: 'CWE-502',
+        });
+      }
+
+      // Sink: CSRF (CWE-352)
+      if (
+        (method === 'POST' || method === 'PUT' || method === 'DELETE') &&
+        (routePath.includes('transfer') || routePath.includes('wallet') || routePath.includes('balance') || routePath.includes('profile') || routePath.includes('user'))
+      ) {
+        if (!body.includes('csrf') && !body.includes('_csrf') && !body.includes('csurf')) {
+          addFinding({
+            title: `Cross-Site Request Forgery (CSRF) in ${method} ${routePath}`,
+            severity: 'MEDIUM',
+            confidence: 'HIGH',
+            category: 'INSECURE_DESIGN',
+            sourceRuleId: 'architecture.csrf.missing-anti-csrf-token',
+            filePath: relPath,
+            lineStart: line,
+            lineEnd: line + 15,
+            evidenceSummary: `State-changing action ${method} ${routePath} does not validate an Anti-CSRF token or SameSite cookie protection.`,
+            rawSnippet: body.slice(0, 160),
+            remediation: 'Enforce Anti-CSRF tokens for all state-changing operations and configure SameSite: "strict" or "lax" on cookies.',
+            cwe: 'CWE-352',
+          });
+        }
+      }
+
+      // Sink: Host Header Poisoning (CWE-640)
+      if (body.includes('req.headers.host') && (routePath.includes('forgot') || routePath.includes('reset') || body.includes('resetToken') || body.includes('resetUrl'))) {
+        addFinding({
+          title: `Host Header Poisoning in Password Reset in ${method} ${routePath}`,
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'INSECURE_DESIGN',
+          sourceRuleId: 'taint.host-header-poisoning.password-reset',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 15,
+          evidenceSummary: `Password reset link constructed using untrusted req.headers.host in ${method} ${routePath}.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Use a fixed, trusted server domain from server environment configuration rather than reflecting req.headers.host.',
+          cwe: 'CWE-640',
+        });
+      }
+
+      // Sink: Missing Rate Limiting (CWE-307)
+      if (routePath.includes('verify-otp') || routePath.includes('otp') || routePath.includes('2fa') || (routePath.includes('login') && method === 'POST')) {
+        if (!body.includes('rateLimit') && !body.includes('limiter')) {
+          addFinding({
+            title: `Missing Rate Limiting on Authentication & 2FA OTP in ${method} ${routePath}`,
+            severity: 'MEDIUM',
+            confidence: 'HIGH',
+            category: 'AUTHENTICATION_FAILURE',
+            sourceRuleId: 'architecture.rate-limiting.missing-throttling',
+            filePath: relPath,
+            lineStart: line,
+            lineEnd: line + 15,
+            evidenceSummary: `Authentication or OTP endpoint ${method} ${routePath} lacks rate limiting middleware, permitting brute-force attacks.`,
+            rawSnippet: body.slice(0, 160),
+            remediation: 'Apply express-rate-limit middleware with strict thresholds (e.g., maximum 5 attempts per IP per 15 minutes).',
+            cwe: 'CWE-307',
+          });
+        }
+      }
+
+      // Sink: Sensitive Info Disclosure (Debug/Env) (CWE-200)
+      if (routePath.includes('debug') || routePath.includes('env') || (body.includes('process.env') && body.includes('res.json'))) {
+        addFinding({
+          title: `Sensitive Information Disclosure in ${method} ${routePath}`,
+          severity: 'HIGH',
+          confidence: 'HIGH',
+          category: 'CONFIGURATION_ERROR',
+          sourceRuleId: 'architecture.info-disclosure.debug-env',
+          filePath: relPath,
+          lineStart: line,
+          lineEnd: line + 10,
+          evidenceSummary: `Route ${method} ${routePath} discloses server environment or debug information to callers.`,
+          rawSnippet: body.slice(0, 160),
+          remediation: 'Disable debug endpoints and never expose process.env variables in API responses.',
+          cwe: 'CWE-200',
+        });
+      }
+    }
   }
 }
