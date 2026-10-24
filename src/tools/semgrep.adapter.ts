@@ -261,12 +261,45 @@ const BACKEND_RULES: SastRule[] = [
   // 3. NoSQL Injection (MongoDB / Mongoose / Document Store - CWE-943)
   {
     id: 'javascript.express.security.nosqli.query-injection',
-    title: 'NoSQL Injection via Unsanitized Object Query Filter',
+    title: 'NoSQL Injection via Unsanitized Object Query Filter ($regex, $ne, $gt)',
     severity: 'CRITICAL',
     category: 'SQL_INJECTION',
     cwe: 'CWE-943',
-    regex: /(?:(?:\.find|\.findOne|\.countDocuments|\.deleteMany|\.updateOne|\.updateMany)\s*\(\s*(?:req\.body|req\.query|req\.params)\b|(?:\$where|\$ne|\$regex|\$gt|\$gte)\s*[:=]\s*(?:req\.|query|body))/i,
+    regex: /(?:(?:\.find|\.findOne|\.countDocuments|\.deleteMany|\.updateOne|\.updateMany)\s*\(\s*(?:req\.body|req\.query|req\.params|queryFilter)\b|(?:\$where|\$ne|\$regex|\$gt|\$gte|\$nin|\$in)\s*[:=]|\[['"]\$(?:ne|regex|gt|gte|lt|lte|in|nin)['"]\]|\.queryFilter\s*&&\s*typeof\s+queryFilter|\.\$(?:regex|ne|gt|where))/i,
     remediation: 'Sanitize query inputs using mongo-sanitize or express-mongo-sanitize, and validate input types strictly to primitive strings rather than raw query filter objects.',
+  },
+
+  // 3b. Host Header Poisoning in Authentication / Verification Links (CWE-640)
+  {
+    id: 'javascript.express.security.host-header-poisoning.auth-link',
+    title: 'Host Header Poisoning in Authentication / Passwordless Login Link',
+    severity: 'HIGH',
+    category: 'INSECURE_DESIGN',
+    cwe: 'CWE-640',
+    regex: /(?:https?:\/\/\$\{(?:req\.headers\.host|host|req\.get\(['"]host['"]\))\}|\b(?:host|req\.headers\.host)\s*\+\s*['"]\/api\/[a-zA-Z0-9_\-\/]*(?:auth|login|reset|magic|verify|invite)|\bmagicLink\s*=[\s\S]{0,80}?host)/i,
+    remediation: 'Use a fixed, canonical domain from server environment configuration (e.g. process.env.APP_BASE_URL) rather than reflecting client-supplied Host or X-Forwarded-Host headers.',
+  },
+
+  // 3c. Blind Command Injection via Runtime process.env Modification (CWE-78 / CWE-88)
+  {
+    id: 'javascript.node.security.env-injection.process-env-mutation',
+    title: 'Blind Command & Code Execution via Runtime process.env Modification',
+    severity: 'CRITICAL',
+    category: 'COMMAND_INJECTION',
+    cwe: 'CWE-78',
+    regex: /(?:process\.env\s*\[[^\]]+\]\s*=\s*|Object\.assign\s*\(\s*process\.env\b|process\.env\.[a-zA-Z0-9_$]+\s*=\s*(?:req\.|body|query|params|[a-zA-Z0-9_$]+))/i,
+    remediation: 'Never permit runtime modification of process.env from user requests. Setting keys like NODE_OPTIONS, LD_PRELOAD, or PATH enables arbitrary remote command execution.',
+  },
+
+  // 3d. Second-Order Path Traversal via Database-Stored Asset Filename (CWE-22)
+  {
+    id: 'javascript.express.security.second-order-path-traversal',
+    title: 'Second-Order Path Traversal via Stored Database Record / Filename',
+    severity: 'HIGH',
+    category: 'PATH_TRAVERSAL',
+    cwe: 'CWE-22',
+    regex: /(?:path\.join\s*\([^)]*?(?:stored|record\.|row\.|doc\.|asset\.|file\.)[^)]*?\)\s*;?[\s\S]{0,80}?(?:res\.sendFile|res\.download|fs\.readFile|fs\.createReadStream))/i,
+    remediation: 'Ensure resolved path resides strictly within the intended base directory using path.resolve(dest).startsWith(allowedDir + path.sep).',
   },
 
   // 4. Insecure Deserialization (CWE-502)
@@ -1404,20 +1437,55 @@ export class SemgrepAdapter implements SecurityToolAdapter {
         }
       }
 
-      // Sink: Host Header Poisoning (CWE-640)
-      if (body.includes('req.headers.host') && /(?:forgot|reset|magic|login|verify|invite|auth|token|url)/i.test(routePath + body)) {
+      // Sink: Host Header Poisoning in Authentication, Passwordless, Reset, or Verification Links (CWE-640)
+      const hasHostHeaderSource =
+        body.includes('req.headers.host') ||
+        body.includes("req.headers['host']") ||
+        body.includes('req.headers["host"]') ||
+        body.includes("req.headers['x-forwarded-host']") ||
+        body.includes('req.headers["x-forwarded-host"]') ||
+        body.includes("req.get('host')") ||
+        body.includes('req.get("host")') ||
+        body.includes("req.header('host')") ||
+        body.includes('req.header("host")') ||
+        body.includes('req.hostname') ||
+        (body.includes('host') && (body.includes('magicLink') || body.includes('resetUrl') || body.includes('verifyUrl')));
+
+      const isAuthOrSensitiveLink =
+        /(?:forgot|reset|magic|login|verify|invite|invitation|activation|confirm|auth|token|sso|oauth|redirect|callback|returnUrl)/i.test(routePath + body) ||
+        /(?:magicLink|resetUrl|verifyUrl|inviteUrl|activationUrl|loginUrl)\b/i.test(body) ||
+        /https?:\/\/\$\{(?:host|req\.headers\.host|req\.hostname)\}/i.test(body);
+
+      if (hasHostHeaderSource && isAuthOrSensitiveLink) {
+        const isMagic = routePath.includes('magic') || body.includes('magicLink') || body.includes('magicToken');
+        const isReset = routePath.includes('reset') || routePath.includes('forgot') || body.includes('resetToken');
+        const isInvite = routePath.includes('invite') || body.includes('invitation');
+        const isVerify = routePath.includes('verify') || body.includes('activation');
+
         addFinding({
-          title: `Host Header Poisoning in ${method} ${routePath}`,
+          title: isMagic
+            ? `Host Header Poisoning in Passwordless Magic Login Link in ${method} ${routePath}`
+            : isReset
+            ? `Host Header Poisoning in Password Reset Link in ${method} ${routePath}`
+            : isInvite
+            ? `Host Header Poisoning in User Invitation Link in ${method} ${routePath}`
+            : isVerify
+            ? `Host Header Poisoning in Account Verification Link in ${method} ${routePath}`
+            : `Host Header Poisoning in ${method} ${routePath}`,
           severity: 'HIGH',
           confidence: 'HIGH',
           category: 'INSECURE_DESIGN',
-          sourceRuleId: 'taint.host-header-poisoning.password-reset',
+          sourceRuleId: isMagic
+            ? 'architecture.host-header-poisoning.magic-link'
+            : isReset
+            ? 'taint.host-header-poisoning.password-reset'
+            : 'architecture.host-header-poisoning.auth-link',
           filePath: relPath,
           lineStart: line,
           lineEnd: line + 15,
-          evidenceSummary: `Authentication link constructed using untrusted req.headers.host in ${method} ${routePath}.`,
+          evidenceSummary: `Security-sensitive link constructed using untrusted Host / X-Forwarded-Host header in ${method} ${routePath}, allowing credential hijacking or token interception.`,
           rawSnippet: body.slice(0, 160),
-          remediation: 'Use a fixed, trusted server domain from server environment configuration rather than reflecting req.headers.host.',
+          remediation: 'Use a fixed, trusted server domain from server environment configuration (e.g. process.env.APP_BASE_URL) rather than reflecting req.headers.host.',
           cwe: 'CWE-640',
         });
       }
@@ -1500,16 +1568,21 @@ export class SemgrepAdapter implements SecurityToolAdapter {
       }
 
       // Sink: NoSQL Operator Injection & Blind Regex Extraction (CWE-943)
-      if (
-        /\.\$(?:ne|gt|gte|lt|lte|regex|where|in|nin)\b/i.test(body) ||
-        /\[['"]\$(?:ne|gt|gte|lt|lte|regex|where|in|nin)['"]\]/i.test(body) ||
-        /(?:\$ne|\$gt|\$where|\$regex)\s*[:=]/i.test(body) ||
-        (body.includes('$regex') && (routePath.includes('search-nosql') || body.includes('queryFilter')))
-      ) {
-        const isBlindRegex = body.includes('$regex') || routePath.includes('search-nosql');
+      const hasNoSqlOperators =
+        /\.\$(?:ne|gt|gte|lt|lte|regex|options|where|in|nin|not|or|and|nor|exists|type|expr)\b/i.test(body) ||
+        /\[['"]\$(?:ne|gt|gte|lt|lte|regex|options|where|in|nin|not|or|and|nor|exists|type|expr)['"]\]/i.test(body) ||
+        /(?:\$ne|\$gt|\$gte|\$lt|\$lte|\$regex|\$where|\$exists|\$in|\$nin)\s*[:=]/i.test(body) ||
+        (body.includes('$regex') && (routePath.includes('search-nosql') || body.includes('queryFilter') || body.includes('filter'))) ||
+        (/(?:\.find|\.findOne|\.countDocuments|\.deleteMany|\.updateOne|\.updateMany)\s*\(\s*(?:req\.body|req\.query|queryFilter|filter)\b/i.test(body) && !body.includes('mongoSanitize') && !body.includes('sanitize('));
+
+      if (hasNoSqlOperators) {
+        const isBlindRegex = body.includes('$regex') || routePath.includes('search-nosql') || body.includes('regex');
+        const isAuthBypass = (body.includes('$ne') || body.includes('$gt')) && /(?:login|auth|password|token)/i.test(routePath + body);
         addFinding({
           title: isBlindRegex
             ? `NoSQL Blind Injection via Regex Extraction ($regex Filter) in ${method} ${routePath}`
+            : isAuthBypass
+            ? `NoSQL Operator Injection (Authentication Bypass via $ne / $gt) in ${method} ${routePath}`
             : `NoSQL Operator Injection in ${method} ${routePath}`,
           severity: 'CRITICAL',
           confidence: 'HIGH',
@@ -2198,11 +2271,31 @@ export class SemgrepAdapter implements SecurityToolAdapter {
         });
       }
 
-      // Sink: Second-Order Path Traversal via Database-Stored Asset Filename (CWE-22)
-      if (
-        (body.includes('storedAssetFilename') || routePath.includes('download-stored') || routePath.includes('store-filename')) &&
-        (body.includes('path.join') && (body.includes('res.sendFile') || body.includes('fs.existsSync')))
-      ) {
+      // Sink: Second-Order Path Traversal via Database-Stored Asset Filename / Record (CWE-22)
+      const hasStoredOrDbFileSink =
+        (
+          body.includes('storedAssetFilename') ||
+          body.includes('storedFilename') ||
+          routePath.includes('download-stored') ||
+          routePath.includes('store-filename') ||
+          /(?:stored|saved|db|record|row|doc|asset|item)\.(?:filename|filePath|path|diskPath|originalName)\b/i.test(body) ||
+          /(?:row|record|doc|item|asset)Filename\b/i.test(body) ||
+          ((body.includes('db.get') || body.includes('db.all') || body.includes('SELECT') || body.includes('findUnique') || body.includes('findById')) &&
+          (body.includes('path.join') && (body.includes('row.') || body.includes('doc.') || body.includes('record.'))))
+        ) &&
+        (body.includes('path.join') || body.includes('path.resolve')) &&
+        (
+          body.includes('res.sendFile') ||
+          body.includes('res.download') ||
+          body.includes('fs.readFile') ||
+          body.includes('fs.createReadStream') ||
+          body.includes('fs.existsSync')
+        );
+
+      const hasPathSanitization =
+        body.includes('.startsWith(') && (body.includes('path.resolve') || body.includes('publicDir') || body.includes('baseDir') || body.includes('uploadDir'));
+
+      if (hasStoredOrDbFileSink && !hasPathSanitization) {
         addFinding({
           title: `Second-Order Path Traversal via Database-Stored Asset Filename in ${method} ${routePath}`,
           severity: 'HIGH',
@@ -2212,28 +2305,31 @@ export class SemgrepAdapter implements SecurityToolAdapter {
           filePath: relPath,
           lineStart: line,
           lineEnd: line + 15,
-          evidenceSummary: `Stored filename retrieved from persistent state flows into path.join() and res.sendFile() without boundary verification in ${method} ${routePath}.`,
+          evidenceSummary: `Stored filename retrieved from persistent database or in-memory state flows directly into path.join() and filesystem sink without directory boundary verification (startsWith) in ${method} ${routePath}.`,
           rawSnippet: body.slice(0, 160),
-          remediation: 'Verify resolved path starts with base directory: path.resolve(targetPath).startsWith(publicDir).',
+          remediation: 'Verify resolved path resides strictly within the intended directory: if (!path.resolve(targetPath).startsWith(baseDir + path.sep)) throw new Error("Access Denied");',
           cwe: 'CWE-22',
         });
       }
 
       // Sink: Blind Command Injection via Environment Variable Injection (CWE-78 / CWE-88)
-      if (
-        (body.includes('process.env[') && (body.includes('flagName') || body.includes('flagValue') || body.includes('='))) ||
-        routePath.includes('set-environment-flag')
-      ) {
+      const hasProcessEnvMutation =
+        /(?:process\.env\s*\[[^\]]+\]\s*=|process\.env\.[a-zA-Z0-9_$]+\s*=|Object\.assign\s*\(\s*process\.env\b|dotenv\.populate\s*\(\s*process\.env\b)/.test(body) ||
+        (body.includes('process.env[') && body.includes('=')) ||
+        routePath.includes('set-environment-flag') ||
+        routePath.includes('set-env');
+
+      if (hasProcessEnvMutation) {
         addFinding({
           title: `Blind Command Injection via Environment Variable Injection in ${method} ${routePath}`,
           severity: 'CRITICAL',
           confidence: 'HIGH',
-          category: 'INJECTION',
+          category: 'COMMAND_INJECTION',
           sourceRuleId: 'architecture.injection.environment-variable-injection',
           filePath: relPath,
           lineStart: line,
           lineEnd: line + 15,
-          evidenceSummary: `Modifying process.env directly with user-supplied keys/values permits injecting NODE_OPTIONS or LD_PRELOAD leading to remote command execution in ${method} ${routePath}.`,
+          evidenceSummary: `Modifying process.env directly with runtime keys/values permits injecting NODE_OPTIONS, LD_PRELOAD, or PATH leading to arbitrary remote command execution in ${method} ${routePath}.`,
           rawSnippet: body.slice(0, 160),
           remediation: 'Never permit runtime modification of process.env from user requests. Restrict configuration flags to an in-memory application configuration dictionary.',
           cwe: 'CWE-78',
