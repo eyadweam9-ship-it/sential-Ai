@@ -119,9 +119,11 @@ findingsRouter.get('/list', async (req: AuthenticatedRequest, res: Response): Pr
         instanceKey = `${normFile}:RATE_LIMIT:${sub}`;
       } else if (cwe.includes('345') || cwe.includes('347') || title.includes('jwt')) {
         instanceKey = `${normFile}:JWT_AUTH`;
-      } else if (cwe.includes('798') || cwe.includes('321') || title.includes('password') || title.includes('secret')) {
+      } else if (cwe.includes('798') || cwe.includes('321') || title.includes('password') || title.includes('secret') || title.includes('credential')) {
         const isEnv = normFile.includes('.env');
-        instanceKey = `${normFile}:SECRET:${isEnv ? 'env' : 'code'}`;
+        instanceKey = `${normFile}:SECRET:${isEnv ? 'env' : `line_${line}`}`;
+      } else if (cwe.includes('359') || cwe.includes('200') || title.includes('email')) {
+        instanceKey = `${normFile}:EMAIL_DISCLOSURE:line_${line}`;
       } else {
         instanceKey = `${normFile}:${cwe}:cluster_${Math.floor(line / 25)}`;
       }
@@ -131,6 +133,14 @@ findingsRouter.get('/list', async (req: AuthenticatedRequest, res: Response): Pr
       } else {
         const existing = canonicalMap.get(instanceKey)!;
         if (f.status === 'CONFIRMED') existing.status = 'CONFIRMED';
+        const sevOrder: Record<string, number> = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
+        if ((sevOrder[f.severity.toUpperCase()] || 0) > (sevOrder[existing.severity.toUpperCase()] || 0)) {
+          existing.severity = f.severity;
+          existing.title = f.title;
+          existing.cwe = f.cwe;
+          existing.description = f.description;
+          existing.remediation = f.remediation;
+        }
         if (f.evidences && f.evidences.length > 0) {
           existing.evidences = [...(existing.evidences || []), ...f.evidences];
         }

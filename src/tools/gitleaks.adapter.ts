@@ -43,7 +43,7 @@ const GITLEAKS_RULES: SecretRule[] = [
     category: 'HARDCODED_SECRET',
     severity: 'CRITICAL',
     cwe: 'CWE-798',
-    regex: /(?:username|user|email)\s*[:=]\s*['"]([^'"]+)['"]\s*[,;\n\r]\s*(?:password|pass|pwd)\s*[:=]\s*['"]([^'"]+)['"]/i,
+    regex: /(?:username|user|email|login)\s*[:=]\s*['"]?([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+|[a-zA-Z0-9_-]{3,64})['"]?\s*(?:[,;\n\r]|<br\s*\/?>|\s+)\s*(?:password|pass|pwd)\s*[:=]\s*['"]?([^'"\r\n\s<]{3,128})['"]?/i,
     mask: () => 'user: ***, pass: ***',
     remediation: 'Revoke and rotate the exposed user credentials. Store hashed passwords using Argon2 or bcrypt and manage accounts in a database.',
   },
@@ -394,7 +394,7 @@ export class GitleaksAdapter implements SecurityToolAdapter {
               remediation: rule.remediation || 'Immediately revoke and rotate the exposed credential.',
               cwe: rule.cwe || 'CWE-798',
             });
-            continue;
+            break; // Stop further overlapping checks (e.g. standalone email PII) for this line
           }
 
           findings.push({
@@ -413,6 +413,11 @@ export class GitleaksAdapter implements SecurityToolAdapter {
             remediation: rule.remediation || 'Immediately revoke and rotate the exposed credential. Store secrets strictly in backend environment variables or a secrets manager.',
             cwe: rule.cwe || 'CWE-798',
           });
+
+          // If a specific high-confidence secret or admin config rule matched on this line, don't trigger generic PII email checks on the same line
+          if (rule.id === 'gitleaks.hardcoded-email-config' || rule.id === 'gitleaks.hardcoded-password' || rule.id.includes('token') || rule.id.includes('key')) {
+            break;
+          }
         }
       }
     }
