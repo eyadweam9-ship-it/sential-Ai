@@ -40,11 +40,12 @@ router.get('/stats', (req: Request, res: Response) => {
 
 /**
  * GET /api/threat-intel/kb
- * Query / filter through the 205 built-in Master Knowledge Base entries
+ * Query / filter through the 970 authoritative MITRE CWE 4.20 Knowledge Base entries
+ * Supports high-performance pagination (page, limit), full-text search (q), and classification filters
  */
 router.get('/kb', (req: Request, res: Response) => {
   try {
-    const { category, severity, cwe, q } = req.query;
+    const { category, severity, cwe, q, page: reqPage, limit: reqLimit, all } = req.query;
     let list = knowledgeBaseService.getAllEntries();
 
     if (category) {
@@ -66,10 +67,22 @@ router.get('/kb', (req: Request, res: Response) => {
       );
     }
 
+    const total = list.length;
+    const page = Math.max(1, parseInt(reqPage as string, 10) || 1);
+    const isAll = all === 'true' || reqLimit === 'all';
+    const limit = isAll ? total : Math.max(1, Math.min(250, parseInt(reqLimit as string, 10) || 50));
+    const totalPages = Math.ceil(total / limit) || 1;
+    const startIndex = (page - 1) * limit;
+    const paginated = isAll ? list : list.slice(startIndex, startIndex + limit);
+
     res.json({
       success: true,
-      count: list.length,
-      entries: list.map(e => ({
+      total,
+      page,
+      limit,
+      totalPages,
+      count: paginated.length,
+      entries: paginated.map(e => ({
         id: e.id,
         name: e.name,
         category: e.category,
@@ -77,8 +90,8 @@ router.get('/kb', (req: Request, res: Response) => {
         owasp_category: e.owasp_category,
         default_severity: e.default_severity,
         cvss_score: e.cvss_score,
-        description: e.description,
-        remediation_summary: e.remediation.guidance,
+        description: e.description && e.description.length > 250 ? `${e.description.slice(0, 247)}...` : e.description,
+        remediation_summary: e.remediation?.guidance,
       })),
     });
   } catch (error) {

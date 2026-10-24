@@ -60,6 +60,7 @@ class KnowledgeBaseService {
   private entryById = new Map<string, KnowledgeBaseEntry>();
   private entriesByCwe = new Map<string, KnowledgeBaseEntry[]>();
   private sastRulesCache: ExecutableSastRule[] | null = null;
+  private rulesByScope = new Map<string, ExecutableSastRule[]>();
   private isLoaded = false;
 
   constructor() {
@@ -160,7 +161,61 @@ class KnowledgeBaseService {
     }
 
     this.sastRulesCache = rules;
+    this.rulesByScope.clear();
+    for (const r of rules) {
+      const scope = (r.scope || 'BACKEND').toUpperCase();
+      if (!this.rulesByScope.has(scope)) {
+        this.rulesByScope.set(scope, []);
+      }
+      this.rulesByScope.get(scope)!.push(r);
+    }
     return rules;
+  }
+
+  public getRulesForScope(scope: string): ExecutableSastRule[] {
+    if (!this.sastRulesCache) this.getExecutableSastRules();
+    return this.rulesByScope.get(scope.toUpperCase()) || [];
+  }
+
+  public getRulesForFile(filePath: string): ExecutableSastRule[] {
+    if (!this.sastRulesCache) this.getExecutableSastRules();
+    const lower = filePath.toLowerCase();
+    const ext = path.extname(lower);
+    const base = path.basename(lower);
+
+    if (base === 'dockerfile' || base.startsWith('dockerfile.')) {
+      return [...this.getRulesForScope('DOCKERFILE'), ...this.getRulesForScope('CONTAINER')];
+    }
+    if (ext === '.tf' || ext === '.tfvars') {
+      return this.getRulesForScope('TERRAFORM');
+    }
+    if (ext === '.yaml' || ext === '.yml') {
+      if (lower.includes('.github/') || lower.includes('.gitlab-ci') || base === 'jenkinsfile') {
+        return this.getRulesForScope('CI_CD');
+      }
+      return this.getRulesForScope('KUBERNETES');
+    }
+    if (ext === '.c' || ext === '.cpp' || ext === '.cc' || ext === '.cxx' || ext === '.h' || ext === '.hpp') {
+      return this.getRulesForScope('C_CPP');
+    }
+    if (ext === '.java' || ext === '.jsp' || ext === '.scala') {
+      return this.getRulesForScope('JAVA');
+    }
+    if (ext === '.py') {
+      return this.getRulesForScope('PYTHON');
+    }
+    if (ext === '.php') {
+      return this.getRulesForScope('PHP');
+    }
+    if (ext === '.html' || lower.includes('/public/') || lower.includes('\\public\\') || lower.includes('/assets/') || lower.includes('\\assets\\')) {
+      return this.getRulesForScope('FRONTEND');
+    }
+
+    // Default application code (Node.js / JS / TS / General backend)
+    return [
+      ...this.getRulesForScope('BACKEND'),
+      ...this.getRulesForScope('GLOBAL'),
+    ];
   }
 
   public getRemediationDiff(cweOrTitle: string): KbRemediationDef | null {

@@ -584,20 +584,39 @@ export class SemgrepAdapter implements SecurityToolAdapter {
 
         if (rule.regex.test(line)) {
           triggeredRules.add(ruleKey);
-          findings.push({
-            title: rule.title,
-            severity: rule.severity,
-            confidence: 'HIGH',
-            category: rule.category,
-            sourceRuleId: rule.id,
-            filePath: sourcePath,
-            lineStart: i + 1,
-            lineEnd: i + 1,
-            evidenceSummary: `Detected in ${path.basename(sourcePath)}: ${line.slice(0, 140)}`,
-            rawSnippet: line.slice(0, 180),
-            remediation: rule.remediation,
-            cwe: rule.cwe,
-          });
+
+          // Deduplicate multiple rules firing on the exact same line for the same category or root cause
+          const lineNum = i + 1;
+          const alreadyCovered = findings.some(f =>
+            f.filePath === sourcePath &&
+            Math.abs((f.lineStart || 0) - lineNum) <= 1 &&
+            (
+              f.cwe === rule.cwe ||
+              f.category === rule.category ||
+              (f.category === 'SQL_INJECTION' && rule.category === 'SQL_INJECTION') ||
+              (f.category === 'COMMAND_INJECTION' && rule.category === 'COMMAND_INJECTION') ||
+              (f.category === 'XSS' && rule.category === 'XSS') ||
+              (f.category === 'CRYPTOGRAPHY' && rule.category === 'CRYPTOGRAPHY') ||
+              (f.category === 'HARDCODED_SECRET' && rule.category === 'HARDCODED_SECRET')
+            )
+          );
+
+          if (!alreadyCovered) {
+            findings.push({
+              title: rule.title,
+              severity: rule.severity,
+              confidence: 'HIGH',
+              category: rule.category,
+              sourceRuleId: rule.id,
+              filePath: sourcePath,
+              lineStart: lineNum,
+              lineEnd: lineNum,
+              evidenceSummary: `Detected in ${path.basename(sourcePath)}: ${line.slice(0, 140)}`,
+              rawSnippet: line.slice(0, 180),
+              remediation: rule.remediation,
+              cwe: rule.cwe,
+            });
+          }
         }
       }
     }
@@ -716,35 +735,10 @@ export class SemgrepAdapter implements SecurityToolAdapter {
       const isKubernetes = (ext === '.yaml' || ext === '.yml') && (content.includes('apiVersion:') || content.includes('kind:'));
       const isCiCd = relPath.includes('.github/') || relPath.includes('.gitlab-ci') || relPath.includes('Jenkinsfile');
 
-      // Dynamically load active rules from Central Knowledge Base if present
-      const kbRules = knowledgeBaseService.getExecutableSastRules();
-
-      // Precision Scope Matching: Ensure Dockerfile / IaC rules never bleed into application source code
-      let targetRules: SastRule[] = [];
-
-      if (isDockerfile) {
-        targetRules = kbRules.filter(r => r.scope === 'DOCKERFILE' || r.scope === 'CONTAINER');
-      } else if (isTerraform) {
-        targetRules = kbRules.filter(r => r.scope === 'TERRAFORM');
-      } else if (isKubernetes) {
-        targetRules = kbRules.filter(r => r.scope === 'KUBERNETES');
-      } else if (isCiCd) {
-        targetRules = kbRules.filter(r => r.scope === 'CI_CD');
-      } else if (isClientCode) {
-        targetRules = DOM_SAST_RULES;
-      } else {
-        // Application code (.js, .ts, .php, .py, .java, .go, etc.)
-        targetRules = kbRules.length > 0
-          ? kbRules.filter(r =>
-              r.scope !== 'FRONTEND' &&
-              r.scope !== 'DOCKERFILE' &&
-              r.scope !== 'CONTAINER' &&
-              r.scope !== 'DOCKER_COMPOSE' &&
-              r.scope !== 'KUBERNETES' &&
-              r.scope !== 'TERRAFORM' &&
-              r.scope !== 'CI_CD'
-            )
-          : BACKEND_RULES;
+      // Precision Scope Matching via high-speed pre-indexed Knowledge Base
+      let targetRules: SastRule[] = knowledgeBaseService.getRulesForFile(relPath);
+      if (targetRules.length === 0) {
+        targetRules = isClientCode ? DOM_SAST_RULES : BACKEND_RULES;
       }
 
       // Execute targeted rules
