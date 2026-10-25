@@ -235,6 +235,57 @@ export async function extractSourcesFromTarget(
     } catch {}
   }
 
+  // Step B2: Probe for Exposed Stored Data Files (Config, Databases, Logs & Diagnostics)
+  const sensitiveStoredPaths = [
+    { p: '/.env', sig: /DB_|PASSWORD|SECRET|KEY|APP_ENV/i, cat: 'ENVIRONMENT_SECRETS', title: 'Exposed Environment File (.env)' },
+    { p: '/.env.local', sig: /DB_|PASSWORD|SECRET|KEY/i, cat: 'ENVIRONMENT_SECRETS', title: 'Exposed Local Environment File (.env.local)' },
+    { p: '/.env.backup', sig: /DB_|PASSWORD|SECRET|KEY/i, cat: 'ENVIRONMENT_SECRETS', title: 'Exposed Environment Backup (.env.backup)' },
+    { p: '/dump.sql', sig: /CREATE\s+TABLE|INSERT\s+INTO/i, cat: 'DATABASE_LEAK', title: 'Exposed Database SQL Dump (dump.sql)' },
+    { p: '/backup.sql', sig: /CREATE\s+TABLE|INSERT\s+INTO/i, cat: 'DATABASE_LEAK', title: 'Exposed Database Backup Dump (backup.sql)' },
+    { p: '/database.sqlite', sig: /SQLite format 3/i, cat: 'DATABASE_LEAK', title: 'Exposed Live SQLite Database File' },
+    { p: '/app.log', sig: /\[ERROR\]|\[INFO\]|at\s+\w+\s+\(|Stack trace/i, cat: 'SERVER_LOG_LEAK', title: 'Exposed Application Debug Log (app.log)' },
+    { p: '/debug.log', sig: /\[ERROR\]|\[DEBUG\]|SQL/i, cat: 'SERVER_LOG_LEAK', title: 'Exposed System Debug Log (debug.log)' },
+    { p: '/actuator/heapdump', sig: /heap|azure|vault|token/i, cat: 'MEMORY_LEAK', title: 'Exposed Cloud Actuator Heapdump' },
+    { p: '/actuator/env', sig: /propertySources|environment/i, cat: 'ENVIRONMENT_SECRETS', title: 'Exposed Spring Actuator Environment Variables' },
+    { p: '/phpinfo.php', sig: /PHP Version|Configuration File|phpinfo\(\)/i, cat: 'CONFIGURATION_EXPOSURE', title: 'Exposed PHP Information Telemetry (phpinfo.php)' },
+  ];
+
+  await Promise.allSettled(
+    sensitiveStoredPaths.map(async item => {
+      try {
+        const itemUrl = new URL(item.p, targetUrl);
+        const res = await fetch(itemUrl.toString(), {
+          headers: { 'User-Agent': 'SentinelAI-Security-Auditor/2.0' },
+          signal: AbortSignal.timeout(3500),
+        });
+
+        if (res.status === 200) {
+          const text = await res.text();
+          // Verify signature and ensure it's not a generic SPA/HTML 404 page
+          if (item.sig.test(text) && (!text.includes('<!DOCTYPE html>') || item.p === '/phpinfo.php')) {
+            const fileName = path.basename(item.p) || 'exposed_data.txt';
+            const savePath = path.join(outputDir, fileName.startsWith('.') ? fileName : `exposed_${fileName}`);
+            fs.writeFileSync(savePath, text, 'utf8');
+            result.extractedFilesCount++;
+
+            result.findings.push({
+              title: item.title,
+              severity: 'CRITICAL',
+              confidence: 'CONFIRMED',
+              category: 'INFORMATION_DISCLOSURE',
+              sourceRuleId: `recon.exposed-stored-data.${item.cat.toLowerCase()}`,
+              targetUrl: itemUrl.toString(),
+              evidenceSummary: `Publicly accessible stored sensitive data file discovered at ${item.p}. File contains active credentials, database queries, or server memory telemetry.`,
+              rawSnippet: text.slice(0, 300),
+              remediation: `Deny public access to ${item.p} in web server configurations and ensure sensitive database and environment files reside outside the document root.`,
+              cwe: 'CWE-200',
+            });
+          }
+        }
+      } catch {}
+    })
+  );
+
   // Step C: Probe and Extract JavaScript Source Maps (.js.map)
   const scriptUrls: string[] = [];
   const inlineScripts: string[] = [];
