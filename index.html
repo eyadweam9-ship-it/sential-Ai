@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,23 +10,38 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     
+    <script>
+        (function() {
+            var savedTheme = localStorage.getItem('sential_theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        })();
+    </script>
+
     <!-- Google Fonts: Manrope (Exact Figma Prototype Font) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
     <!-- Application Stylesheets -->
-    <link rel="stylesheet" href="assets/css/style.css?v=3.1">
-    <link rel="stylesheet" href="assets/css/sheet.css?v=3.1">
+    <link rel="stylesheet" href="assets/css/style.css?v=3.5">
+    <link rel="stylesheet" href="assets/css/sheet.css?v=3.5">
+    <link rel="stylesheet" href="assets/css/cyber-dark.css?v=3.5">
     
     <style>
+        :root {
+            color-scheme: dark;
+        }
         body {
             font-family: 'Manrope', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
             margin: 0;
             padding: 0;
+            background-color: #060a12;
+            color: #f1f5f9;
+            -webkit-font-smoothing: antialiased;
+        }
+        [data-theme="light"] body {
             background-color: #f7f9fc;
             color: #0f172a;
-            -webkit-font-smoothing: antialiased;
         }
         .hidden {
             display: none !important;
@@ -38,9 +53,10 @@
     <div id="root"></div>
 
     <!-- Application JavaScript Modules with Cache Busting -->
-    <script src="assets/js/icons.js?v=3.3"></script>
-    <script src="assets/js/api.js?v=3.3"></script>
-    <script src="assets/js/sheet.js?v=3.3"></script>
-    <script src="assets/js/app.js?v=3.3"></script>
+    <script src="assets/js/icons.js?v=3.5"></script>
+    <script src="assets/js/theme-canvas.js?v=3.5"></script>
+    <script src="assets/js/api.js?v=3.5"></script>
+    <script src="assets/js/sheet.js?v=3.5"></script>
+    <script src="assets/js/app.js?v=3.5"></script>
 </body>
 </html>

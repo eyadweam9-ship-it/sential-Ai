@@ -1,12 +1,19 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#0b1220">
+  <meta name="theme-color" content="#060a12">
   <title>Sential AI | Admin Dashboard</title>
+  <script>
+    (function() {
+      var savedTheme = localStorage.getItem('sential_theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    })();
+  </script>
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/dashboard.css">
+  <link rel="stylesheet" href="css/cyber-dark.css">
 </head>
 <body class="admin-dashboard">
 
@@ -30,8 +37,9 @@
     </div>
 
     <div class="topbar-right">
+      <div id="adminThemeContainer"></div>
       <div class="admin-chip">
-        <span id="navAdminName" style="font-weight:700;color:#0f172a">Admin</span>
+        <span id="navAdminName" style="font-weight:700;">Admin</span>
         <span class="admin-role-badge">ADMIN</span>
       </div>
 
@@ -137,6 +145,68 @@
           <div class="metric-lbl">Active Administrators</div>
         </div>
       </article>
+
+      <article class="metric-box">
+        <div class="metric-icon-wrap amber">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+        </div>
+        <div>
+          <div class="metric-val" id="totalAuthPending">—</div>
+          <div class="metric-lbl">Pending Auth Requests</div>
+        </div>
+      </article>
+    </section>
+
+    <!-- Target Authorization Requests Section -->
+    <section class="dashboard-section sential-card" id="auth-requests" style="margin-bottom: 2rem;">
+      <div class="sential-card-head" style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+        <div>
+          <h2 class="sential-card-title">Target Authorization Requests</h2>
+          <p class="dash-subtitle">
+            Review, approve, or reject written authorization documents submitted by users for target security scans.
+          </p>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div class="auth-filter-pills" style="display:flex; gap:4px; background:#f1f5f9; padding:4px; border-radius:8px;">
+            <button type="button" class="dashboard-btn auth-filter-btn" data-filter="ALL" style="padding:4px 10px; font-size:12px; height:auto; background:#2563eb; color:#fff;" id="filterAuthAll">All</button>
+            <button type="button" class="dashboard-btn auth-filter-btn" data-filter="PENDING" style="padding:4px 10px; font-size:12px; height:auto; background:transparent; color:#64748b;" id="filterAuthPending">Pending</button>
+            <button type="button" class="dashboard-btn auth-filter-btn" data-filter="APPROVED" style="padding:4px 10px; font-size:12px; height:auto; background:transparent; color:#64748b;" id="filterAuthApproved">Approved</button>
+          </div>
+          <button type="button" class="dashboard-btn" id="refreshAuthRequestsBtn">
+            Refresh Requests
+          </button>
+        </div>
+      </div>
+
+      <div class="table-scroll">
+        <table class="clean-table">
+          <thead>
+            <tr>
+              <th>Target &amp; Environment</th>
+              <th>Submitter User</th>
+              <th>Signatory &amp; Role</th>
+              <th>Submitted At</th>
+              <th>Document</th>
+              <th>Status</th>
+              <th style="text-align:right;">Admin Review Actions</th>
+            </tr>
+          </thead>
+          <tbody id="authRequestsTableBody">
+            <tr>
+              <td colspan="7" class="dashboard-empty">
+                Loading authorization requests...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <!-- Audit Logs -->
@@ -181,6 +251,12 @@
 
   </main>
 
+  <script src="js/theme.js"></script>
+  <script>
+    if (document.getElementById('adminThemeContainer') && typeof ThemeManager !== 'undefined') {
+      document.getElementById('adminThemeContainer').innerHTML = ThemeManager.renderButton();
+    }
+  </script>
   <script src="js/dashboard.js"></script>
 </body>
 </html>

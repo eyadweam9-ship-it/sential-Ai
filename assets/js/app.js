@@ -446,16 +446,28 @@ const App = {
 
         if (this.currentView === 'welcome') {
             root.innerHTML = this.renderWelcomeView();
-        } else if (this.currentView === 'signup') {
-            root.innerHTML = this.renderSignupView();
-            this.clearInputs(['signup-firstname', 'signup-lastname', 'signup-email', 'signup-password', 'signup-confirm']);
-            this.bindValidationListeners('signup');
-        } else if (this.currentView === 'login') {
-            root.innerHTML = this.renderLoginView();
-            this.clearInputs(['login-email', 'login-password']);
-            this.bindValidationListeners('login');
+            if (typeof ZenConstellation !== 'undefined') {
+                ZenConstellation.init('zen-constellation-canvas');
+            }
         } else {
-            root.innerHTML = this.renderAppShell();
+            if (typeof ZenConstellation !== 'undefined') {
+                ZenConstellation.destroy();
+            }
+            if (this.currentView === 'signup') {
+                root.innerHTML = this.renderSignupView();
+                this.clearInputs(['signup-firstname', 'signup-lastname', 'signup-email', 'signup-password', 'signup-confirm']);
+                this.bindValidationListeners('signup');
+            } else if (this.currentView === 'login') {
+                root.innerHTML = this.renderLoginView();
+                this.clearInputs(['login-email', 'login-password']);
+                this.bindValidationListeners('login');
+            } else {
+                root.innerHTML = this.renderAppShell();
+            }
+        }
+
+        if (typeof ThemeManager !== 'undefined') {
+            ThemeManager.updateButtons();
         }
 
         if (this.currentView === 'dashboard') {
@@ -684,9 +696,11 @@ const App = {
     renderWelcomeView() {
         return `
             <div class="welcome-page">
+                <canvas id="zen-constellation-canvas" class="zen-constellation-canvas"></canvas>
                 <header class="welcome-nav">
                     ${renderBrandLogo()}
                     <div class="flex items-center gap-2">
+                        ${typeof ThemeManager !== 'undefined' ? ThemeManager.renderButton() : ''}
                         <button class="button button-ghost" onclick="App.navigate('login')">Log in</button>
                         <button class="button button-primary" onclick="App.navigate('signup')">Start free</button>
                     </div>
@@ -814,6 +828,9 @@ const App = {
     renderSignupView() {
         return `
             <div class="auth-shell">
+                <div style="position: fixed; top: 1.5rem; right: 2rem; z-index: 100;">
+                    ${typeof ThemeManager !== 'undefined' ? ThemeManager.renderButton() : ''}
+                </div>
                 <div class="auth-brand">
                     ${renderBrandLogo()}
                 </div>
@@ -937,6 +954,9 @@ const App = {
     renderLoginView() {
         return `
             <div class="auth-shell">
+                <div style="position: fixed; top: 1.5rem; right: 2rem; z-index: 100;">
+                    ${typeof ThemeManager !== 'undefined' ? ThemeManager.renderButton() : ''}
+                </div>
                 <div class="auth-brand">
                     ${renderBrandLogo()}
                 </div>
@@ -1116,6 +1136,7 @@ const App = {
                         </div>
 
                         <div class="ml-auto flex items-center gap-3">
+                            ${typeof ThemeManager !== 'undefined' ? ThemeManager.renderButton() : ''}
                             <button type="button" class="topbar-logout-btn" onclick="App.handleLogout()" title="Log out">
                                 ${Icons.get('logout', 'size-4')}
                             </button>
@@ -3783,7 +3804,7 @@ const App = {
             <div class="progress-layout">
                 <!-- Left: Progress Orb & Stats -->
                 <div class="progress-main-card">
-                    <div class="progress-orb" style="background: radial-gradient(closest-side, #fff 80%, transparent 81% 99%), conic-gradient(#2563eb ${p}%, #e9eff6 0);">
+                    <div class="progress-orb" style="background: radial-gradient(closest-side, var(--bg-card, #0c1424) 80%, transparent 81% 99%), conic-gradient(#2563eb ${p}%, var(--border-hairline, #1c2e4a) 0);">
                         <div>
                             <strong id="progress-percent-text">${p}%</strong>
                             <span id="progress-status-sub">${p >= 100 ? 'Complete' : 'Scanning'}</span>
@@ -4102,7 +4123,7 @@ const App = {
                     if (subEl) subEl.textContent = scan.status === 'completed' ? 'Complete' : (scan.status === 'cancelled' ? 'Halted' : 'Scanning');
                     if (orbEl) {
                         const orbColor = scan.status === 'cancelled' ? '#ea580c' : '#2563eb';
-                        orbEl.style.background = `radial-gradient(closest-side, #fff 80%, transparent 81% 99%), conic-gradient(${orbColor} ${this.scanState.progress}%, #e9eff6 0)`;
+                        orbEl.style.background = `radial-gradient(closest-side, var(--bg-card, #0c1424) 80%, transparent 81% 99%), conic-gradient(${orbColor} ${this.scanState.progress}%, var(--border-hairline, #1c2e4a) 0)`;
                     }
 
                     // Live Line
@@ -4214,7 +4235,7 @@ const App = {
         if (subEl) subEl.textContent = 'Cancelled';
 
         const orbEl = document.querySelector('.progress-orb');
-        if (orbEl) orbEl.style.background = `radial-gradient(closest-side, #fff 80%, transparent 81% 99%), conic-gradient(#ea580c ${this.scanState.progress || 50}%, #e9eff6 0)`;
+        if (orbEl) orbEl.style.background = `radial-gradient(closest-side, var(--bg-card, #0c1424) 80%, transparent 81% 99%), conic-gradient(#ea580c ${this.scanState.progress || 50}%, var(--border-hairline, #1c2e4a) 0)`;
 
         const dot = document.getElementById('progress-pulse-dot');
         if (dot) dot.style.background = '#ea580c';
@@ -4281,11 +4302,11 @@ const App = {
             ` : ''}
 
             <!-- Multi-Tool Execution & Engine Matrix Card -->
-            <div class="card mb-6" style="padding: 1.25rem 1.5rem; border-radius: 12px; background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+            <div class="card mb-6 engine-matrix-card" style="padding: 1.25rem 1.5rem; border-radius: 12px; background: var(--bg-card, #ffffff); border: 1px solid var(--border-hairline, #e2e8f0); box-shadow: var(--shadow-soft, 0 1px 3px rgba(0,0,0,0.04));">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom: 1rem;">
                     <div>
                         <div style="display:flex; align-items:center; gap:8px;">
-                            <h2 style="font-size:15px; font-weight:800; color:#0f172a; margin:0;">${isDev ? 'Source Code & Component Security Engine' : 'Multi-Tool Security Assessment Engine'}</h2>
+                            <h2 style="font-size:15px; font-weight:800; color: var(--text-heading, #0f172a); margin:0;">${isDev ? 'Source Code & Component Security Engine' : 'Multi-Tool Security Assessment Engine'}</h2>
                             <span id="scan-status-badge" class="badge" style="font-size:10px; padding:2px 8px; border-radius:9999px; background:#eff6ff; color:#2563eb; font-weight:700;">READY</span>
                         </div>
                         <p style="font-size:11px; color:#64748b; margin:3px 0 0 0;">
@@ -4460,23 +4481,23 @@ const App = {
                 <!-- Scan Category Filter Tabs / Pills -->
                 <div class="category-tabs-bar" style="display:flex; align-items:center; gap:8px; padding:10px 16px; border-bottom:1px solid #e2e8f0; background:#f8fafc; overflow-x:auto; border-top-left-radius:12px; border-top-right-radius:12px;">
                     <span style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; margin-right:4px; white-space:nowrap;">Category:</span>
-                    <button type="button" class="cat-pill active" id="cat-pill-all" onclick="App.onSelectCategoryFilter('')" style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:9999px; font-size:12px; font-weight:700; background:#2563eb; color:#ffffff; border:1px solid #2563eb; cursor:pointer; transition:all 0.15s ease;">
-                        All <span id="cat-count-all" style="font-size:10px; background:rgba(255,255,255,0.25); color:#ffffff; padding:1px 6px; border-radius:9999px;">0</span>
+                    <button type="button" class="cat-pill active" id="cat-pill-all" onclick="App.onSelectCategoryFilter('')">
+                        All <span id="cat-count-all">0</span>
                     </button>
-                    <button type="button" class="cat-pill" id="cat-pill-sast" onclick="App.onSelectCategoryFilter('SAST')" style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:9999px; font-size:12px; font-weight:500; background:#ffffff; color:#475569; border:1px solid #cbd5e1; cursor:pointer; transition:all 0.15s ease;">
-                        Source Code (SAST) <span id="cat-count-sast" style="font-size:10px; background:#f1f5f9; color:#475569; padding:1px 6px; border-radius:9999px;">0</span>
+                    <button type="button" class="cat-pill" id="cat-pill-sast" onclick="App.onSelectCategoryFilter('SAST')">
+                        Source Code (SAST) <span id="cat-count-sast">0</span>
                     </button>
-                    <button type="button" class="cat-pill" id="cat-pill-dast" onclick="App.onSelectCategoryFilter('DAST')" style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:9999px; font-size:12px; font-weight:500; background:#ffffff; color:#475569; border:1px solid #cbd5e1; cursor:pointer; transition:all 0.15s ease;">
-                        Web App (DAST) <span id="cat-count-dast" style="font-size:10px; background:#f1f5f9; color:#475569; padding:1px 6px; border-radius:9999px;">0</span>
+                    <button type="button" class="cat-pill" id="cat-pill-dast" onclick="App.onSelectCategoryFilter('DAST')">
+                        Web App (DAST) <span id="cat-count-dast">0</span>
                     </button>
-                    <button type="button" class="cat-pill" id="cat-pill-secrets" onclick="App.onSelectCategoryFilter('SECRETS')" style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:9999px; font-size:12px; font-weight:500; background:#ffffff; color:#475569; border:1px solid #cbd5e1; cursor:pointer; transition:all 0.15s ease;">
-                        Secrets &amp; Credentials <span id="cat-count-secrets" style="font-size:10px; background:#f1f5f9; color:#475569; padding:1px 6px; border-radius:9999px;">0</span>
+                    <button type="button" class="cat-pill" id="cat-pill-secrets" onclick="App.onSelectCategoryFilter('SECRETS')">
+                        Secrets &amp; Credentials <span id="cat-count-secrets">0</span>
                     </button>
-                    <button type="button" class="cat-pill" id="cat-pill-sca" onclick="App.onSelectCategoryFilter('SCA')" style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:9999px; font-size:12px; font-weight:500; background:#ffffff; color:#475569; border:1px solid #cbd5e1; cursor:pointer; transition:all 0.15s ease;">
-                        Dependencies (SCA) <span id="cat-count-sca" style="font-size:10px; background:#f1f5f9; color:#475569; padding:1px 6px; border-radius:9999px;">0</span>
+                    <button type="button" class="cat-pill" id="cat-pill-sca" onclick="App.onSelectCategoryFilter('SCA')">
+                        Dependencies (SCA) <span id="cat-count-sca">0</span>
                     </button>
-                    <button type="button" class="cat-pill" id="cat-pill-iac" onclick="App.onSelectCategoryFilter('IAC')" style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:9999px; font-size:12px; font-weight:500; background:#ffffff; color:#475569; border:1px solid #cbd5e1; cursor:pointer; transition:all 0.15s ease;">
-                        Infrastructure (IaC) <span id="cat-count-iac" style="font-size:10px; background:#f1f5f9; color:#475569; padding:1px 6px; border-radius:9999px;">0</span>
+                    <button type="button" class="cat-pill" id="cat-pill-iac" onclick="App.onSelectCategoryFilter('IAC')">
+                        Infrastructure (IaC) <span id="cat-count-iac">0</span>
                     </button>
                 </div>
 
@@ -4942,24 +4963,13 @@ const App = {
             const count = document.getElementById(`cat-count-${p.id}`);
             if (btn) {
                 const isSelected = (!cat && p.key === '') || (cat && cat.toUpperCase() === p.key);
-                if (isSelected) {
-                    btn.style.background = '#2563eb';
-                    btn.style.color = '#ffffff';
-                    btn.style.borderColor = '#2563eb';
-                    btn.style.fontWeight = '700';
-                    if (count) {
-                        count.style.background = 'rgba(255,255,255,0.25)';
-                        count.style.color = '#ffffff';
-                    }
-                } else {
-                    btn.style.background = '#ffffff';
-                    btn.style.color = '#475569';
-                    btn.style.borderColor = '#cbd5e1';
-                    btn.style.fontWeight = '500';
-                    if (count) {
-                        count.style.background = '#f1f5f9';
-                        count.style.color = '#475569';
-                    }
+                btn.classList.toggle('active', isSelected);
+                btn.style.background = '';
+                btn.style.color = '';
+                btn.style.borderColor = '';
+                if (count) {
+                    count.style.background = '';
+                    count.style.color = '';
                 }
             }
         });

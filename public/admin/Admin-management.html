@@ -1,11 +1,18 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Management | Sential AI</title>
+    <script>
+        (function() {
+            var savedTheme = localStorage.getItem('sential_theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        })();
+    </script>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/cyber-dark.css">
 </head>
 <body class="sential-dashboard">
 
@@ -26,6 +33,7 @@
         </a>
 
         <div style="display: flex; align-items: center; gap: 12px;">
+            <div id="adminThemeContainer"></div>
             <a href="add-admin.html" class="dashboard-btn primary">
                 + Add New Admin
             </a>
@@ -93,6 +101,12 @@
 
     </main>
 
+    <script src="js/theme.js"></script>
+    <script>
+        if (document.getElementById('adminThemeContainer') && typeof ThemeManager !== 'undefined') {
+            document.getElementById('adminThemeContainer').innerHTML = ThemeManager.renderButton();
+        }
+    </script>
     <script src="js/Admin-management.js"></script>
 </body>
 </html>
