@@ -207,15 +207,21 @@ class KnowledgeBaseService {
     if (ext === '.php') {
       return this.getRulesForScope('PHP');
     }
-    if (ext === '.html' || lower.includes('/public/') || lower.includes('\\public\\') || lower.includes('/assets/') || lower.includes('\\assets\\')) {
+    if (ext === '.html' || lower.includes('client-scripts') || lower.includes('/public/') || lower.includes('\\public\\') || lower.includes('/assets/') || lower.includes('\\assets\\')) {
       return this.getRulesForScope('FRONTEND');
     }
 
     // Default application code (Node.js / JS / TS / General backend)
-    return [
+    const backendRules = [
       ...this.getRulesForScope('BACKEND'),
       ...this.getRulesForScope('GLOBAL'),
     ];
+
+    if (ext === '.js' || ext === '.jsx' || ext === '.ts' || ext === '.tsx' || ext === '.mjs') {
+      return backendRules.filter(r => !r.id.startsWith('python.') && !r.id.startsWith('java.') && !r.id.startsWith('php.') && !r.id.startsWith('c_cpp.'));
+    }
+
+    return backendRules;
   }
 
   public getRemediationDiff(cweOrTitle: string): KbRemediationDef | null {

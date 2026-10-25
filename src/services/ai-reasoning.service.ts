@@ -38,8 +38,23 @@ export class AIReasoningService {
       try {
         const content = fs.readFileSync(filePath, 'utf8');
         const relPath = path.relative(targetDir, filePath).replace(/\\/g, '/');
+        const lower = relPath.toLowerCase();
 
-        if (relPath.includes('node_modules') || relPath.includes('vulnerabilities.json')) {
+        // Skip non-executable docs and 3rd party vendor libraries in AI deep reasoning
+        if (
+          lower.includes('node_modules') ||
+          lower.includes('vulnerabilities.json') ||
+          lower.endsWith('.min.js') ||
+          lower.includes('sweetalert') ||
+          lower.includes('feather') ||
+          lower.includes('jquery') ||
+          lower.includes('bootstrap') ||
+          lower.includes('swiper') ||
+          lower.includes('moment') ||
+          lower.includes('core-js') ||
+          lower.includes('lodash') ||
+          lower.includes('toast')
+        ) {
           continue;
         }
 
@@ -357,8 +372,9 @@ export class AIReasoningService {
 
     // 7. SVG XXE & SSRF (CWE-611 / CWE-918)
     if (block.trigger === 'SVG_XXE_SSRF') {
+      const isServerSide = /(?:req\.|upload|multer|router|app\.(?:post|put)|fs\.readFile|svg2png|librsvg)/i.test(code);
       const parsesSvgXml = /(?:DOMParser|xml2js|parseFromString|svg2png|librsvg)/i.test(code);
-      if (parsesSvgXml) {
+      if (parsesSvgXml && isServerSide) {
         findings.push({
           title: 'XML External Entity (XXE) & SSRF via Insecure SVG Logo Parsing',
           severity: 'HIGH',
