@@ -11,6 +11,8 @@ import { generateScanReport } from './report.service';
 import { extractSourcesFromTarget } from './source-extractor.service';
 import { ToolInput } from '../tools/security-tool.interface';
 import { classifyProjectFiles, ProjectClassificationReport } from './file-classifier.service';
+import { AttackSurfaceService } from './attack-surface.service';
+import { AIReasoningService } from './ai-reasoning.service';
 
 export const activeScanState = new Map<number, { activeTool: string; activeMessage: string; progress: number }>();
 
@@ -126,6 +128,23 @@ export async function orchestrateScan(scanId: number): Promise<void> {
             cwe: 'CWE-506',
           }]);
         }
+      }
+
+      // Attack Surface Auto-Discovery & Route Matrix Audit
+      try {
+        await updateScanProgress(
+          scanId,
+          18,
+          'Attack Surface Discovery',
+          `Mapping route endpoints, protocols & security matrices across ${totalSourceFiles} files...`
+        );
+        const attackSurface = await AttackSurfaceService.analyze(effectiveSourcePath);
+        if (attackSurface.findings.length > 0) {
+          console.log(`[ScanOrchestrator] Attack surface discovery identified ${attackSurface.findings.length} findings across ${attackSurface.endpoints.length} routes.`);
+          await normalizeAndSaveFindings(scanId, 'ATTACK_SURFACE_DISCOVERY', attackSurface.findings);
+        }
+      } catch (surfaceErr) {
+        console.warn('[ScanOrchestrator] Attack surface auto-discovery notice:', (surfaceErr as Error).message);
       }
     }
 
@@ -370,6 +389,25 @@ export async function orchestrateScan(scanId: number): Promise<void> {
           currentProg += 18;
           await sleep(1500);
         }
+      }
+    }
+
+    // Step F: Hybrid AI Security Auditor & Deep Reasoning Engine
+    if (effectiveSourcePath && fs.existsSync(effectiveSourcePath)) {
+      await updateScanProgress(
+        scanId,
+        91,
+        'AI Security Auditor',
+        'Running hybrid AST & deep semantic reasoning for BOLA, Race Conditions, and business logic flaws...'
+      );
+      try {
+        const aiReasoningFindings = await AIReasoningService.analyze(effectiveSourcePath);
+        if (aiReasoningFindings.length > 0) {
+          console.log(`[ScanOrchestrator] AI Deep Reasoning identified ${aiReasoningFindings.length} business logic & concurrency findings.`);
+          await normalizeAndSaveFindings(scanId, 'AI_SECURITY_AUDITOR', aiReasoningFindings);
+        }
+      } catch (aiErr) {
+        console.warn('[ScanOrchestrator] AI reasoning layer notice:', (aiErr as Error).message);
       }
     }
 

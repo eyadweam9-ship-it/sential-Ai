@@ -82,9 +82,22 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
   }
 
   // =========================================================================
+  // 1a. NoSQL Injection Validation (CWE-943)
+  // =========================================================================
+  if (cwe === 'CWE-943' || category === 'NOSQL_INJECTION' || title.includes('nosql')) {
+    return {
+      verdict: 'VALID',
+      confidence: 'CONFIRMED',
+      verificationStatus: 'VERIFIED',
+      status: 'CONFIRMED',
+      adjustedSeverity: (finding.severity as any) || 'CRITICAL',
+    };
+  }
+
+  // =========================================================================
   // 1. SQL Injection Validation (CWE-89)
   // =========================================================================
-  if (cwe === 'CWE-89' || category === 'SQL_INJECTION' || title.includes('sql injection')) {
+  if ((cwe === 'CWE-89' || category === 'SQL_INJECTION' || title.includes('sql injection')) && !title.includes('nosql') && cwe !== 'CWE-943') {
     // A. DOM/CSS selector false positive (e.g. group.querySelector('#' + targetId))
     if (
       snippetLower.includes('queryselector') ||
@@ -478,6 +491,39 @@ export function validateFindingEvidence(finding: RawToolFinding): FindingValidat
       status: 'CONFIRMED',
       adjustedSeverity: 'CRITICAL',
       reason: 'Dynamic variable passed to system command execution sink. Tuned to CRITICAL severity.',
+    };
+  }
+
+  // Active Exploit Vectors Exempted from Header / Informational Baseline Downgrade
+  const isActiveExploitableVulnerability =
+    cwe === 'CWE-640' ||
+    title.includes('host header') ||
+    title.includes('poisoning') ||
+    cwe === 'CWE-942' ||
+    title.includes('cors') ||
+    cwe === 'CWE-524' ||
+    title.includes('cache deception') ||
+    title.includes('actuator') ||
+    cwe === 'CWE-915' ||
+    cwe === 'CWE-840' ||
+    cwe === 'CWE-367' ||
+    cwe === 'CWE-1333' ||
+    cwe === 'CWE-208' ||
+    cwe === 'CWE-643' ||
+    cwe === 'CWE-611' ||
+    cwe === 'CWE-1426' ||
+    cwe === 'CWE-400' ||
+    cwe === 'CWE-287' ||
+    cwe === 'CWE-943' ||
+    cwe === 'CWE-117';
+
+  if (isActiveExploitableVulnerability) {
+    return {
+      verdict: 'VALID',
+      confidence: (finding.confidence as any) === 'CONFIRMED' ? 'CONFIRMED' : 'POTENTIAL',
+      verificationStatus: (finding.confidence as any) === 'CONFIRMED' ? 'VERIFIED' : 'UNVERIFIED',
+      status: (finding.confidence as any) === 'CONFIRMED' ? 'CONFIRMED' : 'OPEN',
+      adjustedSeverity: finding.severity as any,
     };
   }
 
