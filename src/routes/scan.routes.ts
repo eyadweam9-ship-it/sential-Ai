@@ -750,14 +750,22 @@ scanRouter.post(['/create', '/start'], optionalAuth, async (req: Request, res: R
     let validationResult: any = null;
 
     if (isDevelopment) {
-      targetType = 'FILE_ZIP';
-      targetLocation = filePath || optionalFilePath || fileName || optionalFileName || 'uploaded_project.zip';
-      if (!filePath && !optionalFilePath && !fileName && !optionalFileName && !url) {
-        res.status(400).json({
-          success: false,
-          error: 'Development environment requires project source code (ZIP or repository files) for Static Analysis (SAST).',
-        });
-        return;
+      if (url && !filePath && !fileName && !optionalFilePath && !optionalFileName) {
+        targetType = 'URL';
+        targetLocation = url.trim();
+        if (!/^https?:\/\//i.test(targetLocation)) {
+          targetLocation = `https://${targetLocation}`;
+        }
+      } else {
+        targetType = 'FILE_ZIP';
+        targetLocation = filePath || optionalFilePath || fileName || optionalFileName || 'uploaded_project.zip';
+        if (!filePath && !optionalFilePath && !fileName && !optionalFileName && !url) {
+          res.status(400).json({
+            success: false,
+            error: 'Development environment requires project source code (ZIP, Git repository URL, or uploaded files) for Static Analysis (SAST).',
+          });
+          return;
+        }
       }
     } else {
       targetType = 'URL';

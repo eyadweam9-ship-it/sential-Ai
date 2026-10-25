@@ -100,7 +100,30 @@ export async function orchestrateScan(scanId: number): Promise<void> {
       }
     }
 
-    // 2. Intelligent File Classification & Inventory Layer
+    // 2. Proactive Source Extraction from Target URL (Git Cloner, Source Maps, .git, Backups & Client Scripts)
+    if (isUrl && (!effectiveSourcePath || !hasSource)) {
+      try {
+        await updateScanProgress(
+          scanId,
+          10,
+          'Source Extractor',
+          `Probing & extracting source code from ${target.url} (Git/SourceMaps/Backups/Scripts)...`
+        );
+        const extractRes = await extractSourcesFromTarget(target.url, scanId);
+        if (extractRes.extractedDir && extractRes.extractedFilesCount > 0) {
+          effectiveSourcePath = extractRes.extractedDir;
+          hasSource = true;
+          console.log(`[ScanOrchestrator] Successfully extracted ${extractRes.extractedFilesCount} source files from target URL for SAST auditing.`);
+        }
+        if (extractRes.findings && extractRes.findings.length > 0) {
+          await normalizeAndSaveFindings(scanId, 'RECON_DISCOVERY', extractRes.findings);
+        }
+      } catch (extractErr) {
+        console.warn('[ScanOrchestrator] Source extraction notice:', (extractErr as Error).message);
+      }
+    }
+
+    // 3. Intelligent File Classification & Inventory Layer
     const isDev = (target.environment || '').toUpperCase() === 'DEVELOPMENT' || target.targetType === 'FILE_ZIP' || (!isUrl && hasSource);
 
     let classification: ProjectClassificationReport | null = null;
@@ -162,26 +185,6 @@ export async function orchestrateScan(scanId: number): Promise<void> {
         if (s.authHeader) authHeader = String(s.authHeader).trim();
       }
     } catch {}
-
-    // 4. Proactive Source Extraction from Target URL (Source Maps, .git, and Backup Archives)
-    if (isUrl && !isDev && !hasSource) {
-      try {
-        const extractRes = await extractSourcesFromTarget(target.url, scanId);
-        if (extractRes.extractedDir && extractRes.extractedFilesCount > 0) {
-          effectiveSourcePath = extractRes.extractedDir;
-          hasSource = true;
-          classification = await classifyProjectFiles(effectiveSourcePath);
-          totalSourceFiles = classification.totalFilesIndexed;
-          totalSourceLines = classification.totalLinesOfCode;
-          console.log(`[ScanOrchestrator] Successfully extracted ${extractRes.extractedFilesCount} source files from target URL for SAST auditing.`);
-        }
-        if (extractRes.findings && extractRes.findings.length > 0) {
-          await normalizeAndSaveFindings(scanId, 'RECON_DISCOVERY', extractRes.findings);
-        }
-      } catch (extractErr) {
-        console.warn('[ScanOrchestrator] Source extraction notice:', (extractErr as Error).message);
-      }
-    }
 
     // 5. Plan Tasks
     let tasks = await prisma.scanTask.findMany({ where: { scanId } });
