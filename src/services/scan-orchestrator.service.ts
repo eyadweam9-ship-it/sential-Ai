@@ -13,6 +13,7 @@ import { ToolInput } from '../tools/security-tool.interface';
 import { classifyProjectFiles, ProjectClassificationReport } from './file-classifier.service';
 import { AttackSurfaceService } from './attack-surface.service';
 import { AIReasoningService } from './ai-reasoning.service';
+import { AccessControlAuditorService } from './access-control-auditor.service';
 
 export const activeScanState = new Map<number, { activeTool: string; activeMessage: string; progress: number }>();
 
@@ -371,6 +372,24 @@ export async function orchestrateScan(scanId: number): Promise<void> {
       }
     } else {
       // DAST / HYBRID PIPELINE (STAGING / PRODUCTION URL SCAN):
+      if (isUrl && target.url) {
+        try {
+          await updateScanProgress(
+            scanId,
+            16,
+            'Access Control Auditor',
+            `Probing unauthenticated admin consoles, bypass headers, and credential leaks on ${target.url}...`
+          );
+          const accessAudit = await AccessControlAuditorService.audit(target.url, scanId, sessionCookie, authHeader);
+          if (accessAudit.findings.length > 0) {
+            console.log(`[ScanOrchestrator] Access Control Auditor identified ${accessAudit.findings.length} findings.`);
+            await normalizeAndSaveFindings(scanId, 'ACCESS_CONTROL_AUDITOR', accessAudit.findings);
+          }
+        } catch (accessErr) {
+          console.warn('[ScanOrchestrator] Access control audit notice:', (accessErr as Error).message);
+        }
+      }
+
       const phases = [
         ['OWASP_ZAP', 'NUCLEI'],
         ['WPSCAN', 'WHATWEB', 'TESTSSL'],

@@ -286,7 +286,13 @@ export class ZapAdapter implements SecurityToolAdapter {
         { path: '/backup.sql', title: 'Publicly Accessible Database Backup File (backup.sql)', severity: 'CRITICAL' as const, ruleId: '40032-8', cwe: 'CWE-200' },
         { path: '/server-status', title: 'Exposed Web Server Status Page (/server-status)', severity: 'MEDIUM' as const, ruleId: '40032-9', cwe: 'CWE-200' },
         { path: '/admin', title: 'Exposed Administration Panel (/admin)', severity: 'HIGH' as const, ruleId: '40032-10', cwe: 'CWE-285' },
+        { path: '/administrator', title: 'Exposed Administrative Portal (/administrator)', severity: 'HIGH' as const, ruleId: '40032-14', cwe: 'CWE-285' },
+        { path: '/cpanel', title: 'Exposed Control Panel Interface (/cpanel)', severity: 'HIGH' as const, ruleId: '40032-15', cwe: 'CWE-285' },
         { path: '/dashboard', title: 'Exposed Dashboard Interface (/dashboard)', severity: 'MEDIUM' as const, ruleId: '40032-11', cwe: 'CWE-200' },
+        { path: '/dump.sql', title: 'Exposed SQL Database Dump (/dump.sql)', severity: 'CRITICAL' as const, ruleId: '40032-16', cwe: 'CWE-200' },
+        { path: '/database.sqlite', title: 'Exposed SQLite Database File (/database.sqlite)', severity: 'CRITICAL' as const, ruleId: '40032-17', cwe: 'CWE-200' },
+        { path: '/app.log', title: 'Exposed Application Debug Log (/app.log)', severity: 'HIGH' as const, ruleId: '40032-18', cwe: 'CWE-200' },
+        { path: '/actuator/heapdump', title: 'Exposed Cloud Actuator Heapdump (/actuator/heapdump)', severity: 'CRITICAL' as const, ruleId: '40032-19', cwe: 'CWE-200' },
         { path: '/stream.m3u8', title: 'Exposed Video Stream Manifest (/stream.m3u8)', severity: 'MEDIUM' as const, ruleId: '40032-12', cwe: 'CWE-200' },
         { path: '/api/videos', title: 'Unprotected Video API Catalog (/api/videos)', severity: 'MEDIUM' as const, ruleId: '40032-13', cwe: 'CWE-200' },
       ];
