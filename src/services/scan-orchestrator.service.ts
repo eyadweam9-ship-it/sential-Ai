@@ -14,6 +14,8 @@ import { classifyProjectFiles, ProjectClassificationReport } from './file-classi
 import { AttackSurfaceService } from './attack-surface.service';
 import { AIReasoningService } from './ai-reasoning.service';
 import { AccessControlAuditorService } from './access-control-auditor.service';
+import { TokenVerifierService } from './token-verifier.service';
+import { OastService } from './oast.service';
 
 export const activeScanState = new Map<number, { activeTool: string; activeMessage: string; progress: number }>();
 
@@ -447,7 +449,40 @@ export async function orchestrateScan(scanId: number): Promise<void> {
     await deduplicateScanFindings(scanId);
     await sleep(1200);
 
-    // 8. AI Intelligence on findings
+    // 8. Live Token Verification & Threat Intelligence
+    try {
+      const secretFindings = await prisma.finding.findMany({
+        where: {
+          scanId,
+          category: { in: ['HARDCODED_SECRET', 'SECRET', 'API_KEY', 'CREDENTIAL'] },
+        },
+        include: { evidences: true },
+      });
+
+      for (const sf of secretFindings) {
+        const ev = sf.evidences[0];
+        const rawText = (ev?.rawSnippet || '') + ' ' + (ev?.evidenceSummary || '');
+        const tokenMatch = /(?:ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{50,}|xox[bap]-[0-9a-zA-Z-]+|sk_live_[0-9a-zA-Z]{24})/i.exec(rawText);
+        if (tokenMatch) {
+          const verifyRes = await TokenVerifierService.verifyToken(tokenMatch[0]);
+          if (verifyRes.isLive) {
+            await prisma.finding.update({
+              where: { id: sf.id },
+              data: {
+                severity: 'CRITICAL',
+                confidence: 'CONFIRMED',
+                verificationStatus: 'VERIFIED',
+                remediation: `IMMEDIATE ACTION REQUIRED: ${verifyRes.verifiedIdentity}. Revoke this token immediately from the provider dashboard.`,
+              },
+            });
+            console.log(`[ScanOrchestrator] 🚨 Live token verified active: ${verifyRes.tokenType} (${verifyRes.verifiedIdentity})`);
+          }
+        }
+      }
+    } catch (verErr) {
+      console.warn('[ScanOrchestrator] Token verification notice:', (verErr as Error).message);
+    }
+
     const findings = await prisma.finding.findMany({ where: { scanId } });
     for (const f of findings.slice(0, 10)) {
       await analyzeFindingWithAI(scanId, f.id).catch(() => null);

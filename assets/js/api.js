@@ -263,6 +263,21 @@ const API = {
         return await this.request(`reports/scan/${scanId}`);
     },
 
+    async getFindingPatch(findingId) {
+        return await this.request(`findings/${findingId}/patch`);
+    },
+
+    async applyFindingFix(findingId) {
+        return await this.request(`findings/${findingId}/apply-fix`, { method: 'POST' });
+    },
+
+    async importApiSpec(spec, baseUrl) {
+        return await this.request('scans/import-api-spec', {
+            method: 'POST',
+            body: JSON.stringify({ spec, baseUrl })
+        });
+    },
+
     async exportScanReport(scanId) {
         return await this.request(`reports/export/${scanId}`, { method: 'POST' });
     },

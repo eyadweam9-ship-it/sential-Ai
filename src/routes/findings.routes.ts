@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../config/db';
 import { analyzeFindingWithAI } from '../services/ai-analysis.service';
+import { GitRemediationService } from '../services/git-remediation.service';
 import { optionalAuth, AuthenticatedRequest } from '../middlewares/auth.middleware';
 
 export const findingsRouter = Router();
@@ -516,6 +517,54 @@ findingsRouter.post('/:id/status', async (req: AuthenticatedRequest, res: Respon
     });
   } catch (error) {
     console.error('Update finding status error:', error);
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/findings/:id/patch
+ * Synthesizes a unified diff and automated code fix for a vulnerability
+ */
+findingsRouter.get('/:id/patch', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const findingId = Number(req.params.id);
+    if (!findingId || isNaN(findingId)) {
+      res.status(400).json({ success: false, error: 'Invalid finding ID.' });
+      return;
+    }
+
+    const patch = await GitRemediationService.generatePatch(findingId);
+    if (!patch) {
+      res.status(404).json({ success: false, error: 'Unable to synthesize automated patch for this finding.' });
+      return;
+    }
+
+    res.json({ success: true, patch });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/findings/:id/apply-fix
+ * Applies the synthesized security patch directly to the target source code file
+ */
+findingsRouter.post('/:id/apply-fix', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const findingId = Number(req.params.id);
+    if (!findingId || isNaN(findingId)) {
+      res.status(400).json({ success: false, error: 'Invalid finding ID.' });
+      return;
+    }
+
+    const result = await GitRemediationService.applyPatchToFile(findingId);
+    if (!result.success) {
+      res.status(400).json(result);
+      return;
+    }
+
+    res.json(result);
+  } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }
 });

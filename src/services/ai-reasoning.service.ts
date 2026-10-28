@@ -509,6 +509,73 @@ Return a JSON array of findings with keys: title, severity (CRITICAL/HIGH/MEDIUM
       }
     }
 
+    // Google Gemini Pro / Flash Cloud Security Auditor
+    const geminiKey = process.env.GEMINI_API_KEY || (typeof ENV !== 'undefined' ? (ENV as any).GEMINI_API_KEY : null);
+    if (geminiKey) {
+      for (const block of blocks.slice(0, 5)) {
+        try {
+          const prompt = `You are an elite Application Security Auditor. Analyze this source code block for deep security flaws (BOLA/IDOR, Race Conditions, Unescaped NoSQL filters, dangerous DOM sinks, second-order dataflow injection).
+
+File: ${block.relPath}
+Code:
+\`\`\`javascript
+${block.codeSnippet}
+\`\`\`
+
+Return strictly a valid JSON array of objects with keys:
+- title: string
+- severity: "CRITICAL" | "HIGH" | "MEDIUM"
+- cwe: string (e.g. "CWE-89")
+- evidenceSummary: string
+- remediation: string
+
+If no real vulnerability is present, return [].`;
+
+          const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
+          const res = await fetch(geminiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: {
+                temperature: 0.1,
+                responseMimeType: 'application/json',
+              },
+            }),
+            signal: AbortSignal.timeout(8000),
+          });
+
+          if (res.ok) {
+            const data = (await res.json()) as any;
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) {
+              const parsed = JSON.parse(text);
+              if (Array.isArray(parsed)) {
+                for (const item of parsed) {
+                  if (item.title && item.severity) {
+                    findings.push({
+                      title: item.title,
+                      severity: item.severity,
+                      confidence: 'CONFIRMED',
+                      category: 'AI_REASONING_DISCOVERY',
+                      sourceRuleId: 'gemini-llm.audit.discovery',
+                      filePath: block.relPath,
+                      lineStart: block.lineStart,
+                      lineEnd: block.lineEnd,
+                      evidenceSummary: item.evidenceSummary || 'Identified via Gemini LLM security reasoning layer.',
+                      rawSnippet: block.codeSnippet.split('\n').slice(0, 6).join('\n'),
+                      remediation: item.remediation || 'Apply standard OWASP secure coding best practices.',
+                      cwe: item.cwe || 'CWE-20',
+                    });
+                  }
+                }
+              }
+            }
+          }
+        } catch {}
+      }
+    }
+
     return findings;
   }
 

@@ -4199,15 +4199,15 @@ const App = {
                             </div>
                             <div class="discovery-stats-grid">
                                 <div class="discovery-stat-tile cursor-pointer hover:border-blue-400 transition" onclick="App.setDiscoveryFilter('PAGE'); App.toggleDiscoveryModal(true);" title="Click to view reached pages">
-                                    <span class="num text-blue-600">${this.scanState.discoverySummary?.totalPages || 14}</span>
+                                    <span class="num text-blue-600">${this.scanState.discoverySummary?.totalPages ?? 0}</span>
                                     <span class="lbl">Public Pages 🔍</span>
                                 </div>
                                 <div class="discovery-stat-tile cursor-pointer hover:border-indigo-400 transition" onclick="App.setDiscoveryFilter('API_ENDPOINT'); App.toggleDiscoveryModal(true);" title="Click to view reached API endpoints">
-                                    <span class="num text-indigo-600">${this.scanState.discoverySummary?.totalApiEndpoints || 8}</span>
+                                    <span class="num text-indigo-600">${this.scanState.discoverySummary?.totalApiEndpoints ?? 0}</span>
                                     <span class="lbl">API Endpoints 🔍</span>
                                 </div>
                                 <div class="discovery-stat-tile cursor-pointer hover:border-purple-400 transition" onclick="App.setDiscoveryFilter('ALL'); App.toggleDiscoveryModal(true);" title="Click to view reached scripts and styles">
-                                    <span class="num text-purple-600">${this.scanState.discoverySummary?.totalAssets || 6}</span>
+                                    <span class="num text-purple-600">${this.scanState.discoverySummary?.totalAssets ?? 0}</span>
                                     <span class="lbl">JS/CSS Bundles 🔍</span>
                                 </div>
                                 <div class="discovery-stat-tile">

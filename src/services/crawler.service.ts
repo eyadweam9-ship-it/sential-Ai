@@ -1,9 +1,52 @@
 import { URL } from 'url';
+import fs from 'fs';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { isInternalHostname } from './validator.service';
 
 const execFileAsync = promisify(execFile);
+
+/**
+ * Headless Chromium SPA Crawler & DOM Hydrator
+ * Executes JavaScript to render modern SPAs (React, Vue, Next.js, Angular)
+ * and discover hidden dynamic links and API endpoints.
+ */
+export async function renderHeadlessDom(targetUrl: string, timeoutMs: number = 8000): Promise<string | null> {
+  const browserCandidates = [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+  ];
+
+  let browserExe: string | null = null;
+  for (const candidate of browserCandidates) {
+    if (fs.existsSync(candidate)) {
+      browserExe = candidate;
+      break;
+    }
+  }
+
+  if (!browserExe) return null;
+
+  try {
+    const { stdout } = await execFileAsync(
+      browserExe,
+      [
+        '--headless=new',
+        '--disable-gpu',
+        '--no-sandbox',
+        '--disable-dev-shm-usage',
+        '--dump-dom',
+        targetUrl,
+      ],
+      { timeout: timeoutMs, maxBuffer: 15 * 1024 * 1024, windowsHide: true }
+    );
+    return stdout || null;
+  } catch (err) {
+    return null;
+  }
+}
 
 /**
  * Native curl fallback to bypass TLS fingerprint blocking (e.g. Cloudflare Turnstile / Bot Fight Mode)
@@ -435,6 +478,21 @@ export async function crawlWebsite(
 
   // Extract from root page HTML
   const extracted = extractHtmlResources(rootRes.body, pageBaseUrl);
+
+  // 3b. Headless SPA Hydration: If page is a JavaScript Single-Page-App with few static links,
+  // execute client-side JS with headless Chromium to discover dynamic pages and API routes
+  const isSpa = rootRes.body.includes('id="root"') || rootRes.body.includes('id="app"') || (extracted.pages.length < 3 && extracted.scripts.length > 0);
+  if (isSpa) {
+    try {
+      const dynamicDom = await renderHeadlessDom(pageBaseUrl.toString(), 7000);
+      if (dynamicDom && dynamicDom.length > rootRes.body.length) {
+        const dynamicExtracted = extractHtmlResources(dynamicDom, pageBaseUrl);
+        for (const p of dynamicExtracted.pages) extracted.pages.push(p);
+        for (const s of dynamicExtracted.scripts) extracted.scripts.push(s);
+        for (const a of dynamicExtracted.apiEndpoints) extracted.apiEndpoints.push(a);
+      }
+    } catch {}
+  }
 
   const addResource = (url: string, type: DiscoveredResource['type']) => {
     if (!seenUrls.has(url)) {

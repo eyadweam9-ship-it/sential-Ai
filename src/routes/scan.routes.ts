@@ -11,6 +11,8 @@ import { evaluateScope, normalizeScopePath, ScopeRule } from '../services/scope.
 import { orchestrateScan } from '../services/scan-orchestrator.service';
 import { countFilesAndLines } from '../utils/file-counter';
 import { optionalAuth, AuthenticatedRequest } from '../middlewares/auth.middleware';
+import { OastService } from '../services/oast.service';
+import { ApiSpecImporterService } from '../services/api-spec-importer.service';
 
 export const scanRouter = Router();
 
@@ -52,6 +54,52 @@ const upload = multer({
 const folderUpload = multer({
   storage,
   limits: { fileSize: 1024 * 1024 * 1024, files: 1000 },
+});
+
+/**
+ * ALL /api/scans/oast/callback
+ * Out-of-Band Application Security Testing (OAST) listener callback
+ * Triggers when a target executes an out-of-band canary payload (Blind SSRF / Blind RCE / Log4j)
+ */
+scanRouter.all('/oast/callback', async (req: Request, res: Response): Promise<void> => {
+  const token = (req.query.token || req.body?.token || req.headers['x-oast-token'] || '') as string;
+  const clientIp = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1') as string;
+
+  if (token) {
+    await OastService.recordCallback(token, clientIp, req.headers as any, JSON.stringify(req.body || {}));
+  }
+
+  res.status(200).send('/* Sential AI OAST Listener OK */');
+});
+
+/**
+ * POST /api/scans/import-api-spec
+ * Imports OpenAPI 2.0/3.0 (Swagger) or Postman collection into scan discovery
+ */
+scanRouter.post('/import-api-spec', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { spec, baseUrl } = req.body;
+    if (!spec || !baseUrl) {
+      res.status(400).json({ success: false, error: 'Both "spec" (JSON/YAML string or object) and "baseUrl" are required.' });
+      return;
+    }
+
+    const result = ApiSpecImporterService.parseSpec(spec, baseUrl);
+    res.json({
+      success: true,
+      message: `Successfully parsed ${result.endpoints.length} API endpoints from specification.`,
+      endpointsCount: result.endpoints.length,
+      discovery: {
+        totalPages: 0,
+        totalApiEndpoints: result.endpoints.length,
+        totalAssets: 0,
+        resources: result.resources,
+      },
+      endpoints: result.endpoints,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: (err as Error).message });
+  }
 });
 
 /**
