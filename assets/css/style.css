@@ -5272,9 +5272,49 @@ html[data-theme="dark"] .discovery-modal-footer {
     background: #080e1b !important;
     border-top: 1px solid #1e2e4a !important;
 }
-html[data-theme="dark"] .discovery-stat-tile {
+html[data-theme="dark"] .discovery-stat-tile,
+[data-theme="dark"] .discovery-stat-tile,
+body.dark-theme .discovery-stat-tile {
     background: #0a101d !important;
     border: 1px solid #1e2e4a !important;
+}
+html[data-theme="dark"] .discovery-stat-tile .num,
+[data-theme="dark"] .discovery-stat-tile .num,
+body.dark-theme .discovery-stat-tile .num {
+    font-size: 1.35rem !important;
+    font-weight: 800 !important;
+    color: #f8fafc !important;
+    letter-spacing: -0.02em;
+}
+html[data-theme="dark"] .discovery-stat-tile .num.text-blue-600,
+[data-theme="dark"] .discovery-stat-tile .num.text-blue-600,
+body.dark-theme .discovery-stat-tile .num.text-blue-600 {
+    color: #38bdf8 !important;
+    text-shadow: 0 0 12px rgba(56, 189, 248, 0.45);
+}
+html[data-theme="dark"] .discovery-stat-tile .num.text-indigo-600,
+[data-theme="dark"] .discovery-stat-tile .num.text-indigo-600,
+body.dark-theme .discovery-stat-tile .num.text-indigo-600 {
+    color: #818cf8 !important;
+    text-shadow: 0 0 12px rgba(129, 140, 248, 0.45);
+}
+html[data-theme="dark"] .discovery-stat-tile .num.text-purple-600,
+[data-theme="dark"] .discovery-stat-tile .num.text-purple-600,
+body.dark-theme .discovery-stat-tile .num.text-purple-600 {
+    color: #c084fc !important;
+    text-shadow: 0 0 12px rgba(192, 132, 252, 0.45);
+}
+html[data-theme="dark"] .discovery-stat-tile .num.text-emerald-600,
+[data-theme="dark"] .discovery-stat-tile .num.text-emerald-600,
+body.dark-theme .discovery-stat-tile .num.text-emerald-600 {
+    color: #34d399 !important;
+    text-shadow: 0 0 12px rgba(52, 211, 153, 0.45);
+}
+html[data-theme="dark"] .discovery-stat-tile .lbl,
+[data-theme="dark"] .discovery-stat-tile .lbl,
+body.dark-theme .discovery-stat-tile .lbl {
+    color: #94a3b8 !important;
+    font-weight: 700 !important;
 }
 html[data-theme="dark"] .discovery-table-wrapper {
     background: #060a12 !important;

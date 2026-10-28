@@ -4437,6 +4437,7 @@ const App = {
     startProgressPolling() {
         if (this.scanState.timer) clearInterval(this.scanState.timer);
         this.scanState.scanStartTime = Date.now();
+        this.startCodeStreamTicker();
 
         // Immediate first poll to eliminate any lag in loading real code and findings
         const fetchProgress = async () => {
@@ -4541,10 +4542,7 @@ const App = {
                     // Completed or Partial Handling
                     if (scan.status === 'completed' || scan.status === 'partial') {
                         clearInterval(this.scanState.timer);
-                        if (this.scanState.inspectorTimer) {
-                            clearInterval(this.scanState.inspectorTimer);
-                            this.scanState.inspectorTimer = null;
-                        }
+                        this.startCodeStreamTicker();
                         this.scanState.progress = 100;
                         this.scanState.maxUnlockedStep = Math.max(this.scanState.maxUnlockedStep || 1, 7);
                         if (txtEl) txtEl.textContent = '100%';
@@ -4675,35 +4673,22 @@ const App = {
         return s;
     },
 
-    updateLiveCodeInspector(progress = 0, liveStream = null, scan = null) {
-        if (liveStream && Array.isArray(liveStream) && liveStream.length > 0) {
-            this.scanState.liveCodeStream = liveStream;
-        }
+    startCodeStreamTicker() {
+        if (this.scanState.inspectorTimer) clearInterval(this.scanState.inspectorTimer);
+        this.scanState.inspectorTimer = setInterval(() => {
+            if (this.currentView !== 'progress') {
+                clearInterval(this.scanState.inspectorTimer);
+                this.scanState.inspectorTimer = null;
+                return;
+            }
+            if (this.scanState.liveCodeStream && this.scanState.liveCodeStream.length > 0) {
+                this.nextCodeSnippet();
+            }
+        }, 2200);
+    },
 
-        const stream = (this.scanState.liveCodeStream && this.scanState.liveCodeStream.length > 0)
-            ? this.scanState.liveCodeStream
-            : null;
-
-        let snip = null;
-        if (stream && stream.length > 0) {
-            this.scanState.inspectorTick = (this.scanState.inspectorTick || 0) + 1;
-            const idx = Math.floor(this.scanState.inspectorTick % stream.length);
-            snip = stream[idx];
-        }
-
-        if (!snip) {
-            const fallbackName = this.scanState.uploadedFile?.name || (this.scanState.url ? this.scanState.url.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : 'source_code');
-            snip = {
-                filename: fallbackName,
-                engineTag: 'Security Inspection Engine &middot; Active',
-                lineCount: 'Live Analysis',
-                lines: [
-                    { ln: 1, code: "// Live AST security analysis in progress...", active: true },
-                    { ln: 2, code: "// Actively inspecting source files and configuration manifests..." }
-                ]
-            };
-        }
-
+    renderLiveCodeSnippet(snip) {
+        if (!snip) return;
         const fileEl = document.getElementById('terminal-active-filename');
         const engineEl = document.getElementById('terminal-engine-tag');
         const counterEl = document.getElementById('terminal-line-counter');
@@ -4731,38 +4716,60 @@ const App = {
         }
     },
 
+    updateLiveCodeInspector(progress = 0, liveStream = null, scan = null) {
+        let streamNewlySet = false;
+        if (liveStream && Array.isArray(liveStream) && liveStream.length > 0) {
+            if (!this.scanState.liveCodeStream || this.scanState.liveCodeStream.length === 0) {
+                this.scanState.liveCodeStream = liveStream;
+                streamNewlySet = true;
+            } else {
+                this.scanState.liveCodeStream = liveStream;
+            }
+        }
+
+        const stream = (this.scanState.liveCodeStream && this.scanState.liveCodeStream.length > 0)
+            ? this.scanState.liveCodeStream
+            : null;
+
+        let snip = null;
+        if (stream && stream.length > 0) {
+            if (streamNewlySet) {
+                snip = stream[0];
+            } else {
+                const idx = Math.floor(Math.abs(this.scanState.inspectorTick || 0) % stream.length);
+                snip = stream[idx];
+            }
+        }
+
+        if (!snip) {
+            const fallbackName = this.scanState.uploadedFile?.name || (this.scanState.url ? this.scanState.url.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : 'source_code');
+            snip = {
+                filename: fallbackName,
+                engineTag: 'Security Inspection Engine &middot; Active',
+                lineCount: 'Live Analysis',
+                lines: [
+                    { ln: 1, code: "// Live AST security analysis in progress...", active: true },
+                    { ln: 2, code: "// Actively inspecting source files and configuration manifests..." }
+                ]
+            };
+        }
+
+        this.renderLiveCodeSnippet(snip);
+
+        // Ensure background ticker is running
+        if (!this.scanState.inspectorTimer) {
+            this.startCodeStreamTicker();
+        }
+    },
+
     nextCodeSnippet() {
-        if (this.scanState.liveCodeStream && this.scanState.liveCodeStream.length > 1) {
+        if (this.scanState.liveCodeStream && this.scanState.liveCodeStream.length > 0) {
             this.scanState.inspectorTick = (this.scanState.inspectorTick || 0) + 1;
             const stream = this.scanState.liveCodeStream;
             const idx = Math.floor(this.scanState.inspectorTick % stream.length);
             const snip = stream[idx];
             if (snip) {
-                const fileEl = document.getElementById('terminal-active-filename');
-                const engineEl = document.getElementById('terminal-engine-tag');
-                const counterEl = document.getElementById('terminal-line-counter');
-                const linesEl = document.getElementById('terminal-code-lines');
-
-                if (fileEl && snip.filename) fileEl.textContent = snip.filename;
-                if (engineEl && snip.engineTag) engineEl.innerHTML = snip.engineTag;
-                if (counterEl && snip.lineCount) counterEl.textContent = snip.lineCount;
-
-                if (linesEl && snip.lines) {
-                    linesEl.innerHTML = snip.lines.map(l => {
-                        const highlighted = this.highlightSyntax(l.code);
-                        return `
-                        <div class="t-code-line ${l.active ? 't-active' : ''} ${l.vuln ? 't-vuln' : ''} ${l.comment ? 't-comment' : ''}">
-                            <span class="t-ln">${l.ln}</span>
-                            <span class="t-code">${highlighted}</span>
-                            ${l.vuln ? `
-                                <span class="t-vuln-badge cwe-badge">
-                                    ${Icons.get('warning', 'size-3')} ${l.vuln}
-                                </span>
-                            ` : ''}
-                        </div>
-                    `;
-                    }).join('');
-                }
+                this.renderLiveCodeSnippet(snip);
             }
         }
     },
