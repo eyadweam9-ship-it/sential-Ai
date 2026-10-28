@@ -1,18 +1,16 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Add New Admin | Sential AI</title>
-  <script>
-    (function() {
-      var savedTheme = localStorage.getItem('sential_theme') || 'dark';
-      document.documentElement.setAttribute('data-theme', savedTheme);
-    })();
-  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/dashboard.css">
-  <link rel="stylesheet" href="css/cyber-dark.css">
+  <script src="../assets/js/i18n.js"></script>
 </head>
 <body class="sential-dashboard">
 
@@ -33,7 +31,7 @@
     </a>
 
     <div style="display: flex; align-items: center; gap: 12px;">
-      <div id="adminThemeContainer"></div>
+      <div id="adminLangToggleContainer"></div>
       <a href="Admin-management.html" class="dashboard-btn">
         Admin Management
       </a>
@@ -121,12 +119,6 @@
 
   </main>
 
-  <script src="js/theme.js"></script>
-  <script>
-    if (document.getElementById('adminThemeContainer') && typeof ThemeManager !== 'undefined') {
-      document.getElementById('adminThemeContainer').innerHTML = ThemeManager.renderButton();
-    }
-  </script>
   <script src="js/add-admin.js"></script>
 </body>
 </html>

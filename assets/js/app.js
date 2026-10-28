@@ -340,6 +340,7 @@ const App = {
     activeSeverityFilter: '',
     activeStatusFilter: '',
     activeSearchQuery: '',
+    isDarkMode: false,
 
     // Dynamically retrieve the logged-in client's credentials (never hardcoded)
     getCurrentUser() {
@@ -353,6 +354,7 @@ const App = {
     },
 
     async init() {
+        this.initTheme();
         this.currentUser = API.getUser();
 
         if (API.getToken()) {
@@ -412,6 +414,189 @@ const App = {
         });
     },
 
+    // =========================================================
+    // CYBER TACTICAL THEME ENGINE (DEFENSE GRID vs STEALTH OPS)
+    // =========================================================
+    initTheme() {
+        try {
+            const saved = localStorage.getItem('sential_theme');
+            if (saved === 'dark') {
+                this.isDarkMode = true;
+            } else if (saved === 'light') {
+                this.isDarkMode = false;
+            } else {
+                this.isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            }
+        } catch (e) {
+            this.isDarkMode = false;
+        }
+        this.applyTheme(false);
+    },
+
+    applyTheme(triggerSound = false) {
+        const theme = this.isDarkMode ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', theme);
+        document.body.setAttribute('data-theme', theme);
+        if (this.isDarkMode) {
+            document.body.classList.add('dark-theme');
+        } else {
+            document.body.classList.remove('dark-theme');
+        }
+        try {
+            localStorage.setItem('sential_theme', theme);
+        } catch (e) {}
+
+        if (triggerSound) {
+            this.playCyberSound(this.isDarkMode);
+        }
+
+        // Keep Progress Orb colors in sync with theme changes
+        const orbEl = document.querySelector('.progress-orb');
+        if (orbEl && this.scanState) {
+            const p = this.scanState.progress || 0;
+            const isDone = p >= 100 || (this.scanState.status === 'completed');
+            const orbColor = this.isDarkMode ? '#38bdf8' : '#2563eb';
+            const bgCutout = this.isDarkMode ? '#0c1424' : '#ffffff';
+            const bgTrack = this.isDarkMode ? '#1a273e' : '#e9eff6';
+            if (isDone) {
+                orbEl.style.background = `radial-gradient(closest-side, ${bgCutout} 72%, transparent 73% 99%), conic-gradient(${orbColor} 100%, ${orbColor} 100%)`;
+                orbEl.classList.add('completed');
+            } else {
+                orbEl.style.background = `radial-gradient(closest-side, ${bgCutout} 72%, transparent 73% 99%), conic-gradient(${orbColor} ${p}%, ${bgTrack} 0)`;
+                orbEl.classList.remove('completed');
+            }
+        }
+
+        // Update all active theme toggles seamlessly without tearing down page DOM
+        document.querySelectorAll('.theme-toggle-wrap, .cyber-tactical-hud-wrap').forEach(wrap => {
+            const temp = document.createElement('div');
+            temp.innerHTML = this.renderCyberThemeToggle();
+            const newEl = temp.firstElementChild;
+            if (newEl && wrap.parentNode) {
+                wrap.parentNode.replaceChild(newEl, wrap);
+            }
+        });
+    },
+
+    toggleCyberTheme(event) {
+        this.isDarkMode = !this.isDarkMode;
+        this.spawnEmpWave(event);
+        this.applyTheme(true);
+        const modeLabel = this.isDarkMode ? 'Dark Mode' : 'Light Mode';
+        const icon = this.isDarkMode ? '🌙' : '☀️';
+        showToast(`${icon} ${modeLabel}`, 'info');
+    },
+
+    spawnEmpWave(event) {
+        try {
+            let x = window.innerWidth / 2;
+            let y = 60;
+            if (event && (event.clientX || event.clientY)) {
+                x = event.clientX;
+                y = event.clientY;
+            } else {
+                const btn = document.querySelector('.cyber-tactical-switch');
+                if (btn) {
+                    const rect = btn.getBoundingClientRect();
+                    x = rect.left + rect.width / 2;
+                    y = rect.top + rect.height / 2;
+                }
+            }
+            const wave = document.createElement('div');
+            wave.className = 'cyber-emp-shockwave';
+            wave.style.left = `${x}px`;
+            wave.style.top = `${y}px`;
+            document.body.appendChild(wave);
+            setTimeout(() => {
+                if (wave.parentNode) wave.parentNode.removeChild(wave);
+            }, 750);
+        } catch (e) {
+            console.warn('EMP Wave error', e);
+        }
+    },
+
+    playCyberSound(isDark) {
+        try {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) return;
+            const ctx = new AudioContextClass();
+            if (ctx.state === 'suspended') {
+                ctx.resume();
+            }
+            const now = ctx.currentTime;
+            if (isDark) {
+                // STEALTH OPS: Night vision power-up frequency sweep
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                const filter = ctx.createBiquadFilter();
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(140, now);
+                osc.frequency.exponentialRampToValueAtTime(780, now + 0.16);
+                osc.frequency.exponentialRampToValueAtTime(520, now + 0.28);
+
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(400, now);
+                filter.frequency.linearRampToValueAtTime(1200, now + 0.18);
+                filter.Q.value = 4.0;
+
+                gain.gain.setValueAtTime(0.001, now);
+                gain.gain.linearRampToValueAtTime(0.18, now + 0.04);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.32);
+
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.34);
+            } else {
+                // DEFENSE GRID: Double high affirmative sonar beep
+                [0, 0.09].forEach((delay, idx) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(idx === 0 ? 680 : 960, now + delay);
+                    gain.gain.setValueAtTime(0.001, now + delay);
+                    gain.gain.linearRampToValueAtTime(0.14, now + delay + 0.015);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, now + delay + 0.08);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(now + delay);
+                    osc.stop(now + delay + 0.09);
+                });
+            }
+        } catch (e) {
+            // Safe fallback
+        }
+    },
+
+    renderCyberThemeToggle() {
+        const isDark = !!this.isDarkMode;
+        return `
+            <div class="theme-toggle-wrap">
+                <button type="button" class="theme-icon-btn ${isDark ? 'is-dark' : 'is-light'}" onclick="App.toggleCyberTheme(event)" title="${isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}" aria-label="Toggle theme">
+                    ${isDark ? 
+                        Icons.get('moon', 'size-5 theme-svg-moon') : 
+                        Icons.get('sun', 'size-5 theme-svg-sun')}
+                </button>
+            </div>
+        `;
+    },
+
+    renderLanguageToggle() {
+        if (window.I18n && typeof window.I18n.renderToggle === 'function') {
+            return window.I18n.renderToggle();
+        }
+        return '';
+    },
+
+    toggleLanguage(event) {
+        if (window.I18n && typeof window.I18n.toggleLang === 'function') {
+            window.I18n.toggleLang(event);
+        }
+    },
+
     navigate(viewName, updateHash = true) {
         // Enforce strictly sequential progression: prevent jumping ahead to locked steps
         const targetStep = STEPS.find(s => s.id === viewName);
@@ -446,28 +631,33 @@ const App = {
 
         if (this.currentView === 'welcome') {
             root.innerHTML = this.renderWelcomeView();
-            if (typeof ZenConstellation !== 'undefined') {
-                ZenConstellation.init('zen-constellation-canvas');
-            }
+        } else if (this.currentView === 'signup') {
+            root.innerHTML = this.renderSignupView();
+            this.clearInputs(['signup-firstname', 'signup-lastname', 'signup-email', 'signup-password', 'signup-confirm']);
+            this.bindValidationListeners('signup');
+        } else if (this.currentView === 'login') {
+            root.innerHTML = this.renderLoginView();
+            this.clearInputs(['login-email', 'login-password']);
+            this.bindValidationListeners('login');
         } else {
-            if (typeof ZenConstellation !== 'undefined') {
-                ZenConstellation.destroy();
-            }
-            if (this.currentView === 'signup') {
-                root.innerHTML = this.renderSignupView();
-                this.clearInputs(['signup-firstname', 'signup-lastname', 'signup-email', 'signup-password', 'signup-confirm']);
-                this.bindValidationListeners('signup');
-            } else if (this.currentView === 'login') {
-                root.innerHTML = this.renderLoginView();
-                this.clearInputs(['login-email', 'login-password']);
-                this.bindValidationListeners('login');
-            } else {
-                root.innerHTML = this.renderAppShell();
-            }
+            root.innerHTML = this.renderAppShell();
         }
 
-        if (typeof ThemeManager !== 'undefined') {
-            ThemeManager.updateButtons();
+        // Strictly attach Cyber Constellation matrix in Welcome view ONLY
+        if (window.CyberMatrix) {
+            if (this.currentView === 'welcome') {
+                window.CyberMatrix.attach('cyber-welcome-canvas', {
+                    nodeCount: window.innerWidth < 768 ? 28 : 54,
+                    maxDistance: window.innerWidth < 768 ? 120 : 165,
+                    drawPackets: true,
+                    packetCount: 5,
+                    ambientLight: true
+                });
+            } else {
+                window.CyberMatrix.destroy('cyber-welcome-canvas');
+                window.CyberMatrix.destroy('cyber-auth-canvas');
+                window.CyberMatrix.destroy('cyber-app-canvas');
+            }
         }
 
         if (this.currentView === 'dashboard') {
@@ -482,6 +672,10 @@ const App = {
             this.ensureAuthLoaded();
         } else if (this.currentView === 'report') {
             this.loadReportData();
+        }
+
+        if (window.I18n && typeof window.I18n.translateDOM === 'function') {
+            window.I18n.translateDOM(document.body);
         }
     },
 
@@ -696,11 +890,19 @@ const App = {
     renderWelcomeView() {
         return `
             <div class="welcome-page">
-                <canvas id="zen-constellation-canvas" class="zen-constellation-canvas"></canvas>
+                <!-- DarkEntry-style Cyber Constellation & Neural Network Canvas -->
+                <div class="cyber-canvas-container">
+                    <canvas id="cyber-welcome-canvas" class="cyber-background-canvas"></canvas>
+                    <div class="cyber-ambient-glow glow-cyan"></div>
+                    <div class="cyber-ambient-glow glow-emerald"></div>
+                    <div class="cyber-ambient-glow glow-violet"></div>
+                </div>
+
                 <header class="welcome-nav">
                     ${renderBrandLogo()}
-                    <div class="flex items-center gap-2">
-                        ${typeof ThemeManager !== 'undefined' ? ThemeManager.renderButton() : ''}
+                    <div class="flex items-center gap-3">
+                        ${this.renderLanguageToggle()}
+                        ${this.renderCyberThemeToggle()}
                         <button class="button button-ghost" onclick="App.navigate('login')">Log in</button>
                         <button class="button button-primary" onclick="App.navigate('signup')">Start free</button>
                     </div>
@@ -741,8 +943,16 @@ const App = {
                     </div>
 
                     <div class="hero-product">
-                        <div class="orbit orbit-one"></div>
-                        <div class="orbit orbit-two"></div>
+                        <!-- Animated Defense Radar Orbits -->
+                        <div class="orbit orbit-one">
+                            <span class="orbit-satellite sat-one"></span>
+                        </div>
+                        <div class="orbit orbit-two">
+                            <span class="orbit-satellite sat-two"></span>
+                        </div>
+                        <div class="orbit orbit-three">
+                            <span class="orbit-satellite sat-three"></span>
+                        </div>
                         <div class="scan-card">
                             <div class="scan-card-head">
                                 <div class="flex items-center gap-3">
@@ -828,11 +1038,12 @@ const App = {
     renderSignupView() {
         return `
             <div class="auth-shell">
-                <div style="position: fixed; top: 1.5rem; right: 2rem; z-index: 100;">
-                    ${typeof ThemeManager !== 'undefined' ? ThemeManager.renderButton() : ''}
-                </div>
                 <div class="auth-brand">
                     ${renderBrandLogo()}
+                </div>
+                <div style="position: absolute; top: 2.5rem; right: 3rem; z-index: 10; display: flex; align-items: center; gap: 0.75rem;">
+                    ${this.renderLanguageToggle()}
+                    ${this.renderCyberThemeToggle()}
                 </div>
 
                 <div class="auth-visual">
@@ -954,11 +1165,12 @@ const App = {
     renderLoginView() {
         return `
             <div class="auth-shell">
-                <div style="position: fixed; top: 1.5rem; right: 2rem; z-index: 100;">
-                    ${typeof ThemeManager !== 'undefined' ? ThemeManager.renderButton() : ''}
-                </div>
                 <div class="auth-brand">
                     ${renderBrandLogo()}
+                </div>
+                <div style="position: absolute; top: 2.5rem; right: 3rem; z-index: 10; display: flex; align-items: center; gap: 0.75rem;">
+                    ${this.renderLanguageToggle()}
+                    ${this.renderCyberThemeToggle()}
                 </div>
 
                 <div class="auth-visual">
@@ -1136,7 +1348,8 @@ const App = {
                         </div>
 
                         <div class="ml-auto flex items-center gap-3">
-                            ${typeof ThemeManager !== 'undefined' ? ThemeManager.renderButton() : ''}
+                            ${this.renderLanguageToggle()}
+                            ${this.renderCyberThemeToggle()}
                             <button type="button" class="topbar-logout-btn" onclick="App.handleLogout()" title="Log out">
                                 ${Icons.get('logout', 'size-4')}
                             </button>
@@ -1164,6 +1377,13 @@ const App = {
         this.scanState.uploadedFile = null;
         this.scanState.name = '';
         this.scanState.url = '';
+        this.scanState.progress = 0;
+        this.scanState.liveCodeStream = [];
+        this.scanState.inspectorTick = 0;
+        if (this.scanState.timer) clearInterval(this.scanState.timer);
+        if (this.scanState.inspectorTimer) clearInterval(this.scanState.inspectorTimer);
+        this.scanState.timer = null;
+        this.scanState.inspectorTimer = null;
         this.scanState.confirmedAuthorization = false;
         this.scanState.showConfirmModal = false;
         this.scanState.maxUnlockedStep = 1;
@@ -2221,38 +2441,68 @@ const App = {
         const first = files[0];
         const folderName = first.webkitRelativePath ? first.webkitRelativePath.split('/')[0] : 'project_source';
         this.scanState.isUploading = true;
-        showToast(`Analyzing folder "${folderName}" (${files.length} items found)...`, 'info');
+
+        const isAr = window.I18n && window.I18n.currentLang === 'ar';
+        showToast(isAr ? `جاري فحص وتجهيز مجلد "${folderName}" (${files.length} ملف)...` : `Analyzing folder "${folderName}" (${files.length} items found)...`, 'info');
 
         try {
             const formData = new FormData();
             formData.append('folderName', folderName);
 
+            const IGNORED_SEGMENTS = [
+                'node_modules', '.git', '.github', '.vscode', '.idea',
+                'dist', 'build', '.next', '.nuxt', 'out', 'coverage',
+                'vendor', 'venv', '.venv', 'env', '__pycache__',
+                'storage', 'uploads', '.cache', '.turbo', '.svn', '.gemini'
+            ];
+
+            const EXCLUDED_EXTS = [
+                '.rar', '.zip', '.7z', '.tar', '.gz', '.iso', '.exe', '.dll', '.bin',
+                '.mp4', '.avi', '.mov', '.wmv', '.mkv', '.webm',
+                '.mp3', '.wav', '.ogg',
+                '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.svg', '.bmp', '.tiff',
+                '.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx',
+                '.db', '.sqlite', '.sqlite3', '.db-journal',
+                '.woff', '.woff2', '.ttf', '.eot', '.otf',
+                '.map'
+            ];
+
             let addedCount = 0;
             for (let i = 0; i < files.length; i++) {
                 const f = files[i];
                 const relPath = f.webkitRelativePath || f.name;
-                // Exclude massive binary/cache directories
-                if (relPath.includes('node_modules/') || relPath.includes('node_modules\\') ||
-                    relPath.includes('/.git/') || relPath.includes('\\.git\\') ||
-                    relPath.includes('/dist/') || relPath.includes('\\dist\\') ||
-                    relPath.includes('/.next/') || relPath.includes('\\.next\\') ||
-                    relPath.includes('/build/') || relPath.includes('\\build\\') ||
-                    relPath.includes('/coverage/') || relPath.includes('\\coverage\\')) {
-                    continue;
-                }
+                const normalized = relPath.replace(/\\/g, '/');
+                const lower = normalized.toLowerCase();
+
+                // Check directory segments
+                const segments = lower.split('/');
+                const hasIgnoredDir = segments.some(seg => IGNORED_SEGMENTS.includes(seg));
+                if (hasIgnoredDir) continue;
+
+                // Check extension
+                const isExcludedExt = EXCLUDED_EXTS.some(ext => lower.endsWith(ext));
+                if (isExcludedExt) continue;
+
+                // Skip single files larger than 10MB
+                if (f.size > 10 * 1024 * 1024) continue;
+
                 formData.append('files', f);
                 formData.append('paths', relPath);
                 addedCount++;
-                if (addedCount >= 950) break; // support up to 950 files
+                if (addedCount >= 2000) break; // support up to 2000 code files
             }
 
             if (addedCount === 0) {
-                showToast(`No source code files found in "${folderName}". (Cache and node_modules are excluded).`, 'error');
+                showToast(isAr 
+                    ? `لم يتم العثور على ملفات أكواد صالحة في "${folderName}". تم استبعاد مجلدات الكاش ومكتبات node_modules.` 
+                    : `No valid source code files found in "${folderName}". (Cache and node_modules are excluded).`, 'error');
                 this.scanState.isUploading = false;
                 return;
             }
 
-            showToast(`Uploading ${addedCount} source files from "${folderName}"...`, 'info');
+            showToast(isAr 
+                ? `جاري رفع ${addedCount} ملف كود مصدري من "${folderName}"...` 
+                : `Uploading ${addedCount} source files from "${folderName}"...`, 'info');
             const res = await API.uploadFolder(formData);
 
             if (res.file) {
@@ -3751,6 +4001,17 @@ const App = {
             if (res.scan && res.scan.id) {
                 this.scanState.currentScanId = res.scan.id;
             }
+
+            // Fresh state initialization for newly launched assessment
+            this.scanState.progress = 15;
+            this.scanState.liveCodeStream = [];
+            this.scanState.inspectorTick = 0;
+            this.scanState.scanStartTime = Date.now();
+            if (this.scanState.timer) clearInterval(this.scanState.timer);
+            if (this.scanState.inspectorTimer) clearInterval(this.scanState.inspectorTimer);
+            this.scanState.timer = null;
+            this.scanState.inspectorTimer = null;
+
             this.findingsData = [];
             this.selectedFindingId = null;
 
@@ -3778,6 +4039,7 @@ const App = {
     // =========================================================
     renderProgressStep() {
         const p = this.scanState.progress || 15;
+        const isCompleted = p >= 100;
         const env = (this.scanState.environment || 'development').toLowerCase();
         const mode = this.scanState.scanType || 'scan_only';
         const isScanOnly = mode === 'scan_only';
@@ -3787,6 +4049,21 @@ const App = {
             ? (this.scanState.uploadedFile?.name || 'Local Code Repository')
             : ((this.scanState.url || 'aymanaboelela.com').replace(/^https?:\/\//, '').replace(/\/.*$/, '') || 'aymanaboelela.com');
 
+        const firstSnip = (this.scanState.liveCodeStream && this.scanState.liveCodeStream.length > 0)
+            ? this.scanState.liveCodeStream[0]
+            : null;
+
+        const defaultFileName = firstSnip?.filename || (isDev ? (this.scanState.uploadedFile?.name || 'source_code') : `${targetHost}/api/probe`);
+        const defaultEngine = firstSnip?.engineTag || (isDev ? 'Multi-Tool SAST Pipeline' : 'OWASP ZAP · Active DAST Probe');
+        const defaultCounter = firstSnip?.lineCount || (isCompleted ? 'Inspection complete' : 'Initializing AST stream...');
+
+        const orbColor = this.isDarkMode ? '#38bdf8' : '#2563eb';
+        const bgCutout = this.isDarkMode ? '#0c1424' : '#ffffff';
+        const bgTrack = this.isDarkMode ? '#1a273e' : '#e9eff6';
+        const orbBackground = isCompleted
+            ? `radial-gradient(closest-side, ${bgCutout} 72%, transparent 73% 99%), conic-gradient(${orbColor} 100%, ${orbColor} 100%)`
+            : `radial-gradient(closest-side, ${bgCutout} 72%, transparent 73% 99%), conic-gradient(${orbColor} ${p}%, ${bgTrack} 0)`;
+
         return `
             ${renderPageTitle({
                 eyebrow: isScanOnly ? 'Scan Only · Multi-Tool Engine Active' : 'Full Lifecycle Assessment · Running',
@@ -3794,7 +4071,11 @@ const App = {
                 copy: isScanOnly 
                     ? 'Running independent multi-tool vulnerability inspection. Findings are cataloged in real-time with zero code modifications.' 
                     : 'Running full multi-tool assessment pipeline with AI threat intelligence and verification.',
-                action: `
+                action: isCompleted ? `
+                    <button type="button" class="button button-primary" id="btn-stop-assessment" onclick="App.proceedToDashboard()">
+                        View findings dashboard ${Icons.get('arrow', 'size-4')}
+                    </button>
+                ` : `
                     <button type="button" class="button button-danger" id="btn-stop-assessment" onclick="App.stopAssessment()">
                         ${Icons.get('x', 'size-4')} Stop assessment
                     </button>
@@ -3802,41 +4083,116 @@ const App = {
             })}
 
             <div class="progress-layout">
-                <!-- Left: Progress Orb & Stats -->
+                <!-- Left: Progress Header & Live Code Inspector Terminal -->
                 <div class="progress-main-card">
-                    <div class="progress-orb" style="background: radial-gradient(closest-side, var(--bg-card, #0c1424) 80%, transparent 81% 99%), conic-gradient(#2563eb ${p}%, var(--border-hairline, #1c2e4a) 0);">
-                        <div>
-                            <strong id="progress-percent-text">${p}%</strong>
-                            <span id="progress-status-sub">${p >= 100 ? 'Complete' : 'Scanning'}</span>
+                    <!-- Compact Card Header with Mini Gauge & Stats -->
+                    <div class="progress-header-row">
+                        <div class="progress-header-main">
+                            <div class="progress-orb mini-orb ${isCompleted ? 'completed' : ''}" id="progress-mini-orb" style="background: ${orbBackground};">
+                                <div>
+                                    <strong id="progress-percent-text">${p}%</strong>
+                                </div>
+                            </div>
+                            <div class="progress-header-titles">
+                                <div class="flex items-center gap-2">
+                                    <h2 id="progress-scan-title">${isDev ? 'Scanning Code for Vulnerabilities' : (isHybrid ? 'Hybrid DAST &amp; SAST Assessment' : 'Scanning for Vulnerabilities')}</h2>
+                                    <span class="status ${isCompleted ? 'status-safe' : 'status-running'}" id="progress-status-sub">${isCompleted ? 'Complete' : 'Scanning'}</span>
+                                </div>
+                                <p class="target-sub-line">Target: <b>${escapeHtml(targetHost)}</b> &middot; <span class="text-slate-400">${isDev ? 'Static Analysis SAST' : (isHybrid ? 'Hybrid DAST + SAST' : env.toUpperCase())}</span></p>
+                            </div>
+                        </div>
+
+                        <!-- Mini Stats Cluster -->
+                        <div class="stats-mini-cluster">
+                            <div class="stat-mini-item">
+                                <span class="lbl">Elapsed</span>
+                                <b id="progress-elapsed-timer">00:00</b>
+                            </div>
+                            <div class="stat-mini-item">
+                                <span class="lbl">Remaining</span>
+                                <b id="progress-remaining-timer">${isCompleted ? '00:00' : '~00:45'}</b>
+                            </div>
+                            <div class="stat-mini-item">
+                                <span class="lbl">Active Tool</span>
+                                <b id="progress-tests-count">${isCompleted ? 'AUDITED' : (isDev ? 'SEMGREP' : 'OWASP_ZAP')}</b>
+                            </div>
                         </div>
                     </div>
-                    <h2>${isDev ? 'Scanning Code for Vulnerabilities' : (isHybrid ? 'Hybrid DAST &amp; SAST Assessment' : 'Scanning for Vulnerabilities')}</h2>
-                    <p>Actively inspecting <b>${escapeHtml(targetHost)}</b> (${isDev ? 'Static Analysis SAST' : (isHybrid ? 'Hybrid DAST + SAST' : env.toUpperCase())})</p>
 
-                    <div class="stats-row">
-                        <div>
-                            <b id="progress-elapsed-timer">00:00</b>
-                            <span>Elapsed</span>
+                    <!-- Live Code Inspector Terminal Window -->
+                    <div class="code-terminal-window ${isCompleted ? 'completed' : ''}" onclick="App.nextCodeSnippet()" style="cursor: pointer;" title="Click to view next scanned code file">
+                        <!-- Terminal Window Top Bar -->
+                        <div class="terminal-topbar">
+                            <div class="terminal-dots">
+                                <span class="t-dot red"></span>
+                                <span class="t-dot yellow"></span>
+                                <span class="t-dot green"></span>
+                            </div>
+                            <div class="terminal-tab">
+                                ${Icons.get('folder', 'size-3.5 text-sky-400')}
+                                <span class="terminal-file-name" id="terminal-active-filename">${escapeHtml(defaultFileName)}</span>
+                                ${isCompleted ? `
+                                    <span class="terminal-status-tag completed" id="terminal-inspect-indicator">
+                                        ${Icons.get('check', 'size-3 text-emerald-400')} ANALYSIS COMPLETE
+                                    </span>
+                                ` : `
+                                    <span class="terminal-status-tag" id="terminal-inspect-indicator">
+                                        <span class="pulse-cyan-dot"></span> INSPECTING
+                                    </span>
+                                `}
+                            </div>
+                            <div class="terminal-meta">
+                                <span class="terminal-tag" id="terminal-engine-tag">${defaultEngine}</span>
+                                <span class="terminal-tag" id="terminal-line-counter">${escapeHtml(defaultCounter)}</span>
+                            </div>
                         </div>
-                        <div>
-                            <b id="progress-remaining-timer">~00:45</b>
-                            <span>Remaining</span>
-                        </div>
-                        <div>
-                            <b id="progress-tests-count">${isDev ? 'SAST Engine' : 'DAST Engine'}</b>
-                            <span id="progress-tests-sub">Active Tool</span>
-                        </div>
-                    </div>
 
-                    <div class="live-line">
-                        <span class="pulse-dot" id="progress-pulse-dot"></span>
-                        <code id="progress-live-code">${isDev ? 'SEMGREP' : 'OWASP_ZAP'}</code>
-                        <span id="progress-live-message">Initializing multi-tool security engine...</span>
+                        <!-- Terminal Code Viewport with Laser Beam -->
+                        <div class="terminal-viewport">
+                            <!-- Scanning Laser Beam -->
+                            <div class="scanning-laser-beam"></div>
+
+                            <!-- Live Code Lines -->
+                            <div class="terminal-code-lines" id="terminal-code-lines">
+                                ${firstSnip && firstSnip.lines ? firstSnip.lines.map(l => `
+                                    <div class="t-code-line ${l.active ? 't-active' : ''} ${l.vuln ? 't-vuln' : ''} ${l.comment ? 't-comment' : ''}">
+                                        <span class="t-ln">${l.ln}</span>
+                                        <span class="t-code">${this.highlightSyntax(l.code)}</span>
+                                        ${l.vuln ? `
+                                            <span class="t-vuln-badge cwe-badge">
+                                                ${Icons.get('warning', 'size-3')} ${l.vuln}
+                                            </span>
+                                        ` : ''}
+                                    </div>
+                                `).join('') : `
+                                    <div class="t-code-line t-active"><span class="t-ln">1</span><span class="t-code"><span class="cm">// Launching multi-tool AST security scanner...</span></span></div>
+                                    <div class="t-code-line"><span class="t-ln">2</span><span class="t-code"><span class="cm">// Streaming real codebase files and vulnerability detections...</span></span></div>
+                                `}
+                            </div>
+                        </div>
+
+                        <!-- Terminal Window Footer -->
+                        <div class="terminal-footer">
+                            <div class="terminal-footer-left">
+                                ${isCompleted ? `
+                                    <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#10b981; box-shadow:0 0 8px rgba(16,185,129,0.6);" id="progress-pulse-dot"></span>
+                                    <code id="progress-live-code">COMPLETED</code>
+                                    <span id="progress-live-message">Assessment completed. All security rules and AST engines finished.</span>
+                                ` : `
+                                    <span class="pulse-dot" id="progress-pulse-dot"></span>
+                                    <code id="progress-live-code">${isDev ? 'SEMGREP' : 'OWASP_ZAP'}</code>
+                                    <span id="progress-live-message">Auditing database queries and taint-sink data flows...</span>
+                                `}
+                            </div>
+                            <div class="terminal-footer-right">
+                                <span class="terminal-sub-tag" id="terminal-vuln-counter">${isCompleted ? 'Audited &amp; Cataloged' : 'Active AST Rule Scanner'}</span>
+                            </div>
+                        </div>
                     </div>
 
                     ${!isDev ? `
                         <!-- Website Discovery Summary Box in Step 4 -->
-                        <div class="mt-4 pt-4 border-t border-slate-100 text-left">
+                        <div class="mt-4 pt-3 border-t border-slate-100 text-left">
                             <div class="flex items-center justify-between text-xs text-slate-500 font-semibold mb-2">
                                 <span class="flex items-center gap-1.5">${Icons.get('globe', 'size-3.5 text-blue-600')} Website Discovery &amp; Crawling</span>
                                 <span class="text-emerald-600 flex items-center gap-1">${Icons.get('check', 'size-3')} Sitemap &amp; Robots OK</span>
@@ -3867,65 +4223,65 @@ const App = {
                 <div class="stage-card">
                     <div class="flex items-center justify-between mb-2">
                         <h2>Assessment progress</h2>
-                        <span class="status status-running" id="progress-engine-mode-badge">
+                        <span class="status ${isCompleted ? 'status-safe' : 'status-running'}" id="progress-engine-mode-badge">
                             <span></span> ${isScanOnly ? 'Scan Only' : (isHybrid ? 'Hybrid Pipeline' : 'Full Pipeline')}
                         </span>
                     </div>
 
                     <div class="stage-list" id="progress-stage-list">
                         ${isDev ? `
-                            <div class="stage active" id="prog-stage-SEMGREP">
-                                <span class="stage-marker" id="prog-marker-SEMGREP"><span class="spinner"></span></span>
+                            <div class="stage ${isCompleted ? '' : 'active'}" id="prog-stage-SEMGREP">
+                                <span class="stage-marker" id="prog-marker-SEMGREP">${isCompleted ? Icons.get('check', 'size-4 text-emerald-600') : '<span class="spinner"></span>'}</span>
                                 <div>
                                     <b>Semgrep (SAST Engine)</b>
                                     <p id="prog-desc-SEMGREP">Static AST code taint &amp; vulnerability pattern analysis</p>
                                 </div>
-                                <span class="status status-running" id="prog-badge-SEMGREP">Running</span>
+                                <span class="status ${isCompleted ? 'status-safe' : 'status-running'}" id="prog-badge-SEMGREP">${isCompleted ? 'Completed' : 'Running'}</span>
                             </div>
 
                             <div class="stage" id="prog-stage-CODEQL">
-                                <span class="stage-marker" id="prog-marker-CODEQL">2</span>
+                                <span class="stage-marker" id="prog-marker-CODEQL">${isCompleted ? Icons.get('check', 'size-4 text-emerald-600') : '2'}</span>
                                 <div>
                                     <b>CodeQL (Data-Flow SAST)</b>
                                     <p id="prog-desc-CODEQL">Deep inter-procedural taint flows (Source -> Sanitizer -> Sink)</p>
                                 </div>
-                                <span class="status" id="prog-badge-CODEQL" style="color:#64748b;">Pending</span>
+                                <span class="status ${isCompleted ? 'status-safe' : ''}" id="prog-badge-CODEQL" style="${isCompleted ? '' : 'color:#64748b;'}">${isCompleted ? 'Completed' : 'Pending'}</span>
                             </div>
 
                             <div class="stage" id="prog-stage-GITLEAKS">
-                                <span class="stage-marker" id="prog-marker-GITLEAKS">3</span>
+                                <span class="stage-marker" id="prog-marker-GITLEAKS">${isCompleted ? Icons.get('check', 'size-4 text-emerald-600') : '3'}</span>
                                 <div>
                                     <b>Gitleaks (Secrets &amp; Credentials)</b>
                                     <p id="prog-desc-GITLEAKS">Scanning source files &amp; configurations for passwords &amp; tokens</p>
                                 </div>
-                                <span class="status" id="prog-badge-GITLEAKS" style="color:#64748b;">Pending</span>
+                                <span class="status ${isCompleted ? 'status-safe' : ''}" id="prog-badge-GITLEAKS" style="${isCompleted ? '' : 'color:#64748b;'}">${isCompleted ? 'Completed' : 'Pending'}</span>
                             </div>
 
                             <div class="stage" id="prog-stage-CHECKOV">
-                                <span class="stage-marker" id="prog-marker-CHECKOV">4</span>
+                                <span class="stage-marker" id="prog-marker-CHECKOV">${isCompleted ? Icons.get('check', 'size-4 text-emerald-600') : '4'}</span>
                                 <div>
                                     <b>Checkov (IaC &amp; Posture)</b>
                                     <p id="prog-desc-CHECKOV">Dockerfile, Kubernetes &amp; container posture audit</p>
                                 </div>
-                                <span class="status" id="prog-badge-CHECKOV" style="color:#64748b;">Pending</span>
+                                <span class="status ${isCompleted ? 'status-safe' : ''}" id="prog-badge-CHECKOV" style="${isCompleted ? '' : 'color:#64748b;'}">${isCompleted ? 'Skipped' : 'Pending'}</span>
                             </div>
 
                             <div class="stage" id="prog-stage-TRIVY">
-                                <span class="stage-marker" id="prog-marker-TRIVY">5</span>
+                                <span class="stage-marker" id="prog-marker-TRIVY">${isCompleted ? Icons.get('check', 'size-4 text-emerald-600') : '5'}</span>
                                 <div>
                                     <b>Supply Chain (Trivy, OSV &amp; npm audit)</b>
                                     <p id="prog-desc-TRIVY">Dependency manifests validation &amp; CVE advisory database</p>
                                 </div>
-                                <span class="status" id="prog-badge-TRIVY" style="color:#64748b;">Pending</span>
+                                <span class="status ${isCompleted ? 'status-safe' : ''}" id="prog-badge-TRIVY" style="${isCompleted ? '' : 'color:#64748b;'}">${isCompleted ? 'Completed' : 'Pending'}</span>
                             </div>
 
                             <div class="stage" id="prog-stage-AI">
-                                <span class="stage-marker" id="prog-marker-AI">6</span>
+                                <span class="stage-marker" id="prog-marker-AI">${isCompleted ? Icons.get('check', 'size-4 text-emerald-600') : '6'}</span>
                                 <div>
                                     <b>SentinelAI Correlation Engine</b>
                                     <p id="prog-desc-AI">Cross-tool deduplication, evidence validation &amp; AI triage</p>
                                 </div>
-                                <span class="status" id="prog-badge-AI" style="color:#64748b;">Queued</span>
+                                <span class="status ${isCompleted ? 'status-safe' : ''}" id="prog-badge-AI" style="${isCompleted ? '' : 'color:#64748b;'}">${isCompleted ? 'Completed' : 'Queued'}</span>
                             </div>
                         ` : `
                             <div class="stage active" id="prog-stage-OWASP_ZAP">
@@ -4082,19 +4438,9 @@ const App = {
         if (this.scanState.timer) clearInterval(this.scanState.timer);
         this.scanState.scanStartTime = Date.now();
 
-        this.scanState.timer = setInterval(async () => {
-            if (this.currentView !== 'progress') {
-                clearInterval(this.scanState.timer);
-                return;
-            }
-
-            // 1. Live Ticking Elapsed Timer
-            const elapsedSec = Math.max(1, Math.floor((Date.now() - this.scanState.scanStartTime) / 1000));
-            const elMins = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
-            const elSecs = String(elapsedSec % 60).padStart(2, '0');
-            const elTimer = document.getElementById('progress-elapsed-timer');
-            if (elTimer) elTimer.textContent = `${elMins}:${elSecs}`;
-
+        // Immediate first poll to eliminate any lag in loading real code and findings
+        const fetchProgress = async () => {
+            if (this.currentView !== 'progress') return;
             try {
                 const res = await API.getScanProgress(this.scanState.currentScanId);
                 if (res && res.scan) {
@@ -4104,6 +4450,7 @@ const App = {
                     // Remaining time estimate
                     const remTimer = document.getElementById('progress-remaining-timer');
                     if (remTimer) {
+                        const elapsedSec = Math.max(1, Math.floor((Date.now() - this.scanState.scanStartTime) / 1000));
                         if (this.scanState.progress >= 100 || scan.status === 'completed') {
                             remTimer.textContent = '00:00';
                         } else {
@@ -4119,20 +4466,36 @@ const App = {
                     const orbEl = document.querySelector('.progress-orb');
                     const txtEl = document.getElementById('progress-percent-text');
                     const subEl = document.getElementById('progress-status-sub');
+                    const isDone = this.scanState.progress >= 100 || scan.status === 'completed';
+
                     if (txtEl) txtEl.textContent = `${this.scanState.progress}%`;
-                    if (subEl) subEl.textContent = scan.status === 'completed' ? 'Complete' : (scan.status === 'cancelled' ? 'Halted' : 'Scanning');
-                    if (orbEl) {
-                        const orbColor = scan.status === 'cancelled' ? '#ea580c' : '#2563eb';
-                        orbEl.style.background = `radial-gradient(closest-side, var(--bg-card, #0c1424) 80%, transparent 81% 99%), conic-gradient(${orbColor} ${this.scanState.progress}%, var(--border-hairline, #1c2e4a) 0)`;
+                    if (subEl) {
+                        subEl.textContent = isDone ? 'Complete' : (scan.status === 'cancelled' ? 'Halted' : 'Scanning');
+                        subEl.className = isDone ? 'status status-safe' : (scan.status === 'cancelled' ? 'status status-low' : 'status status-running');
                     }
+                    if (orbEl) {
+                        const orbColor = scan.status === 'cancelled' ? '#ea580c' : (this.isDarkMode ? '#38bdf8' : '#2563eb');
+                        const bgCutout = this.isDarkMode ? '#0c1424' : '#ffffff';
+                        const bgTrack = this.isDarkMode ? '#1a273e' : '#e9eff6';
+                        if (isDone) {
+                            orbEl.style.background = `radial-gradient(closest-side, ${bgCutout} 72%, transparent 73% 99%), conic-gradient(${orbColor} 100%, ${orbColor} 100%)`;
+                            orbEl.classList.add('completed');
+                        } else {
+                            orbEl.style.background = `radial-gradient(closest-side, ${bgCutout} 72%, transparent 73% 99%), conic-gradient(${orbColor} ${this.scanState.progress}%, ${bgTrack} 0)`;
+                            orbEl.classList.remove('completed');
+                        }
+                    }
+
+                    // Live Terminal Code Inspector Stream with Real Project Code
+                    this.updateLiveCodeInspector(this.scanState.progress || 0, scan.liveCodeStream, scan);
 
                     // Live Line
                     const liveCode = document.getElementById('progress-live-code');
                     const liveMsg = document.getElementById('progress-live-message');
                     const liveTool = document.getElementById('progress-tests-count');
-                    if (liveCode && scan.activeTool) liveCode.textContent = scan.activeTool;
-                    if (liveMsg && scan.activeMessage) liveMsg.textContent = scan.activeMessage;
-                    if (liveTool && scan.activeTool) liveTool.textContent = scan.activeTool;
+                    if (liveCode && scan.activeTool && !isDone) liveCode.textContent = scan.activeTool;
+                    if (liveMsg && scan.activeMessage && !isDone) liveMsg.textContent = scan.activeMessage;
+                    if (liveTool && !isDone) liveTool.textContent = scan.activeTool || 'AST_SCAN';
 
                     // Live Ribbon Counters
                     if (scan.counts) {
@@ -4178,11 +4541,66 @@ const App = {
                     // Completed or Partial Handling
                     if (scan.status === 'completed' || scan.status === 'partial') {
                         clearInterval(this.scanState.timer);
+                        if (this.scanState.inspectorTimer) {
+                            clearInterval(this.scanState.inspectorTimer);
+                            this.scanState.inspectorTimer = null;
+                        }
                         this.scanState.progress = 100;
                         this.scanState.maxUnlockedStep = Math.max(this.scanState.maxUnlockedStep || 1, 7);
                         if (txtEl) txtEl.textContent = '100%';
-                        if (subEl) subEl.textContent = 'Complete';
-                        if (orbEl) orbEl.style.background = `radial-gradient(closest-side, #fff 80%, transparent 81% 99%), conic-gradient(#059669 100%, #e9eff6 0)`;
+                        if (subEl) {
+                            subEl.textContent = 'Complete';
+                            subEl.className = 'status status-safe';
+                        }
+                        const orbColor = this.isDarkMode ? '#38bdf8' : '#2563eb';
+                        const bgCutout = this.isDarkMode ? '#0c1424' : '#ffffff';
+                        if (orbEl) {
+                            orbEl.style.background = `radial-gradient(closest-side, ${bgCutout} 72%, transparent 73% 99%), conic-gradient(${orbColor} 100%, ${orbColor} 100%)`;
+                            orbEl.classList.add('completed');
+                        }
+
+                        // Stop code scanning and laser animation on screen
+                        const terminalEl = document.querySelector('.code-terminal-window');
+                        if (terminalEl) {
+                            terminalEl.classList.add('completed');
+                        }
+
+                        const indEl = document.getElementById('terminal-inspect-indicator');
+                        if (indEl) {
+                            indEl.innerHTML = `${Icons.get('check', 'size-3 text-emerald-400')} ANALYSIS COMPLETE`;
+                            indEl.className = 'terminal-status-tag completed';
+                        }
+
+                        const dot = document.getElementById('progress-pulse-dot');
+                        if (dot) {
+                            dot.classList.remove('pulse-dot');
+                            dot.style.background = '#10b981';
+                            dot.style.boxShadow = '0 0 8px rgba(16, 185, 129, 0.6)';
+                            dot.style.animation = 'none';
+                        }
+                        if (liveCode) liveCode.textContent = 'COMPLETED';
+                        if (liveMsg) liveMsg.textContent = 'Assessment completed. All security rules and AST engines finished.';
+                        if (liveTool) liveTool.textContent = 'AUDITED';
+
+                        // Ensure SentinelAI Correlation Engine (Tool 6) is marked Complete
+                        const aiBadge = document.getElementById('prog-badge-AI');
+                        const aiMarker = document.getElementById('prog-marker-AI');
+                        const aiStage = document.getElementById('prog-stage-AI');
+                        if (aiBadge) {
+                            aiBadge.textContent = 'Completed';
+                            aiBadge.className = 'status status-safe';
+                            aiBadge.style.color = '';
+                        }
+                        if (aiMarker) {
+                            aiMarker.innerHTML = Icons.get('check', 'size-4 text-emerald-600');
+                        }
+                        if (aiStage) {
+                            aiStage.className = 'stage';
+                        }
+
+                        // Remaining timer to 00:00
+                        const remTimer = document.getElementById('progress-remaining-timer');
+                        if (remTimer) remTimer.textContent = '00:00';
 
                         const stopBtn = document.getElementById('btn-stop-assessment');
                         if (stopBtn) {
@@ -4206,7 +4624,147 @@ const App = {
             } catch (e) {
                 console.warn('Progress poll error:', e);
             }
-        }, 1000);
+        };
+
+        // Fire initial fetch immediately
+        fetchProgress();
+
+        this.scanState.timer = setInterval(async () => {
+            if (this.currentView !== 'progress') {
+                clearInterval(this.scanState.timer);
+                return;
+            }
+
+            // 1. Live Ticking Elapsed Timer
+            const elapsedSec = Math.max(1, Math.floor((Date.now() - this.scanState.scanStartTime) / 1000));
+            const elMins = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
+            const elSecs = String(elapsedSec % 60).padStart(2, '0');
+            const elTimer = document.getElementById('progress-elapsed-timer');
+            if (elTimer) elTimer.textContent = `${elMins}:${elSecs}`;
+
+            await fetchProgress();
+        }, 1200);
+    },
+
+    highlightSyntax(raw) {
+        if (!raw) return '';
+        if (raw.includes('<span class=')) return raw;
+
+        // Escape HTML
+        let s = raw.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+        // Check if full comment line
+        if (/^\s*(\/\/|#|\/\*)/.test(s)) {
+            return `<span class="cm">${s}</span>`;
+        }
+
+        // Strings: single quotes, double quotes, backticks
+        s = s.replace(/('([^'\\]|\\.)*'|"([^"\\]|\\.)*"|`([^`\\]|\\.)*`)/g, '<span class="str">$1</span>');
+
+        // Keywords
+        const kwList = ['import', 'export', 'default', 'from', 'const', 'let', 'var', 'function', 'return', 'async', 'await', 'class', 'if', 'else', 'def', 'try', 'catch', 'throw', 'new', 'typeof', 'interface', 'type'];
+        const kwRegex = new RegExp(`\\b(${kwList.join('|')})\\b`, 'g');
+        s = s.replace(kwRegex, (match, p1, offset, fullStr) => {
+            const before = fullStr.slice(0, offset);
+            const inTag = (before.match(/<[^>]*$/) !== null);
+            const inSpan = (before.match(/<span class="str">[^<]*$/) !== null);
+            if (inTag || inSpan) return match;
+            return `<span class="kw">${match}</span>`;
+        });
+
+        return s;
+    },
+
+    updateLiveCodeInspector(progress = 0, liveStream = null, scan = null) {
+        if (liveStream && Array.isArray(liveStream) && liveStream.length > 0) {
+            this.scanState.liveCodeStream = liveStream;
+        }
+
+        const stream = (this.scanState.liveCodeStream && this.scanState.liveCodeStream.length > 0)
+            ? this.scanState.liveCodeStream
+            : null;
+
+        let snip = null;
+        if (stream && stream.length > 0) {
+            this.scanState.inspectorTick = (this.scanState.inspectorTick || 0) + 1;
+            const idx = Math.floor(this.scanState.inspectorTick % stream.length);
+            snip = stream[idx];
+        }
+
+        if (!snip) {
+            const fallbackName = this.scanState.uploadedFile?.name || (this.scanState.url ? this.scanState.url.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : 'source_code');
+            snip = {
+                filename: fallbackName,
+                engineTag: 'Security Inspection Engine &middot; Active',
+                lineCount: 'Live Analysis',
+                lines: [
+                    { ln: 1, code: "// Live AST security analysis in progress...", active: true },
+                    { ln: 2, code: "// Actively inspecting source files and configuration manifests..." }
+                ]
+            };
+        }
+
+        const fileEl = document.getElementById('terminal-active-filename');
+        const engineEl = document.getElementById('terminal-engine-tag');
+        const counterEl = document.getElementById('terminal-line-counter');
+        const linesEl = document.getElementById('terminal-code-lines');
+
+        if (fileEl && snip.filename) fileEl.textContent = snip.filename;
+        if (engineEl && snip.engineTag) engineEl.innerHTML = snip.engineTag;
+        if (counterEl && snip.lineCount) counterEl.textContent = snip.lineCount;
+
+        if (linesEl && snip.lines) {
+            linesEl.innerHTML = snip.lines.map(l => {
+                const highlighted = this.highlightSyntax(l.code);
+                return `
+                <div class="t-code-line ${l.active ? 't-active' : ''} ${l.vuln ? 't-vuln' : ''} ${l.comment ? 't-comment' : ''}">
+                    <span class="t-ln">${l.ln}</span>
+                    <span class="t-code">${highlighted}</span>
+                    ${l.vuln ? `
+                        <span class="t-vuln-badge cwe-badge">
+                            ${Icons.get('warning', 'size-3')} ${l.vuln}
+                        </span>
+                    ` : ''}
+                </div>
+            `;
+            }).join('');
+        }
+    },
+
+    nextCodeSnippet() {
+        if (this.scanState.liveCodeStream && this.scanState.liveCodeStream.length > 1) {
+            this.scanState.inspectorTick = (this.scanState.inspectorTick || 0) + 1;
+            const stream = this.scanState.liveCodeStream;
+            const idx = Math.floor(this.scanState.inspectorTick % stream.length);
+            const snip = stream[idx];
+            if (snip) {
+                const fileEl = document.getElementById('terminal-active-filename');
+                const engineEl = document.getElementById('terminal-engine-tag');
+                const counterEl = document.getElementById('terminal-line-counter');
+                const linesEl = document.getElementById('terminal-code-lines');
+
+                if (fileEl && snip.filename) fileEl.textContent = snip.filename;
+                if (engineEl && snip.engineTag) engineEl.innerHTML = snip.engineTag;
+                if (counterEl && snip.lineCount) counterEl.textContent = snip.lineCount;
+
+                if (linesEl && snip.lines) {
+                    linesEl.innerHTML = snip.lines.map(l => {
+                        const highlighted = this.highlightSyntax(l.code);
+                        return `
+                        <div class="t-code-line ${l.active ? 't-active' : ''} ${l.vuln ? 't-vuln' : ''} ${l.comment ? 't-comment' : ''}">
+                            <span class="t-ln">${l.ln}</span>
+                            <span class="t-code">${highlighted}</span>
+                            ${l.vuln ? `
+                                <span class="t-vuln-badge cwe-badge">
+                                    ${Icons.get('warning', 'size-3')} ${l.vuln}
+                                </span>
+                            ` : ''}
+                        </div>
+                    `;
+                    }).join('');
+                }
+            }
+        }
     },
 
     async stopAssessment() {
@@ -4235,7 +4793,11 @@ const App = {
         if (subEl) subEl.textContent = 'Cancelled';
 
         const orbEl = document.querySelector('.progress-orb');
-        if (orbEl) orbEl.style.background = `radial-gradient(closest-side, var(--bg-card, #0c1424) 80%, transparent 81% 99%), conic-gradient(#ea580c ${this.scanState.progress || 50}%, var(--border-hairline, #1c2e4a) 0)`;
+        if (orbEl) {
+            const bgCutout = this.isDarkMode ? '#0c1424' : '#ffffff';
+            const bgTrack = this.isDarkMode ? '#1a273e' : '#e9eff6';
+            orbEl.style.background = `radial-gradient(closest-side, ${bgCutout} 72%, transparent 73% 99%), conic-gradient(#ea580c ${this.scanState.progress || 50}%, ${bgTrack} 0)`;
+        }
 
         const dot = document.getElementById('progress-pulse-dot');
         if (dot) dot.style.background = '#ea580c';
@@ -4302,11 +4864,11 @@ const App = {
             ` : ''}
 
             <!-- Multi-Tool Execution & Engine Matrix Card -->
-            <div class="card mb-6 engine-matrix-card" style="padding: 1.25rem 1.5rem; border-radius: 12px; background: var(--bg-card, #ffffff); border: 1px solid var(--border-hairline, #e2e8f0); box-shadow: var(--shadow-soft, 0 1px 3px rgba(0,0,0,0.04));">
+            <div class="card mb-6" style="padding: 1.25rem 1.5rem; border-radius: 12px; background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom: 1rem;">
                     <div>
                         <div style="display:flex; align-items:center; gap:8px;">
-                            <h2 style="font-size:15px; font-weight:800; color: var(--text-heading, #0f172a); margin:0;">${isDev ? 'Source Code & Component Security Engine' : 'Multi-Tool Security Assessment Engine'}</h2>
+                            <h2 style="font-size:15px; font-weight:800; color:#0f172a; margin:0;">${isDev ? 'Source Code & Component Security Engine' : 'Multi-Tool Security Assessment Engine'}</h2>
                             <span id="scan-status-badge" class="badge" style="font-size:10px; padding:2px 8px; border-radius:9999px; background:#eff6ff; color:#2563eb; font-weight:700;">READY</span>
                         </div>
                         <p style="font-size:11px; color:#64748b; margin:3px 0 0 0;">
@@ -4481,23 +5043,23 @@ const App = {
                 <!-- Scan Category Filter Tabs / Pills -->
                 <div class="category-tabs-bar" style="display:flex; align-items:center; gap:8px; padding:10px 16px; border-bottom:1px solid #e2e8f0; background:#f8fafc; overflow-x:auto; border-top-left-radius:12px; border-top-right-radius:12px;">
                     <span style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; margin-right:4px; white-space:nowrap;">Category:</span>
-                    <button type="button" class="cat-pill active" id="cat-pill-all" onclick="App.onSelectCategoryFilter('')">
-                        All <span id="cat-count-all">0</span>
+                    <button type="button" class="cat-pill active" id="cat-pill-all" onclick="App.onSelectCategoryFilter('')" style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:9999px; font-size:12px; font-weight:700; background:#2563eb; color:#ffffff; border:1px solid #2563eb; cursor:pointer; transition:all 0.15s ease;">
+                        All <span id="cat-count-all" style="font-size:10px; background:rgba(255,255,255,0.25); color:#ffffff; padding:1px 6px; border-radius:9999px;">0</span>
                     </button>
-                    <button type="button" class="cat-pill" id="cat-pill-sast" onclick="App.onSelectCategoryFilter('SAST')">
-                        Source Code (SAST) <span id="cat-count-sast">0</span>
+                    <button type="button" class="cat-pill" id="cat-pill-sast" onclick="App.onSelectCategoryFilter('SAST')" style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:9999px; font-size:12px; font-weight:500; background:#ffffff; color:#475569; border:1px solid #cbd5e1; cursor:pointer; transition:all 0.15s ease;">
+                        Source Code (SAST) <span id="cat-count-sast" style="font-size:10px; background:#f1f5f9; color:#475569; padding:1px 6px; border-radius:9999px;">0</span>
                     </button>
-                    <button type="button" class="cat-pill" id="cat-pill-dast" onclick="App.onSelectCategoryFilter('DAST')">
-                        Web App (DAST) <span id="cat-count-dast">0</span>
+                    <button type="button" class="cat-pill" id="cat-pill-dast" onclick="App.onSelectCategoryFilter('DAST')" style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:9999px; font-size:12px; font-weight:500; background:#ffffff; color:#475569; border:1px solid #cbd5e1; cursor:pointer; transition:all 0.15s ease;">
+                        Web App (DAST) <span id="cat-count-dast" style="font-size:10px; background:#f1f5f9; color:#475569; padding:1px 6px; border-radius:9999px;">0</span>
                     </button>
-                    <button type="button" class="cat-pill" id="cat-pill-secrets" onclick="App.onSelectCategoryFilter('SECRETS')">
-                        Secrets &amp; Credentials <span id="cat-count-secrets">0</span>
+                    <button type="button" class="cat-pill" id="cat-pill-secrets" onclick="App.onSelectCategoryFilter('SECRETS')" style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:9999px; font-size:12px; font-weight:500; background:#ffffff; color:#475569; border:1px solid #cbd5e1; cursor:pointer; transition:all 0.15s ease;">
+                        Secrets &amp; Credentials <span id="cat-count-secrets" style="font-size:10px; background:#f1f5f9; color:#475569; padding:1px 6px; border-radius:9999px;">0</span>
                     </button>
-                    <button type="button" class="cat-pill" id="cat-pill-sca" onclick="App.onSelectCategoryFilter('SCA')">
-                        Dependencies (SCA) <span id="cat-count-sca">0</span>
+                    <button type="button" class="cat-pill" id="cat-pill-sca" onclick="App.onSelectCategoryFilter('SCA')" style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:9999px; font-size:12px; font-weight:500; background:#ffffff; color:#475569; border:1px solid #cbd5e1; cursor:pointer; transition:all 0.15s ease;">
+                        Dependencies (SCA) <span id="cat-count-sca" style="font-size:10px; background:#f1f5f9; color:#475569; padding:1px 6px; border-radius:9999px;">0</span>
                     </button>
-                    <button type="button" class="cat-pill" id="cat-pill-iac" onclick="App.onSelectCategoryFilter('IAC')">
-                        Infrastructure (IaC) <span id="cat-count-iac">0</span>
+                    <button type="button" class="cat-pill" id="cat-pill-iac" onclick="App.onSelectCategoryFilter('IAC')" style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:9999px; font-size:12px; font-weight:500; background:#ffffff; color:#475569; border:1px solid #cbd5e1; cursor:pointer; transition:all 0.15s ease;">
+                        Infrastructure (IaC) <span id="cat-count-iac" style="font-size:10px; background:#f1f5f9; color:#475569; padding:1px 6px; border-radius:9999px;">0</span>
                     </button>
                 </div>
 
@@ -4822,24 +5384,7 @@ const App = {
         const list = Array.isArray(findings) ? findings : [];
         const isScanOnly = this.scanState.scanType === 'scan_only';
 
-        // Deduplicate findings by canonical location and CWE
-        const seenFindingKeys = new Set();
-        const uniqueFindings = list.filter(f => {
-            const file = (f.evidences && f.evidences[0] && (f.evidences[0].filePath || f.evidences[0].url)) || f.filePath || '';
-            const normFile = file.replace(/\\/g, '/').toLowerCase().trim();
-            if (normFile.includes('vulnerabilities.json') || normFile.includes('benchmark-report')) return false;
-
-            const cwe = (f.cwe || f.cwe_id || '').toUpperCase();
-            const line = (f.evidences && f.evidences[0] && f.evidences[0].lineStart) || f.lineStart || 0;
-            const cluster = Math.floor(line / 25);
-            const key = `${normFile}:${cwe}:${f.title}:${cluster}`;
-
-            if (seenFindingKeys.has(key)) return false;
-            seenFindingKeys.add(key);
-            return true;
-        });
-
-        target.innerHTML = uniqueFindings.map(f => {
+        target.innerHTML = list.map(f => {
             const sev = f.severity || f.sev || 'Medium';
             const sevLower = sev.toLowerCase();
             const isFixReady = !isScanOnly && (f.status === 'confirmed' || f.status === 'Fix ready');
@@ -4852,10 +5397,9 @@ const App = {
                 || f.filePath 
                 || f.path 
                 || '/';
-            const cweLabel = f.cwe || f.cwe_id || 'CWE-200';
-            const cat = (f.scanCategory || f.scan_category || (f.category ? f.category.split(' ')[0] : 'SAST')).toUpperCase();
-            const catBadge = `<span class="badge" style="font-size:9px; padding:2px 6px; border-radius:4px; background:#f1f5f9; color:#334155; font-weight:700; border:1px solid #cbd5e1;">${escapeHtml(cat)}</span>`;
-            const cweBadge = `<span class="badge" style="font-size:9px; padding:2px 6px; border-radius:4px; background:#e0f2fe; color:#0369a1; font-weight:700; border:1px solid #bae6fd;">${escapeHtml(cweLabel)}</span>`;
+            const cweLabel = f.cwe || f.cwe_id || f.category || f.type || 'CWE-200';
+            const cat = (f.scanCategory || f.scan_category || 'SAST').toUpperCase();
+            const catBadge = `<span class="badge" style="font-size:9px; padding:1px 5px; border-radius:4px; background:#f1f5f9; color:#475569; font-weight:700; margin-right:5px; border:1px solid #e2e8f0;">${escapeHtml(cat)}</span>`;
             const isNeedsReview = f.confidence === 'NEEDS_REVIEW' || f.status === 'Needs Review' || f.findingStatus === 'NEEDS_REVIEW';
             const confBadge = isNeedsReview
                 ? `<span class="badge" style="font-size:10px; padding:1px 6px; border-radius:9999px; background:#fef3c7; color:#d97706; font-weight:700; margin-left:6px; vertical-align:middle;">⚠️ Needs Review</span>`
@@ -4871,9 +5415,7 @@ const App = {
                         <i class="severity-dot ${sevLower}"></i>
                         ${sev.charAt(0).toUpperCase() + sev.slice(1)}
                     </span>
-                    <span class="mono-tag" style="display:inline-flex; align-items:center; gap:6px;">
-                        ${catBadge} <span>${cweBadge}</span>
-                    </span>
+                    <span class="mono-tag">${catBadge}${escapeHtml(cweLabel)}</span>
                     <span class="${isFixReady ? 'fix-ready' : ''}">
                         ${isFixReady ? Icons.get('sparkles', 'size-4') : ''}
                         ${statusLabel}
@@ -4963,13 +5505,24 @@ const App = {
             const count = document.getElementById(`cat-count-${p.id}`);
             if (btn) {
                 const isSelected = (!cat && p.key === '') || (cat && cat.toUpperCase() === p.key);
-                btn.classList.toggle('active', isSelected);
-                btn.style.background = '';
-                btn.style.color = '';
-                btn.style.borderColor = '';
-                if (count) {
-                    count.style.background = '';
-                    count.style.color = '';
+                if (isSelected) {
+                    btn.style.background = '#2563eb';
+                    btn.style.color = '#ffffff';
+                    btn.style.borderColor = '#2563eb';
+                    btn.style.fontWeight = '700';
+                    if (count) {
+                        count.style.background = 'rgba(255,255,255,0.25)';
+                        count.style.color = '#ffffff';
+                    }
+                } else {
+                    btn.style.background = '#ffffff';
+                    btn.style.color = '#475569';
+                    btn.style.borderColor = '#cbd5e1';
+                    btn.style.fontWeight = '500';
+                    if (count) {
+                        count.style.background = '#f1f5f9';
+                        count.style.color = '#475569';
+                    }
                 }
             }
         });

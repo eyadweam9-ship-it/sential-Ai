@@ -125,16 +125,26 @@ const API = {
         const headers = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const res = await fetch(`${this.BASE_URL}/scans/upload-folder`, {
-            method: 'POST',
-            headers,
-            body: formData
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-            throw new Error(data.error || data.message || 'Folder upload failed');
+        try {
+            const res = await fetch(`${this.BASE_URL}/scans/upload-folder`, {
+                method: 'POST',
+                headers,
+                body: formData
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                throw new Error(data.error || data.message || `Upload failed with status ${res.status}`);
+            }
+            return data;
+        } catch (err) {
+            if (err.name === 'TypeError' && (err.message || '').includes('Failed to fetch')) {
+                const isAr = window.I18n && window.I18n.currentLang === 'ar';
+                throw new Error(isAr 
+                    ? 'تعذر الاتصال بالسيرفر أثناء رفع المجلد (الحجم كبير أو انقطع الاتصال). يرجى ضغط الفولدر كملف ZIP ورفعه.' 
+                    : 'Server connection dropped during folder upload (folder is too large or connection timed out). Please upload as a ZIP file.');
+            }
+            throw err;
         }
-        return data;
     },
 
     // Target Authorization & Scope Gate

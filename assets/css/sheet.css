@@ -304,3 +304,137 @@
     gap: 1.2rem;
     font-weight: 600;
 }
+
+/* =========================================================
+   Google Sheets View - Comprehensive Dark Mode Theme
+   ========================================================= */
+html[data-theme="dark"] .sheet-container {
+    background: #0c1322 !important;
+    border-color: #1c273e !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important;
+}
+
+html[data-theme="dark"] .sheet-topbar {
+    background: #090e1a !important;
+    border-bottom-color: #1c273e !important;
+}
+
+html[data-theme="dark"] .sheet-title {
+    color: #f1f5f9 !important;
+}
+
+html[data-theme="dark"] .sheet-badge {
+    background: rgba(16, 185, 129, 0.15) !important;
+    color: #34d399 !important;
+}
+
+html[data-theme="dark"] .sheet-tool-btn {
+    background: #141f36 !important;
+    border-color: #243552 !important;
+    color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .sheet-tool-btn:hover {
+    background: #1e2d4d !important;
+    border-color: #38bdf8 !important;
+    color: #ffffff !important;
+}
+
+html[data-theme="dark"] .sheet-tool-btn.primary {
+    background: #0f9d58 !important;
+    color: #ffffff !important;
+    border-color: #0b8043 !important;
+}
+
+html[data-theme="dark"] .sheet-formula-bar {
+    background: #070b14 !important;
+    border-bottom-color: #1c273e !important;
+}
+
+html[data-theme="dark"] .sheet-cell-address {
+    background: #141f36 !important;
+    color: #93c5fd !important;
+}
+
+html[data-theme="dark"] .sheet-formula-input {
+    color: #f8fafc !important;
+}
+
+html[data-theme="dark"] .sheet-grid-wrapper {
+    background: #070b14 !important;
+}
+
+html[data-theme="dark"] .sheet-table th,
+html[data-theme="dark"] .sheet-table td {
+    border-color: #162238 !important;
+    color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .sheet-table thead tr:first-child th {
+    background: #090e1a !important;
+    color: #94a3b8 !important;
+    border-bottom-color: #1c273e !important;
+}
+
+html[data-theme="dark"] .sheet-table thead tr:nth-child(2) th {
+    background: #0e172a !important;
+    color: #f1f5f9 !important;
+    border-bottom-color: #22324e !important;
+}
+
+html[data-theme="dark"] .sheet-row-num {
+    background: #090e1a !important;
+    color: #64748b !important;
+}
+
+html[data-theme="dark"] .sheet-table tr:hover td:not(.sheet-row-num) {
+    background-color: #0e172a !important;
+}
+
+html[data-theme="dark"] .sheet-table td.sheet-active-cell {
+    outline-color: #38bdf8 !important;
+    background-color: #0e223d !important;
+}
+
+html[data-theme="dark"] .sheet-pill-critical {
+    color: #f87171 !important;
+    background: rgba(239, 68, 68, 0.15) !important;
+    border-color: rgba(239, 68, 68, 0.35) !important;
+}
+
+html[data-theme="dark"] .sheet-pill-high {
+    color: #fb923c !important;
+    background: rgba(249, 115, 22, 0.15) !important;
+    border-color: rgba(249, 115, 22, 0.35) !important;
+}
+
+html[data-theme="dark"] .sheet-pill-medium {
+    color: #fbbf24 !important;
+    background: rgba(245, 158, 11, 0.15) !important;
+    border-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+html[data-theme="dark"] .sheet-pill-low {
+    color: #60a5fa !important;
+    background: rgba(59, 130, 246, 0.15) !important;
+    border-color: rgba(59, 130, 246, 0.35) !important;
+}
+
+html[data-theme="dark"] .sheet-pill-info {
+    color: #94a3b8 !important;
+    background: rgba(148, 163, 184, 0.15) !important;
+    border-color: rgba(148, 163, 184, 0.35) !important;
+}
+
+html[data-theme="dark"] .sheet-footer {
+    background: #090e1a !important;
+    border-top-color: #1c273e !important;
+    color: #94a3b8 !important;
+}
+
+html[data-theme="dark"] .sheet-tab {
+    background: #141f36 !important;
+    border-color: #243552 !important;
+    border-bottom: 2px solid #0f9d58 !important;
+    color: #f1f5f9 !important;
+}

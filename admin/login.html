@@ -1,23 +1,20 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Login | Sential AI — Autonomous Security</title>
-  <script>
-    (function() {
-      var savedTheme = localStorage.getItem('sential_theme') || 'dark';
-      document.documentElement.setAttribute('data-theme', savedTheme);
-    })();
-  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
   <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="css/cyber-dark.css">
+  <script src="../assets/js/i18n.js"></script>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232563eb'><path d='M12 2 4.5 5v6c0 5 3.2 8.7 7.5 11 4.3-2.3 7.5-6 7.5-11V5z'/></svg>">
 </head>
 <body>
 
   <div class="auth-shell">
-    <div style="position: fixed; top: 1.5rem; right: 2rem; z-index: 100;" id="adminThemeContainer"></div>
 
     <!-- Top Left Brand on Visual Column -->
     <div class="auth-brand">
@@ -75,6 +72,9 @@
 
     <!-- Right Form Column -->
     <div class="auth-form-wrap">
+      <div style="display: flex; justify-content: flex-end; width: 100%; max-width: 440px; margin-bottom: 1.5rem;">
+        <div id="adminLangToggleContainer"></div>
+      </div>
       <div class="auth-form">
 
         <div>
@@ -156,12 +156,6 @@
 
   </div>
 
-  <script src="js/theme.js"></script>
-  <script>
-    if (document.getElementById('adminThemeContainer') && typeof ThemeManager !== 'undefined') {
-      document.getElementById('adminThemeContainer').innerHTML = ThemeManager.renderButton();
-    }
-  </script>
   <script src="js/login.js"></script>
 </body>
 </html>
