@@ -379,9 +379,24 @@ const App = {
             console.warn('Could not restore staged file from localStorage', e);
         }
 
+        // Restore session scan & step state if available
+        try {
+            const savedMax = sessionStorage.getItem('sential_max_unlocked_step');
+            if (savedMax) {
+                this.scanState.maxUnlockedStep = parseInt(savedMax, 10) || 1;
+            }
+            const savedScanId = sessionStorage.getItem('sential_current_scan_id');
+            if (savedScanId) {
+                this.scanState.currentScanId = savedScanId;
+            }
+        } catch (e) {}
+
         let hash = window.location.hash.replace('#', '') || 'welcome';
         if (!API.getToken() && !['welcome', 'login', 'signup'].includes(hash)) {
             hash = 'welcome';
+        }
+        if (['dashboard', 'finding', 'report'].includes(hash)) {
+            this.scanState.maxUnlockedStep = 7;
         }
         this.navigate(hash, false);
 
@@ -598,7 +613,12 @@ const App = {
     },
 
     navigate(viewName, updateHash = true) {
-        // Enforce strictly sequential progression: prevent jumping ahead to locked steps
+        // Enforce sequential progression, but if a scan is completed or findings exist, all steps are unlocked
+        if (this.scanState) {
+            if (this.scanState.status === 'completed' || this.scanState.progress >= 100 || (this.findingsData && this.findingsData.length > 0)) {
+                this.scanState.maxUnlockedStep = 7;
+            }
+        }
         const targetStep = STEPS.find(s => s.id === viewName);
         if (targetStep && this.scanState) {
             const maxStep = this.scanState.maxUnlockedStep || 1;
@@ -622,6 +642,16 @@ const App = {
 
     handleLockedStepClick(stepNumber, label) {
         const currentMax = (this.scanState && this.scanState.maxUnlockedStep) || 1;
+        if (stepNumber <= currentMax || currentMax >= 7 || this.scanState?.progress >= 100 || this.scanState?.status === 'completed' || (this.findingsData && this.findingsData.length > 0)) {
+            this.scanState.maxUnlockedStep = 7;
+            try { sessionStorage.setItem('sential_max_unlocked_step', '7'); } catch (e) {}
+            this.updateSideNav();
+            const target = STEPS.find(s => s.step === stepNumber);
+            if (target) {
+                this.navigate(target.id);
+                return;
+            }
+        }
         showToast(`Step ${stepNumber} (${label}) is locked. Please complete Step ${currentMax} first.`, 'info');
     },
 
@@ -1263,6 +1293,49 @@ const App = {
     // =========================================================
     // 4. APP SHELL (Exact Figma Sidebar, Topbar & Navigation)
     // =========================================================
+    renderSideNavItems() {
+        return STEPS.map(s => {
+            const isCurrent = this.currentView === s.id;
+            const maxStep = (this.scanState && this.scanState.maxUnlockedStep) || 1;
+            const isUnlocked = s.step <= maxStep;
+            const isCompleted = s.step < maxStep;
+
+            if (isUnlocked) {
+                return `
+                    <button class="${isCurrent ? 'active' : ''}" onclick="App.navigate('${s.id}')">
+                        <span class="nav-icon ${isCompleted ? 'text-blue-600' : ''}">${Icons.get(s.icon, 'size-4')}</span>
+                        <span>
+                            <b>${s.label}</b>
+                            <small>Step ${s.step}</small>
+                        </span>
+                        ${isCurrent ? '<span class="active-dot"></span>' : (isCompleted ? `<span class="step-check">${Icons.get('check', 'size-3 text-emerald-600')}</span>` : '')}
+                    </button>
+                `;
+            } else {
+                return `
+                    <button type="button" class="step-locked" onclick="App.handleLockedStepClick(${s.step}, '${escapeHtml(s.label)}')">
+                        <span class="nav-icon opacity-40">${Icons.get(s.icon, 'size-4')}</span>
+                        <span class="opacity-45">
+                            <b>${s.label}</b>
+                            <small>Step ${s.step} • Locked</small>
+                        </span>
+                        <span class="ml-auto opacity-35">${Icons.get('lock', 'size-3.5')}</span>
+                    </button>
+                `;
+            }
+        }).join('');
+    },
+
+    updateSideNav() {
+        const navEl = document.getElementById('sidebar-step-nav');
+        if (navEl) {
+            navEl.innerHTML = this.renderSideNavItems();
+            if (window.I18n && typeof window.I18n.translateDOM === 'function') {
+                window.I18n.translateDOM(navEl);
+            }
+        }
+    },
+
     renderAppShell() {
         const user = this.getCurrentUser();
         const currentStepObj = STEPS.find(s => s.id === this.currentView) || 
@@ -1290,37 +1363,8 @@ const App = {
                     </div>
 
                     <div class="nav-label">Assessment flow</div>
-                    <nav class="side-nav">
-                        ${STEPS.map(s => {
-                            const isCurrent = this.currentView === s.id;
-                            const maxStep = (this.scanState && this.scanState.maxUnlockedStep) || 1;
-                            const isUnlocked = s.step <= maxStep;
-                            const isCompleted = s.step < maxStep;
-
-                            if (isUnlocked) {
-                                return `
-                                    <button class="${isCurrent ? 'active' : ''}" onclick="App.navigate('${s.id}')">
-                                        <span class="nav-icon ${isCompleted ? 'text-blue-600' : ''}">${Icons.get(s.icon, 'size-4')}</span>
-                                        <span>
-                                            <b>${s.label}</b>
-                                            <small>Step ${s.step}</small>
-                                        </span>
-                                        ${isCurrent ? '<span class="active-dot"></span>' : (isCompleted ? `<span class="step-check">${Icons.get('check', 'size-3 text-emerald-600')}</span>` : '')}
-                                    </button>
-                                `;
-                            } else {
-                                return `
-                                    <button type="button" class="step-locked" onclick="App.handleLockedStepClick(${s.step}, '${escapeHtml(s.label)}')">
-                                        <span class="nav-icon opacity-40">${Icons.get(s.icon, 'size-4')}</span>
-                                        <span class="opacity-45">
-                                            <b>${s.label}</b>
-                                            <small>Step ${s.step} · Locked</small>
-                                        </span>
-                                        <span class="ml-auto opacity-35">${Icons.get('lock', 'size-3.5')}</span>
-                                    </button>
-                                `;
-                            }
-                        }).join('')}
+                    <nav class="side-nav" id="sidebar-step-nav">
+                        ${this.renderSideNavItems()}
                     </nav>
 
                     <div class="sidebar-bottom">
@@ -1370,6 +1414,8 @@ const App = {
         try {
             localStorage.removeItem('sentinel_history_all_cleared');
             localStorage.removeItem('sential_staged_file');
+            sessionStorage.removeItem('sential_max_unlocked_step');
+            sessionStorage.removeItem('sential_current_scan_id');
         } catch (e) {}
         this.findingsData = [];
         this.selectedFindingId = null;
@@ -1378,6 +1424,7 @@ const App = {
         this.scanState.name = '';
         this.scanState.url = '';
         this.scanState.progress = 0;
+        this.scanState.status = 'idle';
         this.scanState.liveCodeStream = [];
         this.scanState.inspectorTick = 0;
         if (this.scanState.timer) clearInterval(this.scanState.timer);
@@ -1387,23 +1434,29 @@ const App = {
         this.scanState.confirmedAuthorization = false;
         this.scanState.showConfirmModal = false;
         this.scanState.maxUnlockedStep = 1;
+        this.updateSideNav();
         this.navigate('type');
         showToast('Starting a new security assessment.', 'info');
     },
 
     proceedFromType() {
         this.scanState.maxUnlockedStep = Math.max(this.scanState.maxUnlockedStep || 1, 2);
+        this.updateSideNav();
         this.navigate('url');
     },
 
     proceedToDashboard() {
         if (this.scanState.timer) clearInterval(this.scanState.timer);
-        this.scanState.maxUnlockedStep = Math.max(this.scanState.maxUnlockedStep || 1, 7);
+        this.scanState.maxUnlockedStep = 7;
+        try { sessionStorage.setItem('sential_max_unlocked_step', '7'); } catch (e) {}
+        this.updateSideNav();
         this.navigate('dashboard');
     },
 
     proceedToReport() {
-        this.scanState.maxUnlockedStep = Math.max(this.scanState.maxUnlockedStep || 1, 7);
+        this.scanState.maxUnlockedStep = 7;
+        try { sessionStorage.setItem('sential_max_unlocked_step', '7'); } catch (e) {}
+        this.updateSideNav();
         this.navigate('report');
     },
 
@@ -4072,9 +4125,14 @@ const App = {
                     ? 'Running independent multi-tool vulnerability inspection. Findings are cataloged in real-time with zero code modifications.' 
                     : 'Running full multi-tool assessment pipeline with AI threat intelligence and verification.',
                 action: isCompleted ? `
-                    <button type="button" class="button button-primary" id="btn-stop-assessment" onclick="App.proceedToDashboard()">
-                        View findings dashboard ${Icons.get('arrow', 'size-4')}
-                    </button>
+                    <div class="flex gap-2">
+                        <button type="button" class="button button-secondary" onclick="App.proceedToReport()">
+                            ${Icons.get('file', 'size-4')} View Report
+                        </button>
+                        <button type="button" class="button button-primary" id="btn-stop-assessment" onclick="App.proceedToDashboard()">
+                            View findings dashboard ${Icons.get('arrow', 'size-4')}
+                        </button>
+                    </div>
                 ` : `
                     <button type="button" class="button button-danger" id="btn-stop-assessment" onclick="App.stopAssessment()">
                         ${Icons.get('x', 'size-4')} Stop assessment
@@ -4544,7 +4602,15 @@ const App = {
                         clearInterval(this.scanState.timer);
                         this.startCodeStreamTicker();
                         this.scanState.progress = 100;
-                        this.scanState.maxUnlockedStep = Math.max(this.scanState.maxUnlockedStep || 1, 7);
+                        this.scanState.maxUnlockedStep = 7;
+                        this.scanState.status = scan.status;
+                        try {
+                            sessionStorage.setItem('sential_max_unlocked_step', '7');
+                            if (this.scanState.currentScanId) {
+                                sessionStorage.setItem('sential_current_scan_id', String(this.scanState.currentScanId));
+                            }
+                        } catch (e) {}
+                        this.updateSideNav();
                         if (txtEl) txtEl.textContent = '100%';
                         if (subEl) {
                             subEl.textContent = 'Complete';
@@ -4602,13 +4668,29 @@ const App = {
 
                         const stopBtn = document.getElementById('btn-stop-assessment');
                         if (stopBtn) {
-                            stopBtn.className = 'button button-primary';
-                            stopBtn.innerHTML = `View findings dashboard ${Icons.get('arrow', 'size-4')}`;
-                            stopBtn.onclick = () => App.proceedToDashboard();
+                            if (stopBtn.parentElement) {
+                                stopBtn.parentElement.innerHTML = `
+                                    <div class="flex gap-2">
+                                        <button type="button" class="button button-secondary" onclick="App.proceedToReport()">
+                                            ${Icons.get('file', 'size-4')} View Report
+                                        </button>
+                                        <button type="button" class="button button-primary" id="btn-stop-assessment" onclick="App.proceedToDashboard()">
+                                            View findings dashboard ${Icons.get('arrow', 'size-4')}
+                                        </button>
+                                    </div>
+                                `;
+                            } else {
+                                stopBtn.className = 'button button-primary';
+                                stopBtn.innerHTML = `View findings dashboard ${Icons.get('arrow', 'size-4')}`;
+                                stopBtn.onclick = () => App.proceedToDashboard();
+                            }
                         }
                     } else if (scan.status === 'cancelled') {
                         clearInterval(this.scanState.timer);
-                        this.scanState.maxUnlockedStep = Math.max(this.scanState.maxUnlockedStep || 1, 7);
+                        this.scanState.maxUnlockedStep = 7;
+                        this.scanState.status = 'cancelled';
+                        try { sessionStorage.setItem('sential_max_unlocked_step', '7'); } catch (e) {}
+                        this.updateSideNav();
                         if (txtEl) txtEl.textContent = 'Halted';
                         if (subEl) subEl.textContent = 'Cancelled';
                         const stopBtn = document.getElementById('btn-stop-assessment');
@@ -5200,6 +5282,9 @@ const App = {
     },
 
     async loadDashboardData() {
+        this.scanState.maxUnlockedStep = 7;
+        try { sessionStorage.setItem('sential_max_unlocked_step', '7'); } catch (e) {}
+        this.updateSideNav();
         let scanId = this.scanState.currentScanId;
         if (!scanId) {
             try {
@@ -5207,6 +5292,7 @@ const App = {
                 if (hist && Array.isArray(hist.history) && hist.history.length > 0) {
                     scanId = hist.history[0].id;
                     this.scanState.currentScanId = scanId;
+                    try { sessionStorage.setItem('sential_current_scan_id', String(scanId)); } catch (e) {}
                 }
             } catch (e) {}
         }
@@ -5549,7 +5635,9 @@ const App = {
     viewFinding(id) {
         this.selectedFindingId = id;
         this.findingTab = 'overview';
-        this.scanState.maxUnlockedStep = Math.max(this.scanState.maxUnlockedStep || 1, 6);
+        this.scanState.maxUnlockedStep = 7;
+        try { sessionStorage.setItem('sential_max_unlocked_step', '7'); } catch (e) {}
+        this.updateSideNav();
         this.navigate('finding');
     },
 
@@ -5853,7 +5941,33 @@ const App = {
     },
 
     async loadFindingDetail(id) {
-        const targetId = id || this.selectedFindingId;
+        this.scanState.maxUnlockedStep = 7;
+        try { sessionStorage.setItem('sential_max_unlocked_step', '7'); } catch (e) {}
+        this.updateSideNav();
+        let targetId = id || this.selectedFindingId;
+        if (!targetId) {
+            let scanId = this.scanState.currentScanId;
+            if (!scanId) {
+                try {
+                    const hist = await API.getScanHistory().catch(() => null);
+                    if (hist && Array.isArray(hist.history) && hist.history.length > 0) {
+                        scanId = hist.history[0].id;
+                        this.scanState.currentScanId = scanId;
+                    }
+                } catch (e) {}
+            }
+            if (scanId) {
+                try {
+                    const res = await API.getScanFindings(scanId);
+                    if (res && res.findings && res.findings.length > 0) {
+                        this.findingsData = res.findings;
+                        this.selectedFindingId = res.findings[0].id;
+                        this.render();
+                        return;
+                    }
+                } catch (e) {}
+            }
+        }
         if (!targetId) return;
         try {
             const res = await API.getFindingDetail(targetId);
@@ -6340,6 +6454,9 @@ const App = {
     },
 
     async loadReportData() {
+        this.scanState.maxUnlockedStep = 7;
+        try { sessionStorage.setItem('sential_max_unlocked_step', '7'); } catch (e) {}
+        this.updateSideNav();
         let scanId = this.scanState.currentScanId;
         if (!scanId) {
             try {
@@ -6347,6 +6464,7 @@ const App = {
                 if (hist && Array.isArray(hist.history) && hist.history.length > 0) {
                     scanId = hist.history[0].id;
                     this.scanState.currentScanId = scanId;
+                    try { sessionStorage.setItem('sential_current_scan_id', String(scanId)); } catch (e) {}
                 }
             } catch (e) {}
         }
@@ -6958,14 +7076,24 @@ const App = {
 
     openHistoryScan(scanId) {
         this.scanState.currentScanId = scanId;
-        this.scanState.maxUnlockedStep = Math.max(this.scanState.maxUnlockedStep || 1, 5);
+        this.scanState.maxUnlockedStep = 7;
+        try {
+            sessionStorage.setItem('sential_max_unlocked_step', '7');
+            sessionStorage.setItem('sential_current_scan_id', String(scanId));
+        } catch (e) {}
+        this.updateSideNav();
         showToast(`Loading findings for Assessment #${scanId}...`, 'info');
         this.navigate('dashboard');
     },
 
     openHistoryReport(scanId) {
         this.scanState.currentScanId = scanId;
-        this.scanState.maxUnlockedStep = Math.max(this.scanState.maxUnlockedStep || 1, 7);
+        this.scanState.maxUnlockedStep = 7;
+        try {
+            sessionStorage.setItem('sential_max_unlocked_step', '7');
+            sessionStorage.setItem('sential_current_scan_id', String(scanId));
+        } catch (e) {}
+        this.updateSideNav();
         showToast(`Loading audit report for Assessment #${scanId}...`, 'info');
         this.navigate('report');
     },
@@ -6982,6 +7110,10 @@ const App = {
         this.scanState.uploadedFile = null;
         await API.logout();
         this.currentUser = null;
+        try {
+            sessionStorage.removeItem('sential_max_unlocked_step');
+            sessionStorage.removeItem('sential_current_scan_id');
+        } catch (e) {}
         showToast('You have been logged out.', 'info');
         this.navigate('welcome');
     }
