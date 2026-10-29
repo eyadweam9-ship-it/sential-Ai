@@ -3968,29 +3968,18 @@ const App = {
                         </p>
                     </div>
 
-                    <!-- Mandatory Legal Authorization Consent (Never remembered / Always required each scan) -->
-                    <div class="mt-4 p-4 rounded-xl border ${isDev ? 'border-blue-500/30 bg-blue-500/5' : 'border-amber-500/30 bg-amber-500/5'}">
-                        <label class="flex items-start gap-3 cursor-pointer select-none">
-                            <input type="checkbox" id="legal-consent-checkbox" onchange="App.scanState.confirmedAuthorization = this.checked" ${this.scanState.confirmedAuthorization ? 'checked' : ''} style="margin-top: 3px; accent-color: #2563eb; width: 16px; height: 16px;">
-                            <div class="text-xs leading-relaxed ${isDev ? 'text-slate-300' : 'text-amber-200'}">
-                                ${isDev ? `
-                                    <b style="color: #60a5fa;">إقرار وتفويض فحص الكود البرمجي (SAST Code Ownership Consent):</b><br>
-                                    أقر بأنني المالك القانوني لهذا الكود المرفوع أو مفوض رسمياً بفحصه وتحليله أمنياً. لن يتم تطبيق قيود DNS أو التحقق الخارجي في بيئة التطوير.
-                                ` : `
-                                    <b style="color: #f59e0b;">إقرار وتفويض قانوني إلزامي (Mandatory Legal Authorization Disclaimer):</b><br>
-                                    أقر بأنني المالك القانوني للهدف (<span style="color:#38bdf8; font-family:monospace;">${escapeHtml(hostname)}</span>) أو أمتلك تفويضاً كتابياً رسمياً وصريحاً لإجراء الفحص الأمني الأخلاقي وفقاً لقوانين حماية البيانات ومعايير OWASP.
-                                `}
-                            </div>
-                        </label>
-                        ${!isDev ? `
-                            <div class="mt-3 pt-3 border-t border-amber-500/20">
-                                <label class="text-[11px] text-slate-400 block mb-1">
-                                    للتأكيد، اكتب اسم النطاق (<span class="text-sky-400 font-mono font-semibold">${escapeHtml(hostname)}</span>) أو كلمة <b class="text-sky-400 font-mono">CONFIRM</b>:
-                                </label>
-                                <input type="text" id="target-confirm-input" class="w-full text-xs px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 focus:border-sky-400 outline-none font-mono" placeholder="${escapeHtml(hostname)}" autocomplete="off">
-                            </div>
-                        ` : ''}
-                    </div>
+                    ${isDev ? `
+                        <!-- Code Ownership Consent (Development Only - English Only - Checkbox Only) -->
+                        <div class="mt-4 p-4 rounded-xl border border-blue-500/30 bg-blue-500/5">
+                            <label class="flex items-start gap-3 cursor-pointer select-none">
+                                <input type="checkbox" id="legal-consent-checkbox" onchange="App.scanState.confirmedAuthorization = this.checked" ${this.scanState.confirmedAuthorization ? 'checked' : ''} style="margin-top: 3px; accent-color: #2563eb; width: 16px; height: 16px;">
+                                <div class="text-xs leading-relaxed text-slate-300">
+                                    <b style="color: #60a5fa;">Source Code Analysis Consent:</b><br>
+                                    I confirm that I am the legal owner of this uploaded source code or hold explicit authorization to conduct security analysis.
+                                </div>
+                            </label>
+                        </div>
+                    ` : ''}
                 </div>
             </div>
 
@@ -4043,21 +4032,10 @@ const App = {
             return;
         }
 
-        // Mandatory Legal Consent Verification (Never bypassed, never silently remembered)
-        if (!this.scanState.confirmedAuthorization) {
-            showToast('يرجى تأكيد خانة الإقرار والتفويض القانوني قبل بدء الفحص (Mandatory Legal Consent required).', 'error');
+        // For Development mode only: require the code consent checkbox
+        if (isDev && !this.scanState.confirmedAuthorization) {
+            showToast('Please check the code ownership consent box before launching the assessment.', 'error');
             return;
-        }
-
-        if (!isDev) {
-            const confirmInp = document.getElementById('target-confirm-input');
-            const targetUrl = (this.scanState.url || 'https://app.northstar.io').trim();
-            const hostname = targetUrl.replace(/^https?:\/\//i, '').split('/')[0].split(':')[0] || 'target-domain.com';
-            const entered = (confirmInp ? confirmInp.value : '').trim().toLowerCase();
-            if (entered !== hostname.toLowerCase() && entered !== 'confirm') {
-                showToast(`يرجى كتابة اسم النطاق (${hostname}) أو كلمة CONFIRM للتأكيد القانوني.`, 'error');
-                return;
-            }
         }
 
         const btn = document.querySelector('.page-actions .button-primary');
