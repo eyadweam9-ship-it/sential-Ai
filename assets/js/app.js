@@ -1406,6 +1406,7 @@ const App = {
                 </section>
                 ${this.scanState.showDiscoveryModal ? this.renderDiscoveryModal() : ''}
                 ${this.scanState.activeCodeViewer ? this.renderCodeViewerModal() : ''}
+                ${this.renderCyberCopilot()}
             </div>
         `;
     },
@@ -1585,20 +1586,20 @@ const App = {
                 <div class="env-card ${env === 'staging' ? 'selected' : ''}" onclick="App.selectEnvironment('staging')">
                     <div class="env-card-head">
                         <div class="icon-tile blue">${Icons.get('globe', 'size-5')}</div>
-                        <span class="env-badge staging">DAST · Testing URL</span>
+                        <span class="env-badge staging">DAST · Deep Active Testing</span>
                     </div>
                     <h3>Staging</h3>
-                    <p>Target pre-production test environments. Automated endpoint discovery and dynamic security testing (DAST).</p>
+                    <p>Pre-production sandbox. Deep active DAST (25-50 req/s), time-based SQLi payloads, RCE fuzzing, and form manipulation without production risk.</p>
                 </div>
 
                 <!-- 3. Production (URL + Strict Safeguards) -->
                 <div class="env-card ${env === 'production' ? 'selected' : ''}" onclick="App.selectEnvironment('production')">
                     <div class="env-card-head">
                         <div class="icon-tile amber">${Icons.get('shield', 'size-5')}</div>
-                        <span class="env-badge prod">Live DAST · Strict Safeguards</span>
+                        <span class="env-badge prod">Safe DAST · Strict Safeguards</span>
                     </div>
                     <h3>Production</h3>
-                    <p>Target live web applications. Enforces strict conservative rate-limits (10 req/s) to protect live systems and users.</p>
+                    <p>Live business environment. Strictly non-destructive read-only probes (5 req/s), Safe Header identification (X-Sential-Security-Scan), and automatic safety exclusions (/checkout, /pay, /delete).</p>
                 </div>
             </div>
 
@@ -3966,6 +3967,30 @@ const App = {
                                     : 'Under OWASP and ethical safety rules, scanning cannot start until domain control is verified (DNS / File) or approved by an administrator.')}
                         </p>
                     </div>
+
+                    <!-- Mandatory Legal Authorization Consent (Never remembered / Always required each scan) -->
+                    <div class="mt-4 p-4 rounded-xl border ${isDev ? 'border-blue-500/30 bg-blue-500/5' : 'border-amber-500/30 bg-amber-500/5'}">
+                        <label class="flex items-start gap-3 cursor-pointer select-none">
+                            <input type="checkbox" id="legal-consent-checkbox" onchange="App.scanState.confirmedAuthorization = this.checked" ${this.scanState.confirmedAuthorization ? 'checked' : ''} style="margin-top: 3px; accent-color: #2563eb; width: 16px; height: 16px;">
+                            <div class="text-xs leading-relaxed ${isDev ? 'text-slate-300' : 'text-amber-200'}">
+                                ${isDev ? `
+                                    <b style="color: #60a5fa;">إقرار وتفويض فحص الكود البرمجي (SAST Code Ownership Consent):</b><br>
+                                    أقر بأنني المالك القانوني لهذا الكود المرفوع أو مفوض رسمياً بفحصه وتحليله أمنياً. لن يتم تطبيق قيود DNS أو التحقق الخارجي في بيئة التطوير.
+                                ` : `
+                                    <b style="color: #f59e0b;">إقرار وتفويض قانوني إلزامي (Mandatory Legal Authorization Disclaimer):</b><br>
+                                    أقر بأنني المالك القانوني للهدف (<span style="color:#38bdf8; font-family:monospace;">${escapeHtml(hostname)}</span>) أو أمتلك تفويضاً كتابياً رسمياً وصريحاً لإجراء الفحص الأمني الأخلاقي وفقاً لقوانين حماية البيانات ومعايير OWASP.
+                                `}
+                            </div>
+                        </label>
+                        ${!isDev ? `
+                            <div class="mt-3 pt-3 border-t border-amber-500/20">
+                                <label class="text-[11px] text-slate-400 block mb-1">
+                                    للتأكيد، اكتب اسم النطاق (<span class="text-sky-400 font-mono font-semibold">${escapeHtml(hostname)}</span>) أو كلمة <b class="text-sky-400 font-mono">CONFIRM</b>:
+                                </label>
+                                <input type="text" id="target-confirm-input" class="w-full text-xs px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 focus:border-sky-400 outline-none font-mono" placeholder="${escapeHtml(hostname)}" autocomplete="off">
+                            </div>
+                        ` : ''}
+                    </div>
                 </div>
             </div>
 
@@ -4016,6 +4041,23 @@ const App = {
         if (!isAuthorized) {
             showToast('Target Authorization Gate Locked: Domain ownership verification (DNS or File) or Admin approval of a Written Letter is required before starting the scan.', 'error');
             return;
+        }
+
+        // Mandatory Legal Consent Verification (Never bypassed, never silently remembered)
+        if (!this.scanState.confirmedAuthorization) {
+            showToast('يرجى تأكيد خانة الإقرار والتفويض القانوني قبل بدء الفحص (Mandatory Legal Consent required).', 'error');
+            return;
+        }
+
+        if (!isDev) {
+            const confirmInp = document.getElementById('target-confirm-input');
+            const targetUrl = (this.scanState.url || 'https://app.northstar.io').trim();
+            const hostname = targetUrl.replace(/^https?:\/\//i, '').split('/')[0].split(':')[0] || 'target-domain.com';
+            const entered = (confirmInp ? confirmInp.value : '').trim().toLowerCase();
+            if (entered !== hostname.toLowerCase() && entered !== 'confirm') {
+                showToast(`يرجى كتابة اسم النطاق (${hostname}) أو كلمة CONFIRM للتأكيد القانوني.`, 'error');
+                return;
+            }
         }
 
         const btn = document.querySelector('.page-actions .button-primary');
@@ -5441,22 +5483,250 @@ const App = {
         }
     },
 
-    async exportAndDownloadReport() {
+    exportAndDownloadReport() {
         const scanId = this.scanState.currentScanId;
         if (!scanId) {
             showToast('Scan session ID is required to export report.', 'error');
             return;
         }
-        showToast('Generating comprehensive printable executive security report...', 'info');
-        try {
-            const res = await API.exportScanReport(scanId);
-            if (res.htmlReportUrl) {
-                window.open(res.htmlReportUrl, '_blank');
-                showToast('Report opened in new tab! You can print or save as PDF.', 'success');
-            }
-        } catch (err) {
-            showToast(err.message || 'Failed to export report.', 'error');
+        this.openExportReportModal(scanId);
+    },
+
+    openExportReportModal(scanId) {
+        const targetScanId = scanId || this.scanState.currentScanId;
+        if (!targetScanId) {
+            showToast('Scan session ID is required to export report.', 'error');
+            return;
         }
+
+        const existing = document.getElementById('export-report-modal');
+        if (existing) existing.remove();
+
+        const modalHtml = `
+            <div class="export-report-modal-overlay" id="export-report-modal" onclick="if(event.target===this) App.closeExportReportModal()">
+                <div class="export-report-modal-box">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem;">
+                        <div>
+                            <h3 style="font-size:1.15rem; font-weight:700; margin:0; display:flex; align-items:center; gap:8px;">
+                                <span>${Icons.get('file', 'size-5 text-blue-500')}</span>
+                                <span>Export Security Report / تصدير التقرير الأمني</span>
+                            </h3>
+                            <p style="font-size:0.75rem; color:#64748b; margin:4px 0 0;">اختر نوع التقرير المناسب: تنفيذي لإدارة الأعمال أو تقني تفصيلي لمهندسي البرمجيات.</p>
+                        </div>
+                        <button type="button" onclick="App.closeExportReportModal()" style="background:transparent; border:none; font-size:1.4rem; cursor:pointer; color:#94a3b8; line-height:1;">&times;</button>
+                    </div>
+
+                    <div style="display:flex; flex-direction:column; gap:1rem;">
+                        <!-- 1. Executive Report Card -->
+                        <div style="padding:1rem; border-radius:12px; border:1px solid rgba(59,130,246,0.3); background:rgba(59,130,246,0.05);">
+                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                                <span style="font-size:1.3rem;">👔</span>
+                                <b style="font-size:0.95rem; color:#1e40af;" class="dark:text-blue-400">Executive Report · تقرير تنفيذي لإدارة الأعمال والامتثال</b>
+                            </div>
+                            <p style="font-size:0.75rem; color:#64748b; margin-bottom:10px; line-height:1.4;">
+                                ملخص شامل للمخاطر، الأثر المالي والقانوني، ومصفوفة الامتثال (OWASP Top 10 2026, PCI-DSS v4.0, ISO 27001, GDPR). مخصص للمدراء التنفيذيين وأصحاب القرار.
+                            </p>
+                            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                                <button type="button" class="button button-primary" style="font-size:0.75rem; padding:6px 14px;" onclick="window.open('/api/reports/scan/' + ${targetScanId} + '/view?type=executive&lang=en', '_blank')">
+                                    English (PDF / View)
+                                </button>
+                                <button type="button" class="button button-secondary" style="font-size:0.75rem; padding:6px 14px; border-color:#3b82f6; color:#2563eb;" onclick="window.open('/api/reports/scan/' + ${targetScanId} + '/view?type=executive&lang=ar', '_blank')">
+                                    🇸🇦 النسخة العربية (PDF / معاينة)
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 2. Technical Dossier Card -->
+                        <div style="padding:1rem; border-radius:12px; border:1px solid rgba(139,92,246,0.3); background:rgba(139,92,246,0.05);">
+                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                                <span style="font-size:1.3rem;">💻</span>
+                                <b style="font-size:0.95rem; color:#6d28d9;" class="dark:text-purple-400">Technical Dossier · التقرير الفني الهندسي للمطورين</b>
+                            </div>
+                            <p style="font-size:0.75rem; color:#64748b; margin-bottom:10px; line-height:1.4;">
+                                سجل الثغرات الدقيق، إثبات المفهوم PoC والطلبات، سلاسل CVSS v3.1 القياسية، مسارات وأرقام سطور الأكواد، وترقيعات Git Diff الجاهزة للتطبيق.
+                            </p>
+                            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                                <button type="button" class="button button-primary" style="font-size:0.75rem; padding:6px 14px; background:#7c3aed; border-color:#7c3aed;" onclick="window.open('/api/reports/scan/' + ${targetScanId} + '/view?type=technical&lang=en', '_blank')">
+                                    English (PDF / View)
+                                </button>
+                                <button type="button" class="button button-secondary" style="font-size:0.75rem; padding:6px 14px; border-color:#8b5cf6; color:#7c3aed;" onclick="window.open('/api/reports/scan/' + ${targetScanId} + '/view?type=technical&lang=ar', '_blank')">
+                                    🇸🇦 النسخة العربية (PDF / معاينة)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top:1.25rem; text-align:right;">
+                        <button type="button" class="button button-secondary" style="font-size:0.8rem; padding:6px 16px;" onclick="App.closeExportReportModal()">إغلاق / Close</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    },
+
+    closeExportReportModal() {
+        const m = document.getElementById('export-report-modal');
+        if (m) m.remove();
+    },
+
+    renderCyberCopilot() {
+        return `
+            <div class="cyber-copilot-container" id="cyber-copilot-container">
+                <div class="cyber-copilot-fab" id="cyber-copilot-fab" onclick="App.toggleCyberCopilot()" title="Sential Cyber AI Copilot">
+                    <span class="pulse-ring"></span>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"></path>
+                        <rect x="3" y="8" width="18" height="12" rx="4"></rect>
+                        <line x1="9" y1="13" x2="9.01" y2="13"></line>
+                        <line x1="15" y1="13" x2="15.01" y2="13"></line>
+                        <path d="M9 17c1 .6 2 .6 3 .6s2 0 3-.6"></path>
+                    </svg>
+                </div>
+                
+                <div class="cyber-copilot-window" id="cyber-copilot-window" style="display: none;">
+                    <div class="cyber-copilot-head">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div style="width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 6px #34d399;"></div>
+                            <b style="font-size: 13px; font-weight: 700; color: #f8fafc;">Sential Cyber AI</b>
+                            <span style="font-size: 10px; background: rgba(56,189,248,0.15); color: #38bdf8; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(56,189,248,0.3);">Copilot</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button type="button" onclick="App.clearCopilotChat()" style="background:transparent; border:none; color:#94a3b8; cursor:pointer; font-size:11px;" title="Clear Chat">Clear</button>
+                            <button type="button" onclick="App.toggleCyberCopilot(false)" style="background:transparent; border:none; color:#cbd5e1; cursor:pointer; font-size:16px; padding:0 4px; line-height:1;" title="Close">&times;</button>
+                        </div>
+                    </div>
+                    
+                    <div class="cyber-copilot-messages" id="cyber-copilot-messages">
+                        <div class="copilot-msg bot">
+                            <b>مرحباً بك! أنا مساعد Sential AI الذكي.</b><br>
+                            أقدر أساعدك في أي خطوة بالفحص، شرح الثغرات، إعداد الـ Scope والـ Excluded، الفرق بين Staging و Production، أو حل الثغرات وترقيعها برمجياً. اسألني بالعربي أو الإنجليزي في أي وقت!<br><br>
+                            <i>Hello! I am your DevSecOps Copilot. Ask me anything about your scans, CVSS scoring, scope boundaries, or code fixes.</i>
+                        </div>
+                    </div>
+
+                    <div class="cyber-copilot-quick-actions" id="cyber-copilot-quick-actions">
+                        <button type="button" class="copilot-quick-chip" onclick="App.sendCopilotQuick('ما الفرق بين فحص Staging وفحص Production؟')">الفرق بين Staging و Prod</button>
+                        <button type="button" class="copilot-quick-chip" onclick="App.sendCopilotQuick('كيف يتم احتساب سكور CVSS v3.1 للثغرات؟')">حساب CVSS v3.1</button>
+                        <button type="button" class="copilot-quick-chip" onclick="App.sendCopilotQuick('كيف أقوم بضبط الـ Excluded Paths لحماية السايت؟')">ضبط الـ Excluded Paths</button>
+                        <button type="button" class="copilot-quick-chip" onclick="App.sendCopilotQuick('How to fix and remediate IDOR (BOLA) vulnerabilities?')">Fix IDOR (BOLA)</button>
+                    </div>
+
+                    <form class="cyber-copilot-input-bar" onsubmit="App.handleCopilotSubmit(event)">
+                        <input type="text" id="cyber-copilot-input" placeholder="اكتب استفسارك هنا... (Ask in Arabic or English)" autocomplete="off">
+                        <button type="submit" id="cyber-copilot-send-btn" title="Send">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        `;
+    },
+
+    toggleCyberCopilot(open) {
+        const win = document.getElementById('cyber-copilot-window');
+        if (!win) return;
+        if (typeof open === 'boolean') {
+            win.style.display = open ? 'flex' : 'none';
+        } else {
+            win.style.display = (win.style.display === 'none' || !win.style.display) ? 'flex' : 'none';
+        }
+        if (win.style.display === 'flex') {
+            const inp = document.getElementById('cyber-copilot-input');
+            if (inp) inp.focus();
+        }
+    },
+
+    sendCopilotQuick(text) {
+        const inp = document.getElementById('cyber-copilot-input');
+        if (inp) {
+            inp.value = text;
+            this.handleCopilotSubmit();
+        }
+    },
+
+    clearCopilotChat() {
+        const container = document.getElementById('cyber-copilot-messages');
+        if (!container) return;
+        container.innerHTML = `
+            <div class="copilot-msg bot">
+                <b>مرحباً بك مجدداً!</b> تم مسح المحادثة. جاهز لأي استفسار أمني.<br>
+                <i>Chat cleared. Ready for your DevSecOps queries.</i>
+            </div>
+        `;
+    },
+
+    async handleCopilotSubmit(e) {
+        if (e && e.preventDefault) e.preventDefault();
+        const inp = document.getElementById('cyber-copilot-input');
+        const container = document.getElementById('cyber-copilot-messages');
+        if (!inp || !container) return;
+        const msg = inp.value.trim();
+        if (!msg) return;
+
+        const userDiv = document.createElement('div');
+        userDiv.className = 'copilot-msg user';
+        userDiv.textContent = msg;
+        container.appendChild(userDiv);
+        inp.value = '';
+        container.scrollTop = container.scrollHeight;
+
+        const typingDiv = document.createElement('div');
+        typingDiv.className = 'copilot-msg bot typing';
+        typingDiv.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:2px;display:inline-block;margin-right:6px;"></span> جاري التفكير والتحليل...';
+        container.appendChild(typingDiv);
+        container.scrollTop = container.scrollHeight;
+
+        try {
+            const payload = {
+                message: msg,
+                context: {
+                    currentStep: this.currentView,
+                    environment: this.scanState.environment || 'development',
+                    target: this.scanState.url || this.scanState.uploadedFile?.name || 'Local Codebase',
+                    status: this.scanState.status,
+                    findingsCount: (this.findingsData || []).length,
+                    findings: (this.findingsData || []).slice(0, 5).map(f => ({
+                        title: f.title || f.name,
+                        severity: f.severity,
+                        cwe: f.cwe,
+                        file: f.file || f.path
+                    }))
+                }
+            };
+
+            const res = await fetch('/api/ai/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json();
+            typingDiv.remove();
+
+            const botDiv = document.createElement('div');
+            botDiv.className = 'copilot-msg bot';
+            
+            let text = data.reply || (data.data && data.data.reply) || 'عذراً، لم أستطع معالجة الرد الآن.';
+            let formatted = text
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+                .replace(/`([^`]+)`/g, '<code style="background:rgba(0,0,0,0.3);padding:2px 4px;border-radius:3px;color:#38bdf8;">$1</code>')
+                .replace(/\n/g, '<br>');
+            botDiv.innerHTML = formatted;
+            container.appendChild(botDiv);
+        } catch (err) {
+            typingDiv.remove();
+            const errDiv = document.createElement('div');
+            errDiv.className = 'copilot-msg bot';
+            errDiv.style.borderColor = '#ef4444';
+            errDiv.innerHTML = '<b style="color:#ef4444;">خطأ في الاتصال:</b> تعذر الوصول لمساعد الذكاء الاصطناعي حالياً.';
+            container.appendChild(errDiv);
+        }
+        container.scrollTop = container.scrollHeight;
     },
 
     renderStandardRows(findings) {

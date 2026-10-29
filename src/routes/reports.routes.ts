@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { prisma } from '../config/db';
 import { generateScanReport } from '../services/report.service';
+import { generateExecutiveReport, generateTechnicalReport } from '../services/dual-report.service';
 import { optionalAuth, AuthenticatedRequest } from '../middlewares/auth.middleware';
 
 export const reportsRouter = Router();
@@ -150,5 +151,27 @@ reportsRouter.get('/download/:id', async (req: AuthenticatedRequest, res: Respon
   } catch (error) {
     console.error('Download report error:', error);
     res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/reports/scan/:scanId/view
+ * View or print custom Executive or Technical report in Arabic or English
+ */
+reportsRouter.get('/scan/:scanId/view', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const scanId = Number(req.params.scanId);
+    const type = (req.query.type as string) === 'technical' ? 'technical' : 'executive';
+    const lang = (req.query.lang as string) === 'ar' ? 'ar' : 'en';
+
+    const reportData = await generateScanReport(scanId);
+    const html = type === 'technical'
+      ? generateTechnicalReport(reportData, lang)
+      : generateExecutiveReport(reportData, lang);
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  } catch (error) {
+    res.status(500).send(`<h3>Error generating report: ${(error as Error).message}</h3>`);
   }
 });

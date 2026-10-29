@@ -4,6 +4,7 @@ import { prisma } from '../config/db';
 import { generateScanExecutiveSummary } from './ai-analysis.service';
 import { compareWithPreviousScan } from './findings-deduplication.service';
 import { knowledgeBaseService } from './knowledge-base.service';
+import { CVSSCalculatorService } from './cvss-calculator.service';
 
 const SEVERITY_SCORES: Record<string, number> = {
   CRITICAL: 5,

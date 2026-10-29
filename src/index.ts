@@ -17,6 +17,7 @@ import { authorizationRouter } from './routes/authorization.routes';
 import { findingsRouter } from './routes/findings.routes';
 import { reportsRouter } from './routes/reports.routes';
 import { threatIntelRouter } from './routes/threat-intel.routes';
+import { aiChatRouter } from './routes/ai-chat.routes';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -90,6 +91,7 @@ app.use('/api/scans', scanRouter);
 app.use('/api/findings', findingsRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/threat-intel', threatIntelRouter);
+app.use('/api/ai', aiChatRouter);
 app.use('/api', scanRouter);
 
 app.get('/api/health', async (req: Request, res: Response) => {

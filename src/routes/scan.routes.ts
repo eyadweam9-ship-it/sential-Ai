@@ -358,7 +358,11 @@ scanRouter.post('/discover', async (req: Request, res: Response): Promise<void> 
     }
 
     const normalizedEnv = String(environment).toUpperCase() === 'STAGING' ? 'STAGING' : 'PRODUCTION';
-    const crawlSummary = await crawlWebsite(url.trim(), normalizedEnv, options);
+    const crawlOptions = {
+      ...(options || {}),
+      scope: req.body.scope || options?.scope,
+    };
+    const crawlSummary = await crawlWebsite(url.trim(), normalizedEnv, crawlOptions);
 
     res.status(200).json({
       success: true,
@@ -790,6 +794,26 @@ scanRouter.post(['/create', '/start'], optionalAuth, async (req: Request, res: R
         error: 'Confirmation required: You must explicitly confirm ownership or written authorization before launching security assessments.',
       });
       return;
+    }
+
+    // Capture Client IP, User-Agent, and Timestamp for legal audit logging
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || '127.0.0.1';
+    const userAgent = req.headers['user-agent'] || 'Unknown Client';
+    if (currentUserId) {
+      await prisma.auditLog.create({
+        data: {
+          userId: currentUserId,
+          action: 'TARGET_AUTHORIZATION_CONFIRMED',
+          details: JSON.stringify({
+            target: url || filePath || fileName || 'Local Codebase',
+            environment: normalizedEnv,
+            clientIp,
+            userAgent,
+            timestamp: new Date().toISOString(),
+            legalConsentSigned: true,
+          }),
+        },
+      }).catch(() => null);
     }
 
     // 2. Target Resolution & URL / SSRF Validation

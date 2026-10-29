@@ -3,6 +3,7 @@ import fs from 'fs';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { isInternalHostname } from './validator.service';
+import { evaluateScope, ScopeRule } from './scope.service';
 
 const execFileAsync = promisify(execFile);
 
@@ -348,20 +349,40 @@ function extractSitemapUrls(xml: string, baseUrl: URL): string[] {
 export async function crawlWebsite(
   targetUrlStr: string,
   environment: 'STAGING' | 'PRODUCTION' = 'PRODUCTION',
-  options: { maxPages?: number; maxRequests?: number; timeoutMs?: number; sessionCookie?: string; authHeader?: string } = {}
+  options: { maxPages?: number; maxRequests?: number; timeoutMs?: number; sessionCookie?: string; authHeader?: string; scope?: { includedPaths: string[]; excludedPaths: string[] } } = {}
 ): Promise<CrawlDiscoverySummary> {
   const startOverallTime = Date.now();
   const normalizedEnv = environment.toUpperCase() as 'STAGING' | 'PRODUCTION';
   const isProd = normalizedEnv === 'PRODUCTION';
 
-  const rateLimitRps = isProd ? 10 : 25;
-  const maxPages = options.maxPages || 30;
-  const maxRequests = options.maxRequests || 60;
+  const rateLimitRps = isProd ? 5 : 35;
+  const maxPages = options.maxPages || (isProd ? 25 : 50);
+  const maxRequests = options.maxRequests || (isProd ? 50 : 120);
   const maxTimeMs = options.timeoutMs || 15000;
+
+  const activeScope: ScopeRule = {
+    includedPaths: options.scope?.includedPaths && options.scope.includedPaths.length > 0 ? options.scope.includedPaths : ['/*'],
+    excludedPaths: [...(options.scope?.excludedPaths || [])],
+  };
 
   const customHeaders: Record<string, string> = {};
   if (options.sessionCookie) customHeaders['Cookie'] = options.sessionCookie;
   if (options.authHeader) customHeaders['Authorization'] = options.authHeader;
+
+  if (isProd) {
+    customHeaders['X-Sential-Security-Scan'] = 'Authorized-Audit-Engine';
+    const prodSafetyExclusions = [
+      '/logout', '/signout', '/auth/logout',
+      '/delete*', '/api/delete*',
+      '/cart/empty', '/checkout*', '/pay*',
+      '/billing/cancel*'
+    ];
+    for (const ex of prodSafetyExclusions) {
+      if (!activeScope.excludedPaths.includes(ex)) {
+        activeScope.excludedPaths.push(ex);
+      }
+    }
+  }
 
   let targetUrl: URL;
   try {
@@ -494,17 +515,24 @@ export async function crawlWebsite(
     } catch {}
   }
 
-  const addResource = (url: string, type: DiscoveredResource['type']) => {
-    if (!seenUrls.has(url)) {
-      seenUrls.add(url);
-      resources.push({
-        url,
-        type,
-        statusCode: 200,
-        responseTimeMs: 35,
-        status: 'REACHABLE',
-      });
-    }
+  const addResource = (urlStr: string, type: DiscoveredResource['type']) => {
+    try {
+      const parsed = new URL(urlStr, targetUrl);
+      if (parsed.origin !== targetUrl.origin) return;
+      const scopeCheck = evaluateScope(parsed.pathname, activeScope);
+      if (!scopeCheck.allowed) return;
+      const cleanUrl = parsed.toString();
+      if (!seenUrls.has(cleanUrl)) {
+        seenUrls.add(cleanUrl);
+        resources.push({
+          url: cleanUrl,
+          type,
+          statusCode: 200,
+          responseTimeMs: 35,
+          status: 'REACHABLE',
+        });
+      }
+    } catch {}
   };
 
   // Add all scripts from root
@@ -522,7 +550,17 @@ export async function crawlWebsite(
   }
 
   // 4. Crawl batch of discovered internal pages (multi-level deep crawl)
-  const pagesQueue = Array.from(new Set([...sitemapPages, ...extracted.pages])).slice(0, 15);
+  const pagesQueue = Array.from(new Set([...sitemapPages, ...extracted.pages]))
+    .filter(pageUrlStr => {
+      try {
+        const u = new URL(pageUrlStr, targetUrl);
+        if (u.origin !== targetUrl.origin) return false;
+        return evaluateScope(u.pathname, activeScope).allowed;
+      } catch {
+        return false;
+      }
+    })
+    .slice(0, isProd ? 15 : 30);
   const crawledPages = new Set<string>();
 
   for (const pageUrlStr of pagesQueue) {
@@ -567,7 +605,7 @@ export async function crawlWebsite(
     '/api/videos',
     '/api/admin',
     '/api/v2/users',
-  ];
+  ].filter(dp => evaluateScope(dp, activeScope).allowed);
 
   for (const dp of deepProbes) {
     if (resources.length >= maxRequests || (Date.now() - startOverallTime) > maxTimeMs) break;

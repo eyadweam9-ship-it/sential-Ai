@@ -1,4 +1,17 @@
 document.addEventListener('DOMContentLoaded', async () => {
+
+  // Tab Navigation Switching
+  document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.admin-tab-pane').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      const targetId = btn.getAttribute('data-tab');
+      const targetPane = document.getElementById(targetId);
+      if (targetPane) targetPane.classList.add('active');
+    });
+  });
+
   const token = localStorage.getItem('adminToken');
 
   if (!token) {

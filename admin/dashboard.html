@@ -29,7 +29,7 @@
           <div class="brand-name">
             Sential <span class="brand-ai">AI</span>
           </div>
-          <div class="brand-tagline">Autonomous Security</div>
+          <div class="brand-tagline">Autonomous Security SOC</div>
         </div>
       </a>
     </div>
@@ -52,199 +52,289 @@
     </div>
   </header>
 
-  <!-- Main Dashboard -->
-  <main class="dashboard-content-area">
+  <!-- Main Dashboard Content -->
+  <main class="dashboard-content-area" style="max-width: 1200px; margin: 0 auto; padding: 24px 20px;">
 
     <!-- Page Heading -->
-    <section class="dash-heading">
+    <section class="dash-heading" style="margin-bottom: 20px;">
       <div>
-        <span class="eyebrow">ADMINISTRATION / OVERVIEW</span>
-        <h1 class="dash-title" style="margin-top:8px">
-          Admin Dashboard
+        <span class="eyebrow">ADMINISTRATION / TELEMETRY</span>
+        <h1 class="dash-title" style="margin-top:6px; font-size: 24px;">
+          Security Administration Dashboard
         </h1>
-        <p class="dash-subtitle">
-          Monitor users, database targets, security scans and audit activity.
+        <p class="dash-subtitle" style="font-size: 13px;">
+          Manage target authorizations, monitor system telemetry, audit activity, and configure security engines.
         </p>
       </div>
 
       <div class="dashboard-actions">
         <span class="pulse-pill">
           <span class="pulse-dot"></span>
-          Admin Portal
+          SOC Live
         </span>
-
         <a href="Admin-management.html" class="dashboard-btn">
           Admin Management
         </a>
-
         <a href="add-admin.html" class="dashboard-btn primary">
           + Add New Admin
         </a>
       </div>
     </section>
 
-    <!-- Welcome Message -->
-    <div class="dashboard-note">
-      <strong>Welcome to Sential AI Administrator Portal.</strong>
-      Your administrator workspace is ready. Use the quick actions above to manage administrator accounts, oversee platform health, and audit system activities.
+    <!-- Tab Navigation Bar -->
+    <nav class="admin-tab-nav">
+      <button type="button" class="admin-tab-btn active" data-tab="tab-overview">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <span>Overview &amp; Telemetry</span>
+      </button>
+      <button type="button" class="admin-tab-btn" data-tab="tab-auth">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span>Target Authorizations</span>
+      </button>
+      <button type="button" class="admin-tab-btn" data-tab="tab-logs">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span>Audit Logs</span>
+      </button>
+      <button type="button" class="admin-tab-btn" data-tab="tab-engines">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>Security Engines &amp; KB</span>
+      </button>
+    </nav>
+
+    <!-- TAB 1: OVERVIEW & TELEMETRY -->
+    <div class="admin-tab-pane active" id="tab-overview">
+      <!-- Statistics Row -->
+      <section class="metrics-row" aria-label="Dashboard statistics" style="margin-bottom: 20px;">
+        <article class="metric-box">
+          <div class="metric-icon-wrap blue">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </div>
+          <div>
+            <div class="metric-val" id="totalAdmin">-</div>
+            <div class="metric-lbl">Total Admins</div>
+          </div>
+        </article>
+
+        <article class="metric-box">
+          <div class="metric-icon-wrap green">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/>
+            </svg>
+          </div>
+          <div>
+            <div class="metric-val" id="totalTargets">-</div>
+            <div class="metric-lbl">Database Targets</div>
+          </div>
+        </article>
+
+        <article class="metric-box">
+          <div class="metric-icon-wrap amber">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+            </svg>
+          </div>
+          <div>
+            <div class="metric-val" id="totalScans">-</div>
+            <div class="metric-lbl">Recorded Scans</div>
+          </div>
+        </article>
+
+        <article class="metric-box">
+          <div class="metric-icon-wrap amber">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+            </svg>
+          </div>
+          <div>
+            <div class="metric-val" id="totalAuthPending">-</div>
+            <div class="metric-lbl">Pending Auth Requests</div>
+          </div>
+        </article>
+      </section>
+
+      <!-- Telemetry Grid -->
+      <section class="sential-card" style="margin-bottom: 24px; padding: 20px;">
+        <h2 class="sential-card-title" style="margin-bottom: 12px; font-size: 16px;">Core Security Infrastructure Status</h2>
+        <div class="telemetry-grid">
+          <div class="telemetry-tile">
+            <div class="telemetry-tile-icon" style="background: #eff6ff; color: #2563eb;">📚</div>
+            <div>
+              <b style="font-size: 13px; color: #0f172a;">MITRE CWE Knowledge Base</b>
+              <p style="font-size: 11px; color: #64748b; margin: 2px 0 0 0;">970 rules loaded &bull; Version 4.20</p>
+            </div>
+          </div>
+          <div class="telemetry-tile">
+            <div class="telemetry-tile-icon" style="background: #ecfdf5; color: #059669;">🛡️</div>
+            <div>
+              <b style="font-size: 13px; color: #0f172a;">DAST Security Adapters</b>
+              <p style="font-size: 11px; color: #64748b; margin: 2px 0 0 0;">ZAP, Nuclei, GraphQL, JWT, SSRF</p>
+            </div>
+          </div>
+          <div class="telemetry-tile">
+            <div class="telemetry-tile-icon" style="background: #fdf4ff; color: #9333ea;">⚡</div>
+            <div>
+              <b style="font-size: 13px; color: #0f172a;">AI Reasoning Copilot</b>
+              <p style="font-size: 11px; color: #64748b; margin: 2px 0 0 0;">Bilingual DevSecOps Agent Active</p>
+            </div>
+          </div>
+          <div class="telemetry-tile">
+            <div class="telemetry-tile-icon" style="background: #fff7ed; color: #ea580c;">🌐</div>
+            <div>
+              <b style="font-size: 13px; color: #0f172a;">OAST Callback Collaborator</b>
+              <p style="font-size: 11px; color: #64748b; margin: 2px 0 0 0;">Blind SSRF &amp; RCE Listener Active</p>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
 
-    <!-- Statistics -->
-    <section class="metrics-row" aria-label="Dashboard statistics">
-      <article class="metric-box">
-        <div class="metric-icon-wrap blue">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-            <circle cx="9" cy="7" r="4"/>
-            <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
-          </svg>
-        </div>
-        <div>
-          <div class="metric-val" id="totalAdmin">—</div>
-          <div class="metric-lbl">Total Admin</div>
-        </div>
-      </article>
-
-      <article class="metric-box">
-        <div class="metric-icon-wrap green">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="4" width="18" height="16" rx="2"/>
-            <path d="M7 8h10M7 12h10M7 16h6"/>
-          </svg>
-        </div>
-        <div>
-          <div class="metric-val" id="totalTargets">—</div>
-          <div class="metric-lbl">Database Targets</div>
-        </div>
-      </article>
-
-      <article class="metric-box">
-        <div class="metric-icon-wrap amber">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="9"/>
-            <path d="M12 7v5l3 2"/>
-          </svg>
-        </div>
-        <div>
-          <div class="metric-val" id="totalScans">—</div>
-          <div class="metric-lbl">Recorded Scans</div>
-        </div>
-      </article>
-
-      <article class="metric-box">
-        <div class="metric-icon-wrap red">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11z"/>
-            <path d="m9 12 2 2 4-4"/>
-          </svg>
-        </div>
-        <div>
-          <div class="metric-val" id="totalAdmins">—</div>
-          <div class="metric-lbl">Active Administrators</div>
-        </div>
-      </article>
-
-      <article class="metric-box">
-        <div class="metric-icon-wrap amber">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="16" y1="13" x2="8" y2="13"/>
-            <line x1="16" y1="17" x2="8" y2="17"/>
-            <polyline points="10 9 9 9 8 9"/>
-          </svg>
-        </div>
-        <div>
-          <div class="metric-val" id="totalAuthPending">—</div>
-          <div class="metric-lbl">Pending Auth Requests</div>
-        </div>
-      </article>
-    </section>
-
-    <!-- Target Authorization Requests Section -->
-    <section class="dashboard-section sential-card" id="auth-requests" style="margin-bottom: 2rem;">
-      <div class="sential-card-head" style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
-        <div>
-          <h2 class="sential-card-title">Target Authorization Requests</h2>
-          <p class="dash-subtitle">
-            Review, approve, or reject written authorization documents submitted by users for target security scans.
-          </p>
-        </div>
-
-        <div style="display:flex; align-items:center; gap:8px;">
-          <div class="auth-filter-pills" style="display:flex; gap:4px; background:#f1f5f9; padding:4px; border-radius:8px;">
-            <button type="button" class="dashboard-btn auth-filter-btn" data-filter="ALL" style="padding:4px 10px; font-size:12px; height:auto; background:#2563eb; color:#fff;" id="filterAuthAll">All</button>
-            <button type="button" class="dashboard-btn auth-filter-btn" data-filter="PENDING" style="padding:4px 10px; font-size:12px; height:auto; background:transparent; color:#64748b;" id="filterAuthPending">Pending</button>
-            <button type="button" class="dashboard-btn auth-filter-btn" data-filter="APPROVED" style="padding:4px 10px; font-size:12px; height:auto; background:transparent; color:#64748b;" id="filterAuthApproved">Approved</button>
+    <!-- TAB 2: TARGET AUTHORIZATIONS -->
+    <div class="admin-tab-pane" id="tab-auth">
+      <section class="dashboard-section sential-card" id="auth-requests" style="margin-bottom: 2rem;">
+        <div class="sential-card-head" style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+          <div>
+            <h2 class="sential-card-title">Target Authorization Requests</h2>
+            <p class="dash-subtitle">
+              Review, approve, or reject written authorization documents submitted by users for target security scans.
+            </p>
           </div>
-          <button type="button" class="dashboard-btn" id="refreshAuthRequestsBtn">
-            Refresh Requests
+
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div class="auth-filter-pills" style="display:flex; gap:4px; background:#f1f5f9; padding:4px; border-radius:8px;">
+              <button type="button" class="dashboard-btn auth-filter-btn" data-filter="ALL" style="padding:4px 10px; font-size:12px; height:auto; background:#2563eb; color:#fff;" id="filterAuthAll">All</button>
+              <button type="button" class="dashboard-btn auth-filter-btn" data-filter="PENDING" style="padding:4px 10px; font-size:12px; height:auto; background:transparent; color:#64748b;" id="filterAuthPending">Pending</button>
+              <button type="button" class="dashboard-btn auth-filter-btn" data-filter="APPROVED" style="padding:4px 10px; font-size:12px; height:auto; background:transparent; color:#64748b;" id="filterAuthApproved">Approved</button>
+            </div>
+            <button type="button" class="dashboard-btn" id="refreshAuthRequestsBtn">
+              Refresh Requests
+            </button>
+          </div>
+        </div>
+
+        <div class="table-scroll">
+          <table class="clean-table">
+            <thead>
+              <tr>
+                <th>Target &amp; Environment</th>
+                <th>Submitter User</th>
+                <th>Signatory &amp; Role</th>
+                <th>Submitted At</th>
+                <th>Document</th>
+                <th>Status</th>
+                <th style="text-align:right;">Admin Review Actions</th>
+              </tr>
+            </thead>
+            <tbody id="authRequestsTableBody">
+              <tr>
+                <td colspan="7" class="dashboard-empty">Loading authorization requests...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- TAB 3: AUDIT LOGS -->
+    <div class="admin-tab-pane" id="tab-logs">
+      <section class="dashboard-section sential-card" id="audit-logs">
+        <div class="sential-card-head" style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <h2 class="sential-card-title">Platform Audit Logs</h2>
+            <p class="dash-subtitle">Legal and administrative audit records including IP addresses, timestamps, and target approvals.</p>
+          </div>
+          <button type="button" class="dashboard-btn" id="refreshLogsBtn">
+            Refresh Logs
           </button>
         </div>
-      </div>
 
-      <div class="table-scroll">
-        <table class="clean-table">
-          <thead>
-            <tr>
-              <th>Target &amp; Environment</th>
-              <th>Submitter User</th>
-              <th>Signatory &amp; Role</th>
-              <th>Submitted At</th>
-              <th>Document</th>
-              <th>Status</th>
-              <th style="text-align:right;">Admin Review Actions</th>
-            </tr>
-          </thead>
-          <tbody id="authRequestsTableBody">
-            <tr>
-              <td colspan="7" class="dashboard-empty">
-                Loading authorization requests...
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- Audit Logs -->
-    <section class="dashboard-section sential-card" id="audit-logs">
-      <div class="sential-card-head">
-        <div>
-          <h2 class="sential-card-title">Security & System Audit Logs</h2>
-          <p class="dash-subtitle">
-            Recent administrator logins, account changes, and security operations.
-          </p>
+        <div class="table-scroll">
+          <table class="clean-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Admin / User</th>
+                <th>Action</th>
+                <th>Details / Target / IP</th>
+              </tr>
+            </thead>
+            <tbody id="auditLogsTableBody">
+              <tr>
+                <td colspan="4" class="dashboard-empty">Loading audit logs...</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
+      </section>
+    </div>
 
-        <button type="button" class="dashboard-btn" id="refreshLogsBtn">
-          Refresh Logs
-        </button>
-      </div>
-
-      <div class="table-scroll">
+    <!-- TAB 4: ENGINES & KB -->
+    <div class="admin-tab-pane" id="tab-engines">
+      <section class="dashboard-section sential-card" style="padding: 24px;">
+        <h2 class="sential-card-title" style="margin-bottom: 8px;">Security Engine Pipeline Configuration</h2>
+        <p class="dash-subtitle" style="margin-bottom: 20px;">Detailed execution parameters, rate limits, and detection module coverage.</p>
+        
         <table class="clean-table">
           <thead>
             <tr>
-              <th>Activity</th>
-              <th>Administrator</th>
-              <th>Timestamp</th>
-              <th>Details</th>
+              <th>Engine / Adapter</th>
+              <th>Mode</th>
+              <th>Safety Profile</th>
+              <th>Ruleset Coverage</th>
+              <th>Operational Status</th>
             </tr>
           </thead>
-          <tbody id="auditLogsTableBody">
+          <tbody>
             <tr>
-              <td colspan="4" class="dashboard-empty">
-                Loading audit logs...
-              </td>
+              <td><b>OWASP ZAP Dynamic Engine</b></td>
+              <td>DAST (URL)</td>
+              <td>Production Rate Limit (5 req/s) &bull; Safe Probes</td>
+              <td>Passive + Active Probes (CSP, HSTS, Injection)</td>
+              <td><span class="pulse-pill" style="color: #059669; background: #ecfdf5;"><span class="pulse-dot"></span> Active</span></td>
+            </tr>
+            <tr>
+              <td><b>GraphQL &amp; WebSocket Inspector</b></td>
+              <td>DAST (API)</td>
+              <td>Read-only Introspection &bull; Depth limit validation</td>
+              <td>CWE-200, CWE-400, CWE-1385</td>
+              <td><span class="pulse-pill" style="color: #059669; background: #ecfdf5;"><span class="pulse-dot"></span> Active</span></td>
+            </tr>
+            <tr>
+              <td><b>JWT Security &amp; Token Verifier</b></td>
+              <td>DAST / AST</td>
+              <td>Alg None check &bull; Weak secret brute force</td>
+              <td>CWE-347, CWE-522, CWE-312, CWE-613</td>
+              <td><span class="pulse-pill" style="color: #059669; background: #ecfdf5;"><span class="pulse-dot"></span> Active</span></td>
+            </tr>
+            <tr>
+              <td><b>Cloud Metadata &amp; SSRF Engine</b></td>
+              <td>DAST (Network)</td>
+              <td>AWS IMDSv1/v2, GCP, Azure, Localhost bypass</td>
+              <td>CWE-918 (Server-Side Request Forgery)</td>
+              <td><span class="pulse-pill" style="color: #059669; background: #ecfdf5;"><span class="pulse-dot"></span> Active</span></td>
+            </tr>
+            <tr>
+              <td><b>Prototype Pollution Auditor</b></td>
+              <td>DAST / SAST</td>
+              <td>Object proto reflection &bull; Safe canaries</td>
+              <td>CWE-1321 (Prototype Pollution)</td>
+              <td><span class="pulse-pill" style="color: #059669; background: #ecfdf5;"><span class="pulse-dot"></span> Active</span></td>
+            </tr>
+            <tr>
+              <td><b>Semgrep AST &amp; CodeQL</b></td>
+              <td>SAST (Code)</td>
+              <td>Taint analysis &bull; Deep data sink tracing</td>
+              <td>Full Project Source Code Coverage</td>
+              <td><span class="pulse-pill" style="color: #059669; background: #ecfdf5;"><span class="pulse-dot"></span> Active</span></td>
             </tr>
           </tbody>
         </table>
-      </div>
-    </section>
+      </section>
+    </div>
 
     <footer style="margin-top: 40px; text-align: center; font-size: 0.8rem; color: #94a3b8;">
-      <span>Sential AI &bull; Autonomous Security SOC Dashboard &bull; All changes audited</span>
+      <span>Sential AI &bull; Autonomous Security SOC Dashboard &bull; Clean Multi-Tab Layout</span>
     </footer>
 
   </main>

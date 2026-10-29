@@ -16,6 +16,11 @@ import { AIReasoningService } from './ai-reasoning.service';
 import { AccessControlAuditorService } from './access-control-auditor.service';
 import { TokenVerifierService } from './token-verifier.service';
 import { OastService } from './oast.service';
+import { GraphqlAuditorService } from './graphql-auditor.service';
+import { JwtAuditorService } from './jwt-auditor.service';
+import { SsrfAuditorService } from './ssrf-auditor.service';
+import { PrototypePollutionAuditorService } from './prototype-pollution.service';
+import { IdorAuditorService } from './idor-auditor.service';
 
 export const activeScanState = new Map<number, { activeTool: string; activeMessage: string; progress: number }>();
 
@@ -389,6 +394,51 @@ export async function orchestrateScan(scanId: number): Promise<void> {
           }
         } catch (accessErr) {
           console.warn('[ScanOrchestrator] Access control audit notice:', (accessErr as Error).message);
+        }
+
+        // Modern Protocol & Advanced Attack Surface Auditor (GraphQL, JWT, SSRF, Prototype Pollution, IDOR)
+        try {
+          await updateScanProgress(
+            scanId,
+            19,
+            'Modern Protocol Auditor',
+            `Auditing GraphQL introspection, JWT posture, SSRF metadata, and Prototype Pollution...`
+          );
+
+          // 1. GraphQL Introspection & Depth
+          const gqlFindings = await GraphqlAuditorService.auditTarget(target.url, isProd);
+          if (gqlFindings.length > 0) {
+            await normalizeAndSaveFindings(scanId, 'GRAPHQL_AUDITOR', gqlFindings);
+          }
+
+          // 2. JWT Security & Weak Secrets
+          const tokensToAudit: string[] = [];
+          if (sessionCookie) tokensToAudit.push(sessionCookie);
+          if (authHeader) tokensToAudit.push(authHeader);
+          const jwtFindings = await JwtAuditorService.auditTokens(tokensToAudit, target.url);
+          if (jwtFindings.length > 0) {
+            await normalizeAndSaveFindings(scanId, 'JWT_AUDITOR', jwtFindings);
+          }
+
+          // 3. SSRF & Cloud Metadata
+          const ssrfFindings = await SsrfAuditorService.auditEndpoint(target.url, 'url', isProd);
+          if (ssrfFindings.length > 0) {
+            await normalizeAndSaveFindings(scanId, 'SSRF_AUDITOR', ssrfFindings);
+          }
+
+          // 4. Prototype Pollution
+          const protoFindings = await PrototypePollutionAuditorService.auditEndpoint(target.url, isProd);
+          if (protoFindings.length > 0) {
+            await normalizeAndSaveFindings(scanId, 'PROTOTYPE_POLLUTION_AUDITOR', protoFindings);
+          }
+
+          // 5. Insecure Direct Object Reference (IDOR)
+          const idorFindings = await IdorAuditorService.auditEndpoint(target.url, sessionCookie, authHeader);
+          if (idorFindings.length > 0) {
+            await normalizeAndSaveFindings(scanId, 'IDOR_AUDITOR', idorFindings);
+          }
+        } catch (modernErr) {
+          console.warn('[ScanOrchestrator] Modern threat auditor notice:', (modernErr as Error).message);
         }
       }
 
