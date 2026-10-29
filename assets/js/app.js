@@ -5605,12 +5605,6 @@ const App = {
                         </div>
                     </div>
 
-                    <div class="cyber-copilot-quick-actions" id="cyber-copilot-quick-actions">
-                        <button type="button" class="copilot-quick-chip" onclick="App.sendCopilotQuick('ما الفرق بين فحص Staging وفحص Production؟')">الفرق بين Staging و Prod</button>
-                        <button type="button" class="copilot-quick-chip" onclick="App.sendCopilotQuick('كيف يتم احتساب سكور CVSS v3.1 للثغرات؟')">حساب CVSS v3.1</button>
-                        <button type="button" class="copilot-quick-chip" onclick="App.sendCopilotQuick('كيف أقوم بضبط الـ Excluded Paths لحماية السايت؟')">ضبط الـ Excluded Paths</button>
-                        <button type="button" class="copilot-quick-chip" onclick="App.sendCopilotQuick('How to fix and remediate IDOR (BOLA) vulnerabilities?')">Fix IDOR (BOLA)</button>
-                    </div>
 
                     <form class="cyber-copilot-input-bar" onsubmit="App.handleCopilotSubmit(event)">
                         <input type="text" id="cyber-copilot-input" placeholder="اكتب استفسارك هنا... (Ask in Arabic or English)" autocomplete="off">

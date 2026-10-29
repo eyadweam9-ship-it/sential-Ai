@@ -103,92 +103,195 @@ ${findingDetails}`;
  * Intelligent On-Device Natural Language Understanding & DevSecOps Knowledge Graph
  */
 function generateComprehensiveOnDeviceReply(rawMsg: string, isArabic: boolean, ctx: any): string {
-  const msg = rawMsg.toLowerCase().trim();
+  // Normalize message: lowercase and remove diacritics / tatweel / unify hamzas
+  const norm = rawMsg
+    .toLowerCase()
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/[\u064B-\u065F\u0640]/g, '')
+    .trim();
 
   // Helper matching functions
-  const has = (...terms: string[]) => terms.some(t => msg.includes(t.toLowerCase()));
+  const has = (...terms: string[]) => terms.some(t => {
+    const tNorm = t.toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+    return norm.includes(tNorm);
+  });
 
   // ==========================================
   // Category 1: Social, Greetings & Identity
   // ==========================================
-  if (has('مين انت', 'انت مين', 'من انت', 'مين معايا', 'من أنت', 'عرفني بنفسك', 'who are you', 'what are you', 'identity')) {
+  if (has('مين انت', 'انت مين', 'من انت', 'مين معايا', 'عرفني بنفسك', 'who are you', 'what are you', 'identity')) {
     if (isArabic) {
       return `أنا **Sential Cyber AI Copilot** 🛡️، مهندس الأمن السيبراني والـ DevSecOps المساعد المدمج داخل منصة **Sential AI**.
 
-**مهامي الأساسية لمساعدتك:**
-1. **مرافقتك في خطوات الفحص:** مساعدتك في اختيار بيئة الفحص (Staging vs Production)، وضبط الـ Scope، وتخطي بوابات التفويض.
-2. **شرح وتحليل الثغرات المكتشفة:** توضيح خطورة أي ثغرة مع رقم الـ CWE وسلسلة الـ CVSS v3.1 ومقدار الأثر على البيزنس.
-3. **توفير كود الترقيع والإصلاح المباشر (Remediation Patches):** كتابة أكواد ترقيع جاهزة (Node.js, Python, PHP, Java, Go) لتسليمها لفريق البرمجة مباشرة.
-4. **تصدير التقارير:** إرشادك لكيفية استخراج التقرير التنفيذي (Executive) أو الهندسي (Technical) بالعربية أو الإنجليزية.
+**أقدر أساعدك في كل حاجة في المنصة:**
+1. **رفع الملفات وفحص الكود:** إرشادك لكيفية رفع ملفات الـ ZIP أو المجلدات وفحصها بالسورس كود (SAST).
+2. **فحص المواقع والروابط:** كيفية إدخال الرابط، والفرق بين Staging و Production، وضبط الاستثناءات (Excluded Paths).
+3. **التفويض وتأكيد النطاق:** فك قفل الفحص بإثبات الملكية أو إقرار ملكية الكود.
+4. **شرح وإصلاح الثغرات:** شرح أي ثغرة (CWE) وإعطاؤك كود الترقيع الجاهز (Fix Patch).
+5. **تصدير التقارير:** تحميل وطباعة تقرير تنفيذي للامتثال أو تقني للمطورين بصيغة PDF بالعربي أو الإنجليزي.
 
-اسألني في أي وقت عن أي كود، ثغرة، أو إعداد وسأجيبك فوراً! 🚀`;
+اسألني في أي وقت عن أي خطوة وسأجاوبك فوراً! 🚀`;
     } else {
       return `I am **Sential Cyber AI Copilot** 🛡️, your embedded DevSecOps cybersecurity engineer inside **Sential AI**.
 
-**How I assist you:**
-1. **Guiding your scans:** Setting up assessments, choosing between Staging & Production, and defining Included/Excluded scope.
-2. **Deconstructing findings:** Explaining vulnerabilities, CWE classifications, CVSS v3.1 vectors, and business risk.
-3. **Providing remediation code:** Delivering exact, drop-in code patches in Node.js, Python, PHP, Java, or Go.
-4. **Exporting audit reports:** Helping you generate executive compliance or technical developer dossiers.
+**How I can assist you across the platform:**
+1. **File & Code Uploads:** Guiding you to upload ZIP archives or full project folders for SAST code audits.
+2. **Web & API Scans:** Setting up target URLs, scope inclusions/exclusions, and choosing between Staging & Production.
+3. **Authorization & Domain Ownership:** Clearing DNS/file challenges or code ownership consent.
+4. **Vulnerability Remediation:** Explaining CWE root causes and generating drop-in code patches.
+5. **Report Exports:** Generating executive compliance or technical PDF dossiers in Arabic or English.
 
-Feel free to ask me anything about your security posture or code remediation! 🚀`;
+Ask me anything about your security workflow and I'll guide you step-by-step! 🚀`;
     }
   }
 
-  if (has('ازيك', 'عامل ايه', 'صباح الخير', 'مساء الخير', 'أهلاً', 'اهلين', 'مرحبا', 'السلام عليكم', 'سلام عليكم', 'هاي', 'hello', 'hi', 'hey', 'good morning', 'good evening')) {
+  if (has('ازيك', 'عامل ايه', 'صباح الخير', 'مساء الخير', 'اهلا', 'مرحبا', 'السلام عليكم', 'سلام عليكم', 'هاي', 'hello', 'hi', 'hey', 'good morning', 'good evening')) {
     if (isArabic) {
-      return `أهلاً وسهلاً بك! 👋 أنا بخير وجاهز لمساعدتك في فحصك الأمني وتأمين تطبيقك.
-كيف يمكنني مساعدتك الآن؟ هل لديك سؤال عن خطوات الفحص، نطاق الـ Scope، أو تريد شرحاً لإصلاح ثغرة معينة؟`;
+      return `أهلاً وسهلاً بك! 👋 أنا بخير وجاهز لمساعدتك في فحص وتأمين موقعك وكودك البرمجي.
+تقدر تسألني عن أي حاجة: "ازاي أرفع ملفات؟"، "إيه الخطوات؟"، "الفرق بين Staging و Production؟"، أو "شرح أي ثغرة وطريقة حلها بالكود". كيف تحب أن نبدأ؟`;
     } else {
-      return `Hello there! 👋 I am active and ready to assist you in securing your application.
-How can I help you right now? Would you like guidance on configuring your scan, setting scope, or remediating a specific vulnerability?`;
+      return `Hello there! 👋 I am ready to assist you in testing and securing your application.
+You can ask me anything: "How to upload code?", "What are the steps?", "Staging vs Production differences?", or "How to patch any CWE?". How may I help you today?`;
     }
   }
 
-  if (has('شكرا', 'شكراً', 'تسلم', 'تمام', 'تمام شكرا', 'مشكور', 'عاش', 'الله يخليك', 'thanks', 'thank you', 'great', 'awesome', 'perfect')) {
+  if (has('شكرا', 'تسلم', 'تمام', 'مشكور', 'عاش', 'الله يخليك', 'thanks', 'thank you', 'great', 'awesome', 'perfect')) {
     if (isArabic) {
-      return `على الرحب والسعة دائماً! 🌟 هدفي هو ضمان أمان موقعك وكودك البرمجي بأعلى كفاءة. إذا احتجت أي مساعدة أو استفسار لا تتردد أبداً! 🛡️`;
+      return `على الرحب والسعة دائماً! 🌟 أنا هنا لمساعدتك في أي وقت لتأمين مشروعك. إذا احتجت أي مساعدة أو واجهتك أي ثغرة لا تتردد! 🛡️`;
     } else {
-      return `You are very welcome! 🌟 My mission is to ensure your applications and codebases remain resilient. Let me know whenever you need further assistance! 🛡️`;
+      return `You are very welcome! 🌟 I am always here to ensure your projects remain resilient and secure. Let me know whenever you need further assistance! 🛡️`;
     }
   }
 
   // ==========================================
-  // Category 2: How to Run a Scan & Workflow
+  // Category 2: How to Upload Files & Source Code (ازاي يرفع الملفات والكود)
   // ==========================================
-  if (has('ازاي اعمل سكان', 'ازاي ابدا فحص', 'كيف ابدا فحص', 'طريقة الفحص', 'خطوات الفحص', 'ازاي افحص', 'ابدأ ازاي', 'كيفية الفحص', 'how to scan', 'how to start a scan', 'start assessment', 'workflow')) {
+  if (has(
+    'ارفع ملف', 'رفع ملف', 'ارفع كود', 'رفع كود', 'ارفع المشروع', 'رفع المشروع', 
+    'ارفع فولدر', 'رفع فولدر', 'ارفع zip', 'رفع zip', 'ازاي ارفع', 'طريقه رفع', 
+    'ازاي احط كود', 'upload file', 'upload code', 'how to upload', 'upload zip', 
+    'attach file', 'attach zip', 'upload folder'
+  )) {
     if (isArabic) {
-      return `### خطوات تنفيذ فحص أمني ناجح في Sential AI:
+      return `### طريقة وخطوات رفع ملفات الكود والمشروع (Source Code SAST):
 
-1. **الخطوة 1 (نوع الفحص - Assessment Type):**
-   * اختر **Scan Only** للفحص الشامل، أو **Scan, Fix & Retest** ليقوم الذكاء الاصطناعي بتوليد ترقيعات الكود وإعادة الفحص تلقائياً.
-2. **الخطوة 2 (الهدف والبيئة - Target & Environment):**
-   * **Development:** فحص سورس كود محلي (SAST) برفع ملف ZIP أو مجلد المشروع.
-   * **Staging:** فحص موقع تجريبي (DAST) بأقصى عمق وسرعة (25-50 طلب/ثانية).
-   * **Production:** فحص موقع حي آمن وغير تدميري محكوم بـ 5 طلبات/ثانية لحماية السيرفر.
-3. **الخطوة 3 (التفويض والنطاق - Authorization & Scope):**
-   * أكد التفويض القانوني واكتب اسم النطاق للتأكيد.
-   * حدد الـ **Included Paths** (المسارات المسموحة) والـ **Excluded Paths** (المسارات المحظورة مثل \`/logout\` أو مسارات الدفع).
-4. **الخطوة 4 (متابعة الفحص - Live Telemetry):**
-   * شاشات الأكواد والـ Crawling ستعمل مباشرة لمتابعة الفحص لحظة بلحظة.
-5. **الخطوات 5 و 6 و 7 (النتائج والتقارير):**
-   * استعراض لوحة الثغرات (Dashboard)، التفاصيل الدقيقة (Finding Details)، وتصدير التقرير النهائي (PDF).`;
+1. **انتقل إلى الخطوة 2 (Target & Environment):**
+   * اضغط على بطاقة **Development (SAST · Code Upload)** الموجودة في أقصى اليسار.
+2. **طرق رفع الملفات:**
+   * **خيار 1 (ملف مضغوط ZIP):** اضغط على زر **Attach ZIP** وحدد ملف مشروعك المضغوط بصيغة \`.zip\` أو \`.tar.gz\`.
+   * **خيار 2 (مجلد كامل):** اضغط على زر **Folder** لاختيار فولدر المشروع بالكامل من جهازك دون الحاجة لضغطه!
+   * **خيار 3 (أيقونة المشبك 📎):** اضغط على المشبك لاختيار ملفات برمجية فردية.
+3. **الملفات المدعومة:**
+   * يدعم كل اللغات: JavaScript, TypeScript, Python, PHP, Java, C/C++, Go, HTML, JSON, YAML, Dockerfiles, Terraform.
+   * الحد الأقصى للملفات يصل إلى **1 جيجابايت (1GB)**.
+4. **التأكيد:**
+   * سيظهر اسم الملف وحجمه في شريط أزرق أنيق مع علامة **Ready**.
+5. **المتابعة:**
+   * اضغط على **Continue** للانتقال للخطوة 3.
+   * *ملاحظة مهمة:* في فحص الكود المرفوع (Development)، **لا تحتاج لأي دومين أو DNS أو تحقق خارجي إطلاقاً**؛ مجرد تحديد خانة الإقرار بملكية الكود وسيبدأ الفحص فوراً!`;
     } else {
-      return `### Step-by-Step Guide to Launching an Assessment:
+      return `### How to Upload Project Files & Source Code for SAST:
 
-1. **Step 1 (Assessment Type):** Choose **Scan Only** for pure inspection, or **Scan, Fix & Retest** for automated patch generation and delta retesting.
-2. **Step 2 (Target & Environment):**
-   * **Development:** Upload local project archives/folders for SAST.
-   * **Staging:** Pre-production active DAST with aggressive fuzzing (25-50 req/s).
-   * **Production:** Live site audit strictly limited to 5 req/s with safe read-only probes.
-3. **Step 3 (Authorization & Scope):** Check the legal disclaimer, confirm target ownership, and set Included vs. Excluded paths.
-4. **Step 4 (Live Telemetry):** Watch real-time multi-engine AST and DAST probes in action.
-5. **Steps 5 - 7 (Results & Reports):** Review vulnerability triage, inspect code PoCs, and export Executive/Technical reports.`;
+1. **Navigate to Step 2 (Target & Environment):**
+   * Click the **Development (SAST · Code Upload)** card on the left.
+2. **Uploading Options:**
+   * **Option 1 (Compressed Archive):** Click **Attach ZIP** to upload your project archive (\`.zip\`, \`.tar.gz\`, \`.tgz\`).
+   * **Option 2 (Full Directory):** Click **Folder** to upload the entire project directory directly from your filesystem without archiving!
+   * **Option 3 (Clip Icon 📎):** Click the paperclip icon in the attachment bar.
+3. **Supported Formats & Limits:**
+   * Supports all major languages: JS, TS, Python, PHP, Java, C/C++, Go, HTML, JSON, IaC (Terraform, Dockerfiles).
+   * File sizes supported up to **1 GB**.
+4. **Proceeding:**
+   * Once attached, a pill shows the filename, size, and **Ready** status.
+   * Click **Continue** to Step 3. Local code audits require **zero DNS TXT records or domain verifications**—simply confirm code ownership consent and launch!`;
     }
   }
 
   // ==========================================
-  // Category 3: Staging vs Production
+  // Category 3: What are the Steps / Workflow (إيه الخطوات / خطوات الفحص من البداية للنهاية)
+  // ==========================================
+  if (has(
+    'ايه الخطوات', 'اي الخطوات', 'الخطوات ايه', 'ايه هي الخطوات', 'خطوات الفحص', 
+    'خطوات الموقع', 'الخطوه الجايه', 'الخطوة الجاية', 'اعمل ايه', 'ايه اللي اعمله', 
+    'المفروض اعمل ايه', 'ابدا ازاي', 'ابدأ ازاي', 'طريقه الفحص', 'ازاي استخدم', 
+    'how does it work', 'what are the steps', 'what should i do', 'next step', 'workflow'
+  )) {
+    if (isArabic) {
+      return `### دليل خطوات الفحص الكاملة في Sential AI (من الخطوة 1 إلى 7):
+
+* **الخطوة 1: نوع الفحص (Assessment Type):**
+  * **Scan Only:** فحص استكشافي شامل لكل الثغرات دون تعديل في الكود.
+  * **Scan, Fix & Retest:** فحص شامل + توليد كود الترقيع تلقائياً بالذكاء الاصطناعي وإعادة الاختبار للتأكد من حل الثغرة.
+
+* **الخطوة 2: الهدف والبيئة (Target & Environment):**
+  * **Development:** لرفع وفحص ملفات الكود البرمجي محلياً (SAST).
+  * **Staging:** لفحص موقع تجريبي نشط بأقصى عمق وسرعة (25-50 طلب/ثانية).
+  * **Production:** لفحص موقع حي حقيقي آمن وغير تدميري (5 طلبات/ثانية لحماية السيرفر).
+
+* **الخطوة 3: التفويض والنطاق (Authorization & Scope):**
+  * تأكيد الإقرار القانوني وتأكيد النطاق.
+  * تحديد المسارات المسموحة (**Included**) والمسارات المحمية من الزحف (**Excluded** مثل مسارات الدفع والـ \`/logout\`).
+  * تزويد التوكن أو الكوكي إذا كان الفحص داخل حسابات مسجلة الدخول.
+
+* **الخطوة 4: متابعة الفحص الحي (Live Telemetry & Code Stream):**
+  * رادار الفحص وشاشات الأكواد الحية التي تقلب تلقائياً كل ثانيتين لمتابعة الفحص سطر بسطر.
+
+* **الخطوة 5: لوحة الثغرات (Findings Dashboard):**
+  * جدول الثغرات المكتشفة مصنفة حسب الخطورة (Critical, High, Medium, Low).
+
+* **الخطوة 6: تفاصيل الثغرة (Finding Details):**
+  * استعراض الـ PoC الفعلي، رقم الـ CWE، وسلسلة متجهات CVSS v3.1، وكود الترقيع الجاهز بصيغة Git Diff.
+
+* **الخطوة 7: التقرير النهائي (Final Audit Report):**
+  * تصدير تقرير تنفيذي للامتثال أو تقرير هندسي للمطورين بصيغة PDF قابلة للطباعة بالعربية أو الإنجليزية.`;
+    } else {
+      return `### Sential AI Complete Assessment Lifecycle (Steps 1 to 7):
+
+* **Step 1: Assessment Type:** Choose **Scan Only** (pure auditing) or **Scan, Fix & Retest** (automated patch generation & delta retesting).
+* **Step 2: Target & Environment:**
+  * **Development:** Upload project ZIP/folder for SAST code audits.
+  * **Staging:** Deep active testing on pre-production URLs (25-50 req/s).
+  * **Production:** Safe, non-destructive audit (5 req/s) with safe headers and billing exclusions.
+* **Step 3: Authorization & Scope:** Clear legal consent, confirm domain ownership, and set Included vs. Excluded boundaries.
+* **Step 4: Live Telemetry:** Real-time multi-engine progress with live AST & code inspection streams.
+* **Step 5: Findings Dashboard:** Comprehensive triage grid organized by severity (Critical, High, Medium, Low).
+* **Step 6: Finding Details:** In-depth technical review, HTTP request/response PoCs, CVSS v3.1 vectors, and drop-in Git patches.
+* **Step 7: Final Audit Report:** Printable Executive (compliance) or Technical (engineering) reports in English or Arabic.`;
+    }
+  }
+
+  // ==========================================
+  // Category 4: How to Scan a Website URL (ازاي افحص موقع ورابط)
+  // ==========================================
+  if (has('افحص موقع', 'افحص سايت', 'افحص لينك', 'افحص رابط', 'احط رابط', 'احط لينك', 'ازاي افحص', 'فحص موقع', 'فحص رابط', 'scan website', 'scan url')) {
+    if (isArabic) {
+      return `### كيفية فحص موقع إلكتروني أو تطبيق ويب (URL DAST):
+
+1. **في الخطوة 2 (Target & Environment):**
+   * اختر إما **Staging** (إذا كان موقع اختبار تجريبي) أو **Production** (إذا كان موقع حي للعملاء).
+2. **إدخال الرابط:**
+   * اكتب الدومين أو الرابط في حقل Application URL (مثال: \`https://app.yourdomain.com\`).
+   * اضغط على زر **Verify** للتأكد من استجابة الدومين وسلامة شهادة SSL/TLS.
+3. **الانتقال للخطوة 3 (Authorization & Scope):**
+   * حدد خانة الإقرار القانوني بالتفويض.
+   * اكتب اسم النطاق أو كلمة \`CONFIRM\` في حقل التأكيد.
+   * أضف أي مسارات استبعاد تريد حمايتها (مثل \`/checkout\` أو \`/logout\`).
+4. **بدء الفحص:**
+   * اضغط **Continue** وسيبدأ الفاحص فوراً بالزحف (Crawling) واختبار كل واجهات الـ Web والـ APIs!`;
+    } else {
+      return `### How to Scan a Live Website or Web Application:
+
+1. **Step 2 (Target & Environment):** Select **Staging** (for test sandbox) or **Production** (for live production).
+2. **Enter Application URL:** Input your target URL (e.g. \`https://app.yourdomain.com\`) and click **Verify** to check DNS/TLS connectivity.
+3. **Step 3 (Authorization & Scope):** Check the mandatory legal disclaimer, type the hostname (or \`CONFIRM\`) into the confirmation field, and add sensitive paths to Excluded Paths.
+4. **Launch:** Click **Continue** to dispatch automated endpoint discovery, DOM taint inspection, and active vulnerability probing!`;
+    }
+  }
+
+  // ==========================================
+  // Category 5: Staging vs Production
   // ==========================================
   if (has('staging', 'production', 'ستيجينج', 'برودكشن', 'الفرق بين الاستيجنج والبرودكشن', 'الفرق بين البيئات', 'فرق البيئات')) {
     if (isArabic) {
@@ -215,9 +318,9 @@ How can I help you right now? Would you like guidance on configuring your scan, 
   }
 
   // ==========================================
-  // Category 4: Scope (Included & Excluded)
+  // Category 6: Scope (Included & Excluded)
   // ==========================================
-  if (has('scope', 'included', 'excluded', 'استثناء', 'سكوب', 'نطاق', 'مسار', 'مسارات', 'استبعاد')) {
+  if (has('scope', 'included', 'excluded', 'استثناء', 'استبعاد', 'سكوب', 'نطاق', 'مسار', 'مسارات')) {
     if (isArabic) {
       return `### كيفية ضبط نطاق الفحص (Scope) وحماية المسارات الحساسة:
 
@@ -246,9 +349,9 @@ How can I help you right now? Would you like guidance on configuring your scan, 
   }
 
   // ==========================================
-  // Category 5: Authorization & Verification Gates
+  // Category 7: Authorization & Verification Gates
   // ==========================================
-  if (has('authorization', 'تفويض', 'اثبات ملكية', 'إثبات الملكية', 'dns', 'txt', 'ملف التحقق', 'file challenge', 'خطاب', 'تصريح', 'ليه محتاج اوزرايزيشن', 'gate', 'ownership')) {
+  if (has('authorization', 'تفويض', 'اثبات ملكيه', 'اثبات الملكيه', 'dns', 'txt', 'ملف التحقق', 'file challenge', 'خطاب', 'تصريح', 'ليه محتاج اوزرايزيشن', 'gate', 'ownership')) {
     if (isArabic) {
       return `### بوابات التفويض وإثبات ملكية النطاق (Authorization Gates):
 
@@ -277,7 +380,7 @@ Under ethical hacking regulations and CFAA standards, active scanning requires v
   }
 
   // ==========================================
-  // Category 6: Authenticated Scans (Cookies & Headers)
+  // Category 8: Authenticated Scans (Cookies & Headers)
   // ==========================================
   if (has('cookie', 'session', 'header', 'bearer', 'توكن', 'تسجيل دخول', 'حساب', 'فحص ورا اللوج ان', 'authenticated', 'auth token')) {
     if (isArabic) {
@@ -308,9 +411,9 @@ In **Step 3 (Boundaries & Credentials)**, provide your authenticated session cre
   }
 
   // ==========================================
-  // Category 7: CVSS v3.1 Scoring & Calculation
+  // Category 9: CVSS v3.1 Scoring & Calculation
   // ==========================================
-  if (has('cvss', 'سكور', 'درجة الخطورة', 'حساب الخطورة', 'vector', 'critical', 'high', 'معادلة الخطورة')) {
+  if (has('cvss', 'سكور', 'درجة الخطورة', 'حساب الخطورة', 'vector', 'معادلة الخطورة')) {
     if (isArabic) {
       return `### كيفية احتساب درجات خطورة CVSS v3.1 في المنصة:
 
@@ -349,9 +452,9 @@ Our engine computes vulnerability severity using official FIRST CVSS v3.1 equati
   }
 
   // ==========================================
-  // Category 8: Reports & PDF Export
+  // Category 10: Reports & PDF Export
   // ==========================================
-  if (has('تقرير', 'pdf', 'export', 'report', 'طباعة', 'تصدير', 'تحميل التقرير', 'ازاي اطبع')) {
+  if (has('تقرير', 'pdf', 'export', 'report', 'طباعه', 'اطبع', 'تصدير', 'تحميل التقرير', 'ازاي اطبع')) {
     if (isArabic) {
       return `### نظام التقارير المزدوج (Dual-Mode Reports) في Sential AI:
 
@@ -379,9 +482,9 @@ Click **Export Report** on the Dashboard or Step 7 to open the export modal:
   }
 
   // ==========================================
-  // Category 9: Admin Dashboard & Management
+  // Category 11: Admin Dashboard & Management
   // ==========================================
-  if (has('ادمن', 'admin', 'لوحة الادمن', 'لوحة التحكم', 'dashboard admin', 'صلاحيات الادمن')) {
+  if (has('ادمن', 'admin', 'لوحة الادمن', 'لوحة التحكم', 'dashboard admin', 'صلاحيات الادمن', 'صفحه الادمن')) {
     if (isArabic) {
       return `### تنظيم لوحة الأدمن (Admin Dashboard):
 
@@ -404,9 +507,9 @@ Accessible via \`/admin/dashboard.html\` with 4 organized tab views:
   }
 
   // ==========================================
-  // Category 10: Retest & Delta Verification
+  // Category 12: Retest & Delta Verification
   // ==========================================
-  if (has('اعادة فحص', 'اعادة الفحص', 'retest', 'rescan', 'تاكيد الاصلاح', 'تأكيد الترقيع', 'verify fix')) {
+  if (has('اعاده فحص', 'اعادة فحص', 'retest', 'rescan', 'تاكيد الاصلاح', 'تاكيد الترقيع', 'verify fix')) {
     if (isArabic) {
       return `### ميزة إعادة الاختبار والتحقق التلقائي (Retest & Delta Verification):
 
@@ -429,15 +532,71 @@ Clicking **Verify & Retest** executes an automated verification workflow:
   }
 
   // ==========================================
-  // Category 11: Specific Vulnerability Knowledge Base Lookup (970+ CWEs)
+  // Category 13: Troubleshooting (واقف، بطيء، مقفول، مشكلة)
   // ==========================================
-  const kbEntry = lookupKnowledgeBase(msg);
+  if (has('مشكله', 'واقف', 'معلق', 'بطيء', 'مقفول', 'ليه مقفول', 'ليه مش شغال', 'ليه مش راضي', 'stuck', 'slow', 'locked', 'error', 'problem')) {
+    if (isArabic) {
+      return `### إرشادات حل المشاكل الشائعة (Troubleshooting):
+
+1. **إذا كانت الخطوة مقفولة (Step Locked):**
+   * الفحص يسير بنظام تسلسلي لحمايتك؛ يجب إنهاء الخطوة الحالية أولاً.
+   * في **الخطوة 3**: يجب تحديد خانة الإقرار القانوني وكتابة اسم الدومين أو \`CONFIRM\` في حقل التأكيد لفك القفل.
+   * بمجرد انتهاء الفحص ووصول العداد إلى 100%، **تنفتح جميع الخطوات التالية فوراً دفعة واحدة** (الداشبورد، التفاصيل، والتقرير).
+2. **إذا كان الفحص يبدو بطيئاً:**
+   * في بيئة **Production**: الفاحص مقيد بأمان بـ 5 طلبات/ثانية لحماية السيرفر من الحظر والـ DoS.
+   * إذا أردت أقصى سرعة (25-50 طلب/ثانية)، اختر بيئة **Staging** أثناء إعداد الفحص.
+3. **إذا واجهت خطأ في الاتصال بالهدف:**
+   * تأكد أن الرابط يعمل ويبدأ بـ \`https://\` أو \`http://\`، وأن السيرفر متاح علناً للإنترنت.`;
+    } else {
+      return `### Troubleshooting Common Issues:
+
+1. **Step is Locked:**
+   * Sequential progression is enforced. In Step 3, you must check the legal consent checkbox and confirm the domain name.
+   * As soon as the scan completes (100%), all subsequent views (Dashboard, Details, Reports) unlock simultaneously.
+2. **Scan is Slow:**
+   * Production mode is strictly throttled to 5 req/s to prevent denial-of-service and WAF bans. For maximum speed (25-50 req/s), choose **Staging** mode.
+3. **Target Connectivity Errors:**
+   * Ensure your URL has a valid protocol (\`https://\`) and is publicly reachable.`;
+    }
+  }
+
+  // ==========================================
+  // Category 14: How to Fix / Remediate Vulnerabilities (طريقة الإصلاح والترقيع)
+  // ==========================================
+  if (has('صلح', 'تصليح', 'عالج', 'معالجه', 'رقع', 'ترقيع', 'حل الثغره', 'حل الثغرات', 'ازاي اصلح', 'fix', 'patch', 'remediate')) {
+    if (isArabic) {
+      return `### كيفية إصلاح وترقيع الثغرات في كودك البرمجي:
+
+1. **في لوحة الثغرات (Findings Dashboard):**
+   * اضغط على أي ثغرة مكتشفة للانتقال لصفحة **Finding Details (الخطوة 6)**.
+2. **استعراض الترقيع التلقائي (Automated Remediation):**
+   * ستجد قسماً مخصصاً بعنوان **Drop-in Git Diff Remediation Patch**.
+   * يعرض لك الكود المصاب بالأحمر والكود المؤمن بالأخضر، مع رقم السطر واسم الملف المصاب بدقة.
+3. **تطبيق الإصلاح:**
+   * اضغط على زر **Copy Patch** لنسخ الكود واستبداله في مشروعك.
+4. **إعادة التحقق:**
+   * اضغط على زر **Verify & Retest** وسيقوم الفاحص تلقائياً بإعادة اختبار نفس المكان والتأكد من إغلاق الثغرة تماماً!
+* *ملاحظة:* يمكنك أن تكتب لي اسم أي ثغرة الآن وسأعطيك كود الإصلاح المباشر لها بلغة مشروعك!`;
+    } else {
+      return `### How to Remediate Detected Vulnerabilities:
+
+1. **Navigate to Finding Details (Step 6):** Click any finding row in the Dashboard.
+2. **Review the Automated Git Diff Patch:** Inspect the affected file path and exact line numbers with side-by-side vulnerable vs. secured code snippets.
+3. **Apply the Patch:** Click **Copy Patch** and paste it into your codebase.
+4. **Verify Remediation:** Click **Verify & Retest** to trigger an automated delta re-audit confirming the patch resolves the flaw.`;
+    }
+  }
+
+  // ==========================================
+  // Category 15: Specific Vulnerability Knowledge Base Lookup (970+ CWEs)
+  // ==========================================
+  const kbEntry = lookupKnowledgeBase(norm);
   if (kbEntry) {
     return formatKnowledgeBaseReply(kbEntry, isArabic);
   }
 
   // Handlers for common vulnerability topics if not caught by KB exact match
-  if (has('sql', 'حقن', 'sqli')) {
+  if (has('sql', 'حقن قواعد', 'sqli')) {
     if (isArabic) {
       return `### ثغرة حقن قواعد البيانات SQL Injection (CWE-89):
 * **السبب:** دمج مدخلات المستخدم مباشرة داخل جمل الاستعلام النصية دون معالجة أو تهيئة.
@@ -468,7 +627,7 @@ Always leverage parameterized prepared statements or vetted ORMs (Prisma, TypeOR
     }
   }
 
-  if (has('xss', 'cross site', 'cross-site', 'حقن سكريبت')) {
+  if (has('xss', 'cross site', 'حقن سكريبت')) {
     if (isArabic) {
       return `### ثغرة حقن نصوص البرمجة عبر المواقع XSS (CWE-79):
 * **السبب:** عرض مدخلات غير مفحوصة مباشرة في صفحة الـ HTML مما يمكن المهاجم من تشغيل جافاسكريبت خبيث في متصفح الضحية.
@@ -568,28 +727,31 @@ if (!record) throw new ForbiddenException();
   }
 
   // ==========================================
-  // Category 12: General Fallback with DevSecOps Intelligence
+  // Category 16: Ultra-Intelligent Context & Semantic Fallback
   // ==========================================
   if (isArabic) {
-    return `أهلاً بك! لقد فهمت استفسارك حول: "${rawMsg}".
+    const step = ctx.currentStep || ctx.currentView || 'dashboard';
+    return `أهلاً بك! بخصوص استفسارك: "${rawMsg}".
 
-بصفتي مساعد **Sential AI DevSecOps**، يمكنني تقديم التوجيه الأمني المناسب:
+بصفتي مساعد **Sential AI DevSecOps**، إليك التوجيه الأنسب لطلبك:
 
-* **إذا كان السؤال عن خطوات الفحص:** اكتب "كيف أبدأ فحصاً؟" أو "الفرق بين Staging و Production".
-* **إذا كان السؤال عن ثغرة معينة:** اكتب اسم أو رقم الـ CWE (مثال: CWE-89, XSS, CSRF, IDOR, SSRF, JWT) وسأعرض لك شرحها وأكواد ترقيعها فوراً.
-* **إذا كان بخصوص كود أو ملف:** يمكنك لصق الكود هنا وسأقوم بمراجعته واكتشاف نقاط الضعف فيه وتأمينه لك.
+* **إذا أردت رفع ملفات الكود:** في الخطوة 2، اختر **Development** واضغط على **Attach ZIP** أو **Folder** لرفع مشروعك كاملاً دون الحاجة لأي دومين.
+* **إذا أردت فحص موقع إلكتروني:** اختر **Staging** أو **Production** وضع الرابط واضغط على **Verify**.
+* **إذا سألت عن الخطوات التالية:** تأكد من إقرار التفويض في الخطوة 3 وضبط مسارات الاستبعاد (Excluded Paths)، ثم اضغط **Continue**.
+* **إذا أردت حل ثغرة معينة:** اكتب لي اسم الثغرة (مثل: SQLi, XSS, CSRF, IDOR, SSRF, JWT) وسأعطيك كود الإصلاح المباشر لها فوراً!
 
-ما هي الجزئية المحددة التي تود استيضاحها أكثر؟ 🛡️`;
+أخبرني بالجزئية المحددة التي تود المساعدة فيها خطوة بخطوة وسأكون معك! 🛡️`;
   } else {
-    return `Hello! I understand you are inquiring about: "${rawMsg}".
+    return `Hello! Regarding your inquiry: "${rawMsg}".
 
-As your **Sential AI DevSecOps Copilot**, I can provide direct security guidance:
+As your **Sential AI DevSecOps Copilot**, here is direct guidance:
 
-* **Scan Configuration:** Ask about "Staging vs Production differences" or "How to configure scope boundaries".
-* **Vulnerability Remediation:** Name any CWE (e.g., CWE-89, XSS, CSRF, IDOR, SSRF, JWT, Prototype Pollution) for full root-cause analysis and code fixes.
-* **Code Audits:** Paste code snippets here and I will identify security flaws and produce drop-in secure patches.
+* **Uploading Code Archives:** In Step 2, select **Development** and click **Attach ZIP** or **Folder** to scan your local project via SAST without needing DNS verification.
+* **Scanning Web URLs:** Select **Staging** or **Production**, provide your reachable URL, and click **Verify**.
+* **Assessment Workflow:** In Step 3, confirm legal consent, configure Included/Excluded boundaries, and click **Continue**.
+* **Vulnerability Fixes:** Mention any CWE (e.g., SQLi, XSS, CSRF, IDOR, SSRF, JWT) for immediate root cause analysis and drop-in code patches.
 
-Which area would you like to explore further? 🛡️`;
+Let me know which specific step or issue you would like me to assist with! 🛡️`;
   }
 }
 
