@@ -21,6 +21,11 @@ import { JwtAuditorService } from './jwt-auditor.service';
 import { SsrfAuditorService } from './ssrf-auditor.service';
 import { PrototypePollutionAuditorService } from './prototype-pollution.service';
 import { IdorAuditorService } from './idor-auditor.service';
+import { FormFuzzerService } from './form-fuzzer.service';
+import { SslCipherAuditorService } from './ssl-cipher-auditor.service';
+import { SstiAuditorService } from './ssti-auditor.service';
+import { LfiCmdAuditorService } from './lfi-cmd-auditor.service';
+import { CloudLeakAuditorService } from './cloud-leak-auditor.service';
 
 export const activeScanState = new Map<number, { activeTool: string; activeMessage: string; progress: number }>();
 
@@ -436,6 +441,63 @@ export async function orchestrateScan(scanId: number): Promise<void> {
           const idorFindings = await IdorAuditorService.auditEndpoint(target.url, sessionCookie, authHeader);
           if (idorFindings.length > 0) {
             await normalizeAndSaveFindings(scanId, 'IDOR_AUDITOR', idorFindings);
+          }
+
+          // 6. Active Form & Parameter XSS Fuzzer
+          try {
+            const formFindings = await FormFuzzerService.auditFormsAndParams(
+              target.url,
+              [],
+              [],
+              sessionCookie,
+              authHeader,
+              isProd
+            );
+            if (formFindings.length > 0) {
+              await normalizeAndSaveFindings(scanId, 'FORM_XSS_FUZZER', formFindings);
+            }
+          } catch (formErr) {
+            console.warn('[ScanOrchestrator] Form fuzzer notice:', (formErr as Error).message);
+          }
+
+          // 7. Direct SSL/TLS Raw Socket & Cipher Handshake
+          try {
+            const sslFindings = await SslCipherAuditorService.auditSslTls(target.url);
+            if (sslFindings.length > 0) {
+              await normalizeAndSaveFindings(scanId, 'SSL_TLS_AUDITOR', sslFindings);
+            }
+          } catch (sslErr) {
+            console.warn('[ScanOrchestrator] SSL cipher auditor notice:', (sslErr as Error).message);
+          }
+
+          // 8. Server-Side Template Injection (SSTI)
+          try {
+            const sstiFindings = await SstiAuditorService.auditEndpoint(target.url, [], sessionCookie, authHeader, isProd);
+            if (sstiFindings.length > 0) {
+              await normalizeAndSaveFindings(scanId, 'SSTI_AUDITOR', sstiFindings);
+            }
+          } catch (sstiErr) {
+            console.warn('[ScanOrchestrator] SSTI auditor notice:', (sstiErr as Error).message);
+          }
+
+          // 9. Local File Inclusion (LFI) & OS Command Injection
+          try {
+            const lfiFindings = await LfiCmdAuditorService.auditEndpoint(target.url, [], sessionCookie, authHeader, isProd);
+            if (lfiFindings.length > 0) {
+              await normalizeAndSaveFindings(scanId, 'LFI_CMD_AUDITOR', lfiFindings);
+            }
+          } catch (lfiErr) {
+            console.warn('[ScanOrchestrator] LFI/CMD auditor notice:', (lfiErr as Error).message);
+          }
+
+          // 10. Cloud Storage Bucket Reconnaissance
+          try {
+            const cloudFindings = await CloudLeakAuditorService.auditCloudBuckets(target.url, isProd);
+            if (cloudFindings.length > 0) {
+              await normalizeAndSaveFindings(scanId, 'CLOUD_LEAK_AUDITOR', cloudFindings);
+            }
+          } catch (cloudErr) {
+            console.warn('[ScanOrchestrator] Cloud leak auditor notice:', (cloudErr as Error).message);
           }
         } catch (modernErr) {
           console.warn('[ScanOrchestrator] Modern threat auditor notice:', (modernErr as Error).message);

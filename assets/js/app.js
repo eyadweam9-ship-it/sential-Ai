@@ -6099,14 +6099,50 @@ const App = {
                             </div>
 
                             <section class="detail-section">
-                                <h2>Recommended patch</h2>
-                                <div class="code-head">
-                                    <span id="finding-patch-filename">${escapeHtml(patchFile)}</span>
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:8px;">
+                                    <h2 style="margin:0;">Source Code Remediation (Git Diff)</h2>
                                     <button type="button" class="button button-ghost" onclick="App.copyPatch()">
-                                        ${Icons.get('copy', 'size-4')} Copy patch
+                                        ${Icons.get('copy', 'size-4')} Copy Git Patch
                                     </button>
                                 </div>
+                                <div class="code-head">
+                                    <span id="finding-patch-filename">${escapeHtml(patchFile)}</span>
+                                </div>
                                 <pre class="code-block diff"><code id="finding-fix-code">${escapeHtml(patchDiff)}</code></pre>
+                            </section>
+
+                            <section class="detail-section">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+                                    <div>
+                                        <h2 style="margin:0;">Multi-Platform Server Hardening Patches</h2>
+                                        <p style="font-size:11px; color:#64748b; margin:2px 0 0;">Download ready-to-deploy configuration files for production web servers &amp; frameworks.</p>
+                                    </div>
+                                    <div style="display:flex; gap:8px; align-items:center;">
+                                        <select id="platform-patch-select" style="padding:4px 8px; font-size:12px; border-radius:6px; border:1px solid #cbd5e1; background:#ffffff; color:#0f172a;" onchange="App.loadPlatformPatch(this.value)">
+                                            <option value="nginx">Nginx (nginx.conf)</option>
+                                            <option value="apache">Apache (.htaccess)</option>
+                                            <option value="caddy">Caddy (Caddyfile)</option>
+                                            <option value="express">Express.js (Node)</option>
+                                            <option value="django">Django (Python)</option>
+                                        </select>
+                                        <button type="button" class="button button-primary" style="font-size:11px; padding:4px 10px;" onclick="App.downloadPlatformPatch()">
+                                            ${Icons.get('download', 'size-3.5')} Download Patch
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="code-head">
+                                    <span id="platform-patch-filename">sential-nginx-hardening.conf</span>
+                                    <button type="button" class="button button-ghost" onclick="App.copyPlatformPatch()">
+                                        ${Icons.get('copy', 'size-4')} Copy config
+                                    </button>
+                                </div>
+                                <pre class="code-block" style="background:#090d16; color:#e2e8f0; font-family:monospace; font-size:12px; max-height:220px; overflow-y:auto; padding:12px; border-radius:8px;"><code id="platform-patch-code"># Click Download or choose a platform above to view configuration.
+server {
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    server_tokens off;
+}</code></pre>
                             </section>
 
                             <div class="fix-actions">
@@ -6176,6 +6212,38 @@ const App = {
         const text = document.getElementById('finding-fix-code')?.textContent || '';
         navigator.clipboard.writeText(text);
         showToast('Patch copied to clipboard!', 'success');
+    },
+
+    async loadPlatformPatch(platform) {
+        const id = this.selectedFindingId;
+        if (!id) return;
+        try {
+            const res = await fetch(`/api/findings/${id}/config-patch?platform=${platform || 'nginx'}`);
+            const data = await res.json();
+            if (data.success) {
+                const codeEl = document.getElementById('platform-patch-code');
+                const fileEl = document.getElementById('platform-patch-filename');
+                if (codeEl) codeEl.textContent = data.content;
+                if (fileEl) fileEl.textContent = data.filename;
+            }
+        } catch (err) {
+            console.warn('Failed to load platform patch:', err);
+        }
+    },
+
+    downloadPlatformPatch() {
+        const id = this.selectedFindingId;
+        if (!id) return;
+        const sel = document.getElementById('platform-patch-select');
+        const plat = sel ? sel.value : 'nginx';
+        window.open(`/api/findings/${id}/download-patch?platform=${plat}`, '_blank');
+        showToast(`Downloading ${plat.toUpperCase()} hardening patch...`, 'info');
+    },
+
+    copyPlatformPatch() {
+        const text = document.getElementById('platform-patch-code')?.textContent || '';
+        navigator.clipboard.writeText(text);
+        showToast('Platform configuration copied to clipboard!', 'success');
     },
 
     openInGitHub() {

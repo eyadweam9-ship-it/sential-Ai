@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../config/db';
 import { analyzeFindingWithAI } from '../services/ai-analysis.service';
 import { GitRemediationService } from '../services/git-remediation.service';
+import { PlatformPatchService } from '../services/platform-patch.service';
 import { optionalAuth, AuthenticatedRequest } from '../middlewares/auth.middleware';
 
 export const findingsRouter = Router();
@@ -566,5 +567,56 @@ findingsRouter.post('/:id/apply-fix', async (req: AuthenticatedRequest, res: Res
     res.json(result);
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/findings/:id/config-patch
+ * Generates platform-specific hardening configuration (Nginx, Apache, Caddy, Express, Django)
+ */
+findingsRouter.get('/:id/config-patch', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const findingId = Number(req.params.id);
+    const platform = (req.query.platform as any) || 'nginx';
+    const finding = await prisma.finding.findUnique({
+      where: { id: findingId },
+      include: { scan: { include: { target: true } } },
+    });
+    if (!finding) {
+      res.status(404).json({ success: false, error: 'Finding not found.' });
+      return;
+    }
+    const targetUrl = finding.scan?.target?.url || 'https://target-domain.com';
+    const patch = PlatformPatchService.generatePlatformPatch(finding.title, finding.cwe || 'CWE-693', targetUrl, platform);
+    res.json({ success: true, platform, ...patch });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/findings/:id/download-patch
+ * Downloads the hardening configuration file directly
+ */
+findingsRouter.get('/:id/download-patch', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const findingId = Number(req.params.id);
+    const platform = (req.query.platform as any) || 'nginx';
+    const finding = await prisma.finding.findUnique({
+      where: { id: findingId },
+      include: { scan: { include: { target: true } } },
+    });
+    if (!finding) {
+      res.status(404).send('Finding not found');
+      return;
+    }
+    const targetUrl = finding.scan?.target?.url || 'https://target-domain.com';
+    const patch = PlatformPatchService.generatePlatformPatch(finding.title, finding.cwe || 'CWE-693', targetUrl, platform);
+
+    res.setHeader('Content-Type', patch.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${patch.filename}"`);
+    res.send(patch.content);
+  } catch (error) {
+    res.status(500).send((error as Error).message);
   }
 });
