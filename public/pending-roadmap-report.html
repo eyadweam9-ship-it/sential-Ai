@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>Sential AI — تقرير النواقص الهندسية والميزات قيد التطوير وخارطة الطريق</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --accent: #0ea5e9;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --success: #10b981;
+      --partial: #8b5cf6;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Cairo', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 24px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .no-print-bar {
+      max-width: 960px;
+      margin: 0 auto 20px auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #0f172a;
+      color: white;
+      padding: 14px 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    .no-print-bar .title { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+    .no-print-bar .actions { display: flex; gap: 10px; }
+    .btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 13px;
+      font-family: 'Cairo', sans-serif;
+      cursor: pointer;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-success { background: var(--success); color: white; }
+    .btn-success:hover { background: #059669; }
+
+    .report-sheet {
+      max-width: 960px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 44px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.03);
+    }
+
+    .header-section {
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 24px;
+      margin-bottom: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .brand-meta h1 {
+      font-size: 26px;
+      font-weight: 900;
+      color: #0f172a;
+      margin: 0 0 6px 0;
+      letter-spacing: -0.5px;
+    }
+    .brand-meta .subtitle {
+      color: var(--text-muted);
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .doc-badge {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: var(--primary);
+      padding: 8px 14px;
+      border-radius: 8px;
+      text-align: left;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      direction: ltr;
+    }
+
+    .stat-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 30px;
+    }
+    .stat-card {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+      border-top: 4px solid var(--primary);
+    }
+    .stat-card.partial { border-top-color: var(--partial); }
+    .stat-card.roadmap { border-top-color: var(--warning); }
+    .stat-card.innovations { border-top-color: var(--danger); }
+    .stat-val { font-size: 28px; font-weight: 900; color: #0f172a; font-family: 'Manrope', sans-serif; }
+    .stat-lbl { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-top: 4px; }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: #0f172a;
+      margin: 36px 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+    .section-title .badge {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 700;
+    }
+    .badge-partial { background: #ede9fe; color: #6d28d9; }
+    .badge-roadmap { background: #fef3c7; color: #b45309; }
+    .badge-innovation { background: #fee2e2; color: #b91c1c; }
+
+    .item-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 18px;
+      page-break-inside: avoid;
+      transition: all 0.2s;
+    }
+    .item-card:hover { border-color: #cbd5e1; }
+    .item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .item-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .item-code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      background: #f1f5f9;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #475569;
+    }
+    .progress-bar-container {
+      width: 130px;
+      background: #e2e8f0;
+      border-radius: 6px;
+      height: 8px;
+      overflow: hidden;
+      display: inline-block;
+      vertical-align: middle;
+      margin-left: 8px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 6px;
+    }
+    .fill-partial { background: #8b5cf6; width: 50%; }
+    .fill-low { background: #f59e0b; width: 25%; }
+    .fill-zero { background: #ef4444; width: 0%; }
+
+    .sub-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+    .sub-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+    .sub-box-title {
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .box-current .sub-box-title { color: #16a34a; }
+    .box-missing .sub-box-title { color: #dc2626; }
+    .box-future .sub-box-title { color: #2563eb; }
+
+    .code-tag {
+      font-family: 'JetBrains Mono', monospace;
+      background: #e2e8f0;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 11px;
+      direction: ltr;
+      display: inline-block;
+    }
+
+    .matrix-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 14px;
+      font-size: 13px;
+      page-break-inside: avoid;
+    }
+    .matrix-table th, .matrix-table td {
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      text-align: right;
+    }
+    .matrix-table th {
+      background: #f1f5f9;
+      font-weight: 800;
+      color: #334155;
+    }
+    .tag {
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 11px;
+      display: inline-block;
+    }
+    .tag-p50 { background: #ede9fe; color: #6d28d9; }
+    .tag-p0 { background: #fee2e2; color: #b91c1c; }
+    .tag-high { background: #ffedd5; color: #c2410c; }
+    .tag-critical { background: #fef2f2; color: #991b1b; }
+
+    .phase-timeline {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 16px;
+      page-break-inside: avoid;
+    }
+    .phase-box {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      background: #fafafa;
+      position: relative;
+    }
+    .phase-box::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      left: 0;
+      height: 4px;
+      border-radius: 10px 10px 0 0;
+      background: var(--primary);
+    }
+    .phase-box.p1::before { background: var(--primary); }
+    .phase-box.p2::before { background: var(--partial); }
+    .phase-box.p3::before { background: var(--warning); }
+    .phase-title { font-weight: 800; font-size: 14px; color: #0f172a; margin-bottom: 8px; }
+    .phase-list { margin: 0; padding-right: 18px; font-size: 12px; color: #475569; }
+    .phase-list li { margin-bottom: 6px; }
+
+    .footer-section {
+      margin-top: 40px;
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    @media print {
+      body { background: white; padding: 0; }
+      .no-print-bar { display: none !important; }
+      .report-sheet { border: none; box-shadow: none; padding: 0; max-width: 100%; }
+      .item-card { border: 1px solid #cbd5e1; }
+      @page { size: A4; margin: 12mm 15mm; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- شريط التحكم العلوي (مخفي أثناء الطباعة) -->
+  <div class="no-print-bar">
+    <div class="title">
+      <span>📄 تقرير التدقيق الفني المرجعي للنواقص الهندسية وميزات خارطة الطريق (Roadmap)</span>
+    </div>
+    <div class="actions">
+      <a href="/reports/sential-ai-pending-roadmap-report.pdf" download class="btn btn-success">
+        ⬇️ تحميل نسخة PDF رسمية
+      </a>
+      <button onclick="window.print()" class="btn btn-primary">
+        🖨️ طباعة التقرير / Save as PDF
+      </button>
+    </div>
+  </div>
+
+  <div class="report-sheet">
+
+    <!-- ترويسة التقرير الرسمية -->
+    <div class="header-section">
+      <div class="brand-meta">
+        <h1>Sential AI — تقرير الفجوات الهندسية والميزات المتبقية</h1>
+        <div class="subtitle">وثيقة حصر الميزات المعمولة جزئياً، المتطلبات المعلقة، والأفكار الابتكارية الأربعة (أكتوبر 2026)</div>
+      </div>
+      <div class="doc-badge">
+        DOC ID: SEC-GAP-ROADMAP-2026-V1<br>
+        TARGET SPEC: SentinelAI (August 2026)<br>
+        STATUS: IN-PROGRESS AUDIT
+      </div>
+    </div>
+
+    <!-- بطاقات الإحصائيات السريعة -->
+    <div class="stat-cards-grid">
+      <div class="stat-card">
+        <div class="stat-val">16+</div>
+        <div class="stat-lbl">ميزة مكتملة بالكامل (100%)</div>
+      </div>
+      <div class="stat-card partial">
+        <div class="stat-val">5</div>
+        <div class="stat-lbl">ميزات معمولة جزئياً (Partial)</div>
+      </div>
+      <div class="stat-card roadmap">
+        <div class="stat-val">5</div>
+        <div class="stat-lbl">ميزات مجدولة (Roadmap)</div>
+      </div>
+      <div class="stat-card innovations">
+        <div class="stat-val">4</div>
+        <div class="stat-lbl">أفكار ابتكارية نوعية جديدة</div>
+      </div>
+    </div>
+
+    <!-- القسم الأول: الميزات المعمولة جزئياً -->
+    <div class="section-title">
+      <span>1️⃣ الميزات المعمولة جزئياً وتحتاج إكمالاً هندسياً (Partially Implemented)</span>
+      <span class="badge badge-partial">5 ميزات تحت التنفيذ</span>
+    </div>
+
+    <!-- 1. One-Click AI Remediation & GitHub PR -->
+    <div class="item-card">
+      <div class="item-header">
+        <div class="item-title">
+          <span>1. الترقيع التلقائي بضغطة زر وإنشاء Pull Request على GitHub</span>
+          <span class="item-code">FEAT-PR-01</span>
+        </div>
+        <div>
+          <span class="tag tag-p50">معمول جزئياً 55%</span>
+          <div class="progress-bar-container"><div class="progress-bar-fill fill-partial"></div></div>
+        </div>
+      </div>
+      <div class="sub-grid">
+        <div class="sub-box box-current">
+          <div class="sub-box-title">✅ ما تم إنجازه حالياً في الكود:</div>
+          <div>تم بناء خدمة <span class="code-tag">GitRemediationService.ts</span> التي تولد Unified Diff دقيق، وتصلح كود الثغرات لـ SQLi و XSS و Command Injection وتكتب التعديل على القرص المحلي مباشرة وتحدث حالة الثغرة لـ FIXED.</div>
+        </div>
+        <div class="sub-box box-missing">
+          <div class="sub-box-title">❌ ما ينقص لإتمامها 100%:</div>
+          <div>الربط السحابي بـ <strong>GitHub REST API / Octokit</strong> عبر GitHub App أو Personal Access Token، بحيث يقوم السيرفر بإنشاء Branch جديد ورفع Commit وفتح Pull Request رسمي بنقرة واحدة من لوحة التحكم.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Interactive Attack Graph -->
+    <div class="item-card">
+      <div class="item-header">
+        <div class="item-title">
+          <span>2. شجرة مسارات الهجوم البصرية التفاعلية (Interactive Visual Attack Graph)</span>
+          <span class="item-code">FEAT-GRAPH-02</span>
+        </div>
+        <div>
+          <span class="tag tag-p50">معمول جزئياً 45%</span>
+          <div class="progress-bar-container"><div class="progress-bar-fill fill-partial"></div></div>
+        </div>
+      </div>
+      <div class="sub-grid">
+        <div class="sub-box box-current">
+          <div class="sub-box-title">✅ ما تم إنجازه حالياً في الكود:</div>
+          <div>محرك الربط <span class="code-tag">correlateAndValidateFindings</span> يقوم بالربط المنطقي بين ثغرات الـ DAST ومصادر الـ SAST ويخزن مسارات الهجوم في حقل <span class="code-tag">relatedFindingsJson</span> بقاعدة البيانات.</div>
+        </div>
+        <div class="sub-box box-missing">
+          <div class="sub-box-title">❌ ما ينقص لإتمامها 100%:</div>
+          <div>بناء لوحة العرض البصري (Visual DAG Graph) باستخدام مكتبات <strong>D3.js</strong> أو <strong>Cytoscape.js</strong> لعرض مسار الاختراق المتسلسل من نقطة البداية (Entrypoint) مروراً بالخوادم وحتى قواعد البيانات.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. What if Fixed Simulation -->
+    <div class="item-card">
+      <div class="item-header">
+        <div class="item-title">
+          <span>3. محاكاة أثر إغلاق الثغرة ("What If Fixed?" Simulation)</span>
+          <span class="item-code">FEAT-SIM-03</span>
+        </div>
+        <div>
+          <span class="tag tag-p50">معمول جزئياً 40%</span>
+          <div class="progress-bar-container"><div class="progress-bar-fill fill-partial"></div></div>
+        </div>
+      </div>
+      <div class="sub-grid">
+        <div class="sub-box box-current">
+          <div class="sub-box-title">✅ ما تم إنجازه حالياً في الكود:</div>
+          <div>حساب الـ Root Cause والـ Vulnerability Grouping يجمع الثغرات المشتركة تحت سبب جذري واحد في <span class="code-tag">findings-deduplication.service.ts</span>.</div>
+        </div>
+        <div class="sub-box box-missing">
+          <div class="sub-box-title">❌ ما ينقص لإتمامها 100%:</div>
+          <div>واجهة محاكاة رقمية تتيح للمستخدم تحديد ثغرة أو مجموعة ثغرات وحساب: <em>"كم مسار هجوم سيتم إغلاقه؟ وكيف سترتفع درجة أمان الموقع من 60% إلى 85% بعد الترقيع؟"</em>.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Multi-Account BOLA / IDOR Testing -->
+    <div class="item-card">
+      <div class="item-header">
+        <div class="item-title">
+          <span>4. فحص الصلاحيات المتقدم (BOLA / IDOR Multi-User Matrix)</span>
+          <span class="item-code">FEAT-BOLA-04</span>
+        </div>
+        <div>
+          <span class="tag tag-p50">معمول جزئياً 50%</span>
+          <div class="progress-bar-container"><div class="progress-bar-fill fill-partial"></div></div>
+        </div>
+      </div>
+      <div class="sub-grid">
+        <div class="sub-box box-current">
+          <div class="sub-box-title">✅ ما تم إنجازه حالياً في الكود:</div>
+          <div>خدمة <span class="code-tag">IdorAuditorService.ts</span> تفحص التلاعب بالمعرفات الرقمية المتسلسلة (<span class="code-tag">originalId + 1</span>) في الروابط والـ APIs وترصد استجابات الـ 200 بدون تصريح.</div>
+        </div>
+        <div class="sub-box box-missing">
+          <div class="sub-box-title">❌ ما ينقص لإتمامها 100%:</div>
+          <div>مصفوفة اختبار بحسابين حقيقيين مختلفين (Session User A vs Session User B) وتبديل التوكنات للتأكد من استحالة وصول المستخدم الأول لبيانات وسجلات المستخدم الثاني.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. Adaptive Explanation Levels Toggle -->
+    <div class="item-card">
+      <div class="item-header">
+        <div class="item-title">
+          <span>5. مستويات الشرح التكيفية المباشرة (Adaptive Explanation Levels Toggle)</span>
+          <span class="item-code">FEAT-ADAPT-05</span>
+        </div>
+        <div>
+          <span class="tag tag-p50">معمول جزئياً 60%</span>
+          <div class="progress-bar-container"><div class="progress-bar-fill fill-partial"></div></div>
+        </div>
+      </div>
+      <div class="sub-grid">
+        <div class="sub-box box-current">
+          <div class="sub-box-title">✅ ما تم إنجازه حالياً في الكود:</div>
+          <div>يتوفر تقرير تنفيذي مبسط للإدارة، وتقرير تقني للمهندسين، وشات AI يجيب ويفهم مختلف الأسئلة ويوضح التفاصيل.</div>
+        </div>
+        <div class="sub-box box-missing">
+          <div class="sub-box-title">❌ ما ينقص لإتمامها 100%:</div>
+          <div>إضافة مفتاح تبديل فوري (Toggle Switch) في تفاصيل كل ثغرة بالواجهة يبدل الشرح فوراً بين 3 مستويات: <strong>Beginner / Developer / Security Engineer</strong>.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- القسم الثاني: الميزات التي لم تُبنَ بعد والأفكار الجديدة -->
+    <div class="section-title">
+      <span>2️⃣ الميزات التي لم تُبنَ بعد والأفكار الابتكارية الأربعة (Roadmap & Innovations)</span>
+      <span class="badge badge-innovation">ميزات غير مسبوقة عالمياً</span>
+    </div>
+
+    <!-- 1. Security Intent Compiler -->
+    <div class="item-card">
+      <div class="item-header">
+        <div class="item-title">
+          <span>💡 1. محرك ترجمة نوايا الأمان (Security Intent Compiler)</span>
+          <span class="item-code">INNOV-INTENT-01</span>
+        </div>
+        <div>
+          <span class="tag tag-p0">غير مبني 0% (جديد تماماً)</span>
+          <div class="progress-bar-container"><div class="progress-bar-fill fill-zero"></div></div>
+        </div>
+      </div>
+      <div class="sub-grid">
+        <div class="sub-box box-missing">
+          <div class="sub-box-title">🎯 فكرة الميزة والقيمة المضافة:</div>
+          <div>بدلاً من الاقتصار على فحص الثغرات العامة، يتيح لصاحب الموقع كتابة سياسات وقواعد الأمان والبيزنس الخاصة بموقعه بلغة عادية (مثلاً: <em>"كل يوزر يشوف بياناته هو بس"</em> أو <em>"الـ checkout مينفعش يقبل رقم سالب أو صفر"</em>).</div>
+        </div>
+        <div class="sub-box box-future">
+          <div class="sub-box-title">🛠️ المعمارية الهندسية المطلوبة للبناء:</div>
+          <div>1. مفسر لغوي (NLP / Intent DSL Parser) يترجم النص الطبيعي إلى سيناريو اختبار منطقي.<br>2. محرك تجارب بحسابين تجريبيين (Test Harness).<br>3. تقرير امتثال لقواعد البيزنس (Intent Compliance Report) يوثق التزام الموقع بالقاعدة والدليل.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Continuous Attack Surface Monitoring -->
+    <div class="item-card">
+      <div class="item-header">
+        <div class="item-title">
+          <span>💡 2. المراقبة المستمرة لسطح الهجوم (Continuous Attack Surface Monitoring)</span>
+          <span class="item-code">INNOV-MONITOR-02</span>
+        </div>
+        <div>
+          <span class="tag tag-p0">غير مبني 0% (جديد تماماً)</span>
+          <div class="progress-bar-container"><div class="progress-bar-fill fill-zero"></div></div>
+        </div>
+      </div>
+      <div class="sub-grid">
+        <div class="sub-box box-missing">
+          <div class="sub-box-title">🎯 فكرة الميزة والقيمة المضافة:</div>
+          <div>إضافة وضع ثالث بالواجهة بجانب الفحص والترقيع باسم <strong>Monitor</strong>، يحرس الموقع 24/7 بعد انتهاء الفحص والإصلاح، ويرصد أي نشاط مريب أو تغيرات غير مصرح بها.</div>
+        </div>
+        <div class="sub-box box-future">
+          <div class="sub-box-title">🛠️ المعمارية الهندسية المطلوبة للبناء:</div>
+          <div>1. مجدول مهام خلفي دوري (Background Cron Scheduler) لفحص يومي/أسبوعي خفيف غير تدميري.<br>2. محرك مقارنة الفروقات (Differential Drift Engine) يرصد تغير شهادات SSL، وتغيرات الرؤوس، ومنافذ السيرفر.<br>3. كاشف الانتكاسات الأمنية (Regression Alerting).</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Omnichannel Security Alerts -->
+    <div class="item-card">
+      <div class="item-header">
+        <div class="item-title">
+          <span>💡 3. نظام التنبيهات الذكي متعدد القنوات (Omnichannel Security Alerts)</span>
+          <span class="item-code">INNOV-ALERTS-03</span>
+        </div>
+        <div>
+          <span class="tag tag-p0">غير مبني 0% (جديد تماماً)</span>
+          <div class="progress-bar-container"><div class="progress-bar-fill fill-zero"></div></div>
+        </div>
+      </div>
+      <div class="sub-grid">
+        <div class="sub-box box-missing">
+          <div class="sub-box-title">🎯 فكرة الميزة والقيمة المضافة:</div>
+          <div>فرق الـ DevSecOps والـ SOC لا يجلسون أمام لوحة التحكم طوال الوقت. يتم ربط المنصة بقنواتهم الحية في <strong>Slack, Microsoft Teams, Discord, Telegram</strong> لإرسال بطاقات تنبيه فورية عند حدوث خطر Critical.</div>
+        </div>
+        <div class="sub-box box-future">
+          <div class="sub-box-title">🛠️ المعمارية الهندسية المطلوبة للبناء:</div>
+          <div>1. خدمة موصلات الـ Webhooks المتعددة (<span class="code-tag">OmnichannelAlertService</span>).<br>2. قوالب رسائل غنية (Rich Webhook Cards) تحتوي على درجة الـ CVSS وملخص الثغرة.<br>3. أزرار تفاعلية (Interactive Action Buttons) لإيقاف الفحص أو كتم التنبيه مباشرة من Slack.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Security Evolution Engine -->
+    <div class="item-card">
+      <div class="item-header">
+        <div class="item-title">
+          <span>📊 4. محرك تتبع التطور الزمني للثغرات (Security Evolution Engine)</span>
+          <span class="item-code">ROADMAP-EVOL-04</span>
+        </div>
+        <div>
+          <span class="tag tag-p0">غير مبني 0%</span>
+          <div class="progress-bar-container"><div class="progress-bar-fill fill-zero"></div></div>
+        </div>
+      </div>
+      <div class="sub-grid">
+        <div class="sub-box box-missing">
+          <div class="sub-box-title">🎯 فكرة الميزة والقيمة المضافة:</div>
+          <div>تتبع تاريخ الفحوصات المتتالية على نفس الموقع، وتوضيح لماذا ظهرت ثغرة معينة، ولماذا اختفت، وهل عادت للظهور مجدداً بعد ترقيعها.</div>
+        </div>
+        <div class="sub-box box-future">
+          <div class="sub-box-title">🛠️ المعمارية الهندسية المطلوبة للبناء:</div>
+          <div>تخزين سجل تاريخي للتطابق عبر الـ <span class="code-tag">fingerprint</span> والـ <span class="code-tag">CWE</span> ومقارنة الفحوصات بـ Diff زمني يوضح مسار تحسن الموقع.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. Vulnerability Chain Prediction -->
+    <div class="item-card">
+      <div class="item-header">
+        <div class="item-title">
+          <span>🔮 5. التنبؤ بسلاسل الهجوم المستقبلية (Vulnerability Chain Prediction)</span>
+          <span class="item-code">ROADMAP-PRED-05</span>
+        </div>
+        <div>
+          <span class="tag tag-p0">غير مبني 0%</span>
+          <div class="progress-bar-container"><div class="progress-bar-fill fill-zero"></div></div>
+        </div>
+      </div>
+      <div class="sub-grid">
+        <div class="sub-box box-missing">
+          <div class="sub-box-title">🎯 فكرة الميزة والقيمة المضافة:</div>
+          <div>التنبؤ بالمخاطر المستقبلية لو تم ترك الثغرة دون علاج، وكيف يمكن دمجها مع ثغرات ثانوية للوصول لـ RCE أو تسريب بيانات كامل.</div>
+        </div>
+        <div class="sub-box box-future">
+          <div class="sub-box-title">🛠️ المعمارية الهندسية المطلوبة للبناء:</div>
+          <div>نموذج ذكاء اصطناعي تحليلي يربط بين نوع الثغرة والبنية التحتية للنظام المستهدف ويولد تقرير أثر استشرافي (Predictive Risk Forecast).</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- القسم الثالث: مصفوفة المقارنة والتقييم الفني -->
+    <div class="section-title">
+      <span>3️⃣ مصفوفة التقييم والجاهزية الشاملة (Gap Analysis Master Matrix)</span>
+      <span class="badge badge-roadmap">جدول الأولويات الهندسية</span>
+    </div>
+
+    <table class="matrix-table">
+      <thead>
+        <tr>
+          <th>كود الميزة</th>
+          <th>اسم الميزة والنطاق التقني</th>
+          <th>نسبة الإنجاز الحالية</th>
+          <th>الصعوبة الهندسية</th>
+          <th>المدة المقدرة</th>
+          <th>درجة الأولوية</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="code-tag">FEAT-PR-01</span></td>
+          <td>One-Click AI Remediation & GitHub PR</td>
+          <td><span class="tag tag-p50">55% (محلي فقط)</span></td>
+          <td>متوسطة</td>
+          <td>4 - 6 أيام</td>
+          <td><span class="tag tag-critical">عاجلة وقصوى (P0)</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">INNOV-ALERTS-03</span></td>
+          <td>Omnichannel Alerts (Slack / Teams / Discord / Telegram)</td>
+          <td><span class="tag tag-p0">0%</span></td>
+          <td>سهلة - متوسطة</td>
+          <td>3 - 5 أيام</td>
+          <td><span class="tag tag-critical">عاجلة وقصوى (P0)</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">INNOV-INTENT-01</span></td>
+          <td>Security Intent Compiler (قواعد البيزنس)</td>
+          <td><span class="tag tag-p0">0%</span></td>
+          <td>متقدمة جداً</td>
+          <td>2 - 3 أسابيع</td>
+          <td><span class="tag tag-high">استراتيجية فارقة (P1)</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">INNOV-MONITOR-02</span></td>
+          <td>Continuous Attack Surface Monitoring (24/7)</td>
+          <td><span class="tag tag-p0">0%</span></td>
+          <td>متوسطة</td>
+          <td>1 - 2 أسبوع</td>
+          <td><span class="tag tag-high">استراتيجية فارقة (P1)</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">FEAT-GRAPH-02</span></td>
+          <td>Interactive Visual Attack Graph (D3.js)</td>
+          <td><span class="tag tag-p50">45% (بيانات فقط)</span></td>
+          <td>متوسطة</td>
+          <td>5 - 7 أيام</td>
+          <td><span class="tag tag-high">عالية (P1)</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">FEAT-SIM-03</span></td>
+          <td>"What If Fixed?" Interactive Simulator</td>
+          <td><span class="tag tag-p50">40%</span></td>
+          <td>متوسطة</td>
+          <td>4 - 5 أيام</td>
+          <td>متوسطة (P2)</td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">FEAT-BOLA-04</span></td>
+          <td>Multi-User Dual Session BOLA Matrix</td>
+          <td><span class="tag tag-p50">50%</span></td>
+          <td>متوسطة</td>
+          <td>5 - 7 أيام</td>
+          <td>متوسطة (P2)</td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">FEAT-ADAPT-05</span></td>
+          <td>Adaptive Explanation Levels Toggle (UI)</td>
+          <td><span class="tag tag-p50">60%</span></td>
+          <td>بسيطة</td>
+          <td>1 - 2 يوم</td>
+          <td>متوسطة (P2)</td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">ROADMAP-EVOL-04</span></td>
+          <td>Security Evolution Engine (تاريخ الفحوصات)</td>
+          <td><span class="tag tag-p0">0%</span></td>
+          <td>متوسطة</td>
+          <td>1 - 2 أسبوع</td>
+          <td>مستقبلية (P3)</td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">ROADMAP-PRED-05</span></td>
+          <td>Vulnerability Chain Prediction</td>
+          <td><span class="tag tag-p0">0%</span></td>
+          <td>متقدمة</td>
+          <td>2 - 3 أسابيع</td>
+          <td>مستقبلية (P3)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- القسم الرابع: المخطط الزمني للتنفيذ المقترح -->
+    <div class="section-title">
+      <span>4️⃣ خطة التنفيذ المقترحة للمرحلة القادمة (Execution Plan)</span>
+      <span class="badge badge-roadmap">3 مراحل متتابعة</span>
+    </div>
+
+    <div class="phase-timeline">
+      <div class="phase-box p1">
+        <div class="phase-title">المرحلة الأولى: Quick Wins والتكامل الفوري</div>
+        <ul class="phase-list">
+          <li><strong>One-Click GitHub PR</strong>: ربط GitHub API لفتح PR تلقائي بضغطة زر.</li>
+          <li><strong>Omnichannel Alerts</strong>: إرسال تنبيهات لحظية لـ Slack و Discord و Telegram.</li>
+          <li><strong>Adaptive Levels Toggle</strong>: إضافة زر تبديل الشرح (Beginner / Developer / Engineer) في الواجهة.</li>
+        </ul>
+      </div>
+      <div class="phase-box p2">
+        <div class="phase-title">المرحلة الثانية: المراقبة والشجرة البصرية</div>
+        <ul class="phase-list">
+          <li><strong>Continuous Monitoring</strong>: إطلاق تبويب "Monitor" وجدولة الفحص الدوري 24/7.</li>
+          <li><strong>Interactive Attack Graph</strong>: رسم شجرة مسارات الهجوم التفاعلية بـ D3.js.</li>
+          <li><strong>What-If Simulator</strong>: محاكاة أثر إغلاق الثغرة على مسارات الهجوم.</li>
+        </ul>
+      </div>
+      <div class="phase-box p3">
+        <div class="phase-title">المرحلة الثالثة: محرك نوايا الأمان والذكاء العميق</div>
+        <ul class="phase-list">
+          <li><strong>Security Intent Compiler</strong>: بناء مترجم لغة البيزنس لاختبارات آلية ببيانات تجريبية.</li>
+          <li><strong>Multi-User BOLA Matrix</strong>: اختبار العزل بحسابين تجريبيين مختلفين.</li>
+          <li><strong>Security Evolution Engine</strong>: تتبع مسار وتاريخ الثغرات والانحدارات الأمنية عبر الزمن.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- التذييل الرسمي -->
+    <div class="footer-section">
+      <div>تم إنشاء التقرير آلياً عبر منصة <strong>Sential AI Core Intelligence Engine</strong></div>
+      <div>التاريخ: أكتوبر 2026 | وثيقة تدقيق هندسية معتمدة</div>
+    </div>
+
+  </div>
+
+</body>
+</html>
