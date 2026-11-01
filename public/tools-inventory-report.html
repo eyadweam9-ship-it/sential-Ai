@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>Sential AI — الدليل الشامل للأدوات والمحركات المستخدمة في الفحص الأمني</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --accent: #0ea5e9;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --success: #10b981;
+      --purple: #8b5cf6;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Cairo', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 24px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .no-print-bar {
+      max-width: 1000px;
+      margin: 0 auto 20px auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #0f172a;
+      color: white;
+      padding: 14px 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    .no-print-bar .title { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+    .no-print-bar .actions { display: flex; gap: 10px; }
+    .btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 13px;
+      font-family: 'Cairo', sans-serif;
+      cursor: pointer;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-success { background: var(--success); color: white; }
+    .btn-success:hover { background: #059669; }
+
+    .report-sheet {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 44px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.03);
+    }
+
+    .header-section {
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 24px;
+      margin-bottom: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .brand-meta h1 {
+      font-size: 26px;
+      font-weight: 900;
+      color: #0f172a;
+      margin: 0 0 6px 0;
+      letter-spacing: -0.5px;
+    }
+    .brand-meta .subtitle {
+      color: var(--text-muted);
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .doc-badge {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: var(--primary);
+      padding: 8px 14px;
+      border-radius: 8px;
+      text-align: left;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      direction: ltr;
+    }
+
+    .stat-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 30px;
+    }
+    .stat-card {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+      border-top: 4px solid var(--primary);
+    }
+    .stat-card.dast { border-top-color: #ef4444; }
+    .stat-card.sast { border-top-color: #8b5cf6; }
+    .stat-card.sca { border-top-color: #0ea5e9; }
+    .stat-card.fix { border-top-color: #10b981; }
+    .stat-val { font-size: 28px; font-weight: 900; color: #0f172a; font-family: 'Manrope', sans-serif; }
+    .stat-lbl { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-top: 4px; }
+
+    .category-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: #0f172a;
+      margin: 36px 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+    .category-badge {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 700;
+    }
+    .badge-dast { background: #fee2e2; color: #b91c1c; }
+    .badge-sast { background: #ede9fe; color: #6d28d9; }
+    .badge-sca { background: #e0f2fe; color: #0369a1; }
+    .badge-remediation { background: #dcfce7; color: #15803d; }
+    .badge-intel { background: #fef3c7; color: #b45309; }
+
+    .tool-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+      page-break-inside: avoid;
+    }
+
+    .tool-box {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+      transition: all 0.2s;
+      page-break-inside: avoid;
+    }
+    .tool-box:hover { border-color: #cbd5e1; }
+    .tool-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .tool-name {
+      font-size: 15px;
+      font-weight: 800;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tool-file {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      background: #f1f5f9;
+      color: #475569;
+      padding: 2px 6px;
+      border-radius: 4px;
+      direction: ltr;
+    }
+    .tool-desc {
+      font-size: 13px;
+      color: #334155;
+      margin-bottom: 10px;
+      line-height: 1.5;
+    }
+    .tool-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-size: 11px;
+    }
+    .pill {
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+    .pill-active { background: #fee2e2; color: #991b1b; }
+    .pill-passive { background: #f1f5f9; color: #475569; }
+    .pill-cwe { background: #eff6ff; color: #1d4ed8; font-family: 'JetBrains Mono', monospace; }
+    .pill-tech { background: #f0fdf4; color: #166534; font-family: 'JetBrains Mono', monospace; }
+
+    .master-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 14px;
+      font-size: 13px;
+      page-break-inside: avoid;
+    }
+    .master-table th, .master-table td {
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      text-align: right;
+    }
+    .master-table th {
+      background: #f1f5f9;
+      font-weight: 800;
+      color: #334155;
+    }
+    .master-table tr:hover { background: #f8fafc; }
+
+    .footer-section {
+      margin-top: 40px;
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    @media print {
+      body { background: white; padding: 0; }
+      .no-print-bar { display: none !important; }
+      .report-sheet { border: none; box-shadow: none; padding: 0; max-width: 100%; }
+      .tool-box { border: 1px solid #cbd5e1; }
+      @page { size: A4; margin: 12mm 15mm; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- شريط التحكم العلوي -->
+  <div class="no-print-bar">
+    <div class="title">
+      <span>🛠️ وثيقة الفهرس الهندسي الشامل لكافة الأدوات ومحركات الفحص في Sential AI</span>
+    </div>
+    <div class="actions">
+      <a href="/reports/sential-ai-tools-inventory.pdf" download class="btn btn-success">
+        ⬇️ تحميل نسخة PDF رسمية
+      </a>
+      <button onclick="window.print()" class="btn btn-primary">
+        🖨️ طباعة التقرير / Save as PDF
+      </button>
+    </div>
+  </div>
+
+  <div class="report-sheet">
+
+    <!-- ترويسة التقرير الرسمية -->
+    <div class="header-section">
+      <div class="brand-meta">
+        <h1>Sential AI — فهرس ودليل محركات وأدوات الفحص الأمني</h1>
+        <div class="subtitle">حصر وتوصيف تفصيلي لكافة أدوات الفحص الديناميكي (DAST)، المصدري (SAST)، سلاسل الإمداد (SCA)، ومولدات الترقيع (أكتوبر 2026)</div>
+      </div>
+      <div class="doc-badge">
+        DOC ID: SEC-TOOLS-INVENTORY-2026-V1<br>
+        SECURITY STANDARD: OWASP / CWE / CVSS v3.1<br>
+        CLASSIFICATION: TECHNICAL ARCHITECTURE
+      </div>
+    </div>
+
+    <!-- بطاقات الإحصائيات العامة للمحركات -->
+    <div class="stat-cards-grid">
+      <div class="stat-card dast">
+        <div class="stat-val">14+</div>
+        <div class="stat-lbl">محركات فحص هجومي (DAST)</div>
+      </div>
+      <div class="stat-card sast">
+        <div class="stat-val">970+</div>
+        <div class="stat-lbl">قواعد فحص كود مصدري (SAST)</div>
+      </div>
+      <div class="stat-card sca">
+        <div class="stat-val">5</div>
+        <div class="stat-lbl">أدوات سلاسل التوريد والـ IaC</div>
+      </div>
+      <div class="stat-card fix">
+        <div class="stat-val">5</div>
+        <div class="stat-lbl">منصات ترقيع تلقائي مدعومة</div>
+      </div>
+    </div>
+
+    <!-- 1. محركات الفحص الهجومي الديناميكي (DAST) -->
+    <div class="category-title">
+      <span>1️⃣ محركات الفحص الهجومي الديناميكي (DAST & Active Probing Engines)</span>
+      <span class="category-badge badge-dast">14 أداة ومحرك نشط</span>
+    </div>
+
+    <div class="tool-grid">
+
+      <!-- Form Fuzzer -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">⚡ Active Form XSS Fuzzer</div>
+          <div class="tool-file">form-fuzzer.service.ts</div>
+        </div>
+        <div class="tool-desc">
+          يقوم باستخراج نماذج الـ HTML وحقول الإدخال (<span class="pill-tech">&lt;input&gt;</span>, <span class="pill-tech">&lt;textarea&gt;</span>)، وحقن Canaries تشخيصية ذكية (<span class="pill-tech">sential_probe_xss"'&gt;&lt;canary&gt;</span>) عبر طلبات GET و POST وفحص الارتداد غير المشفر بالـ DOM.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-active">Active Fuzzing</span>
+          <span class="pill pill-cwe">CWE-79 / OWASP A03</span>
+          <span class="pill pill-tech">Node.js DOM Parser</span>
+        </div>
+      </div>
+
+      <!-- Raw SSL/TLS Cipher Auditor -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">🔒 Raw SSL/TLS Socket Auditor</div>
+          <div class="tool-file">ssl-cipher-auditor.service.ts</div>
+        </div>
+        <div class="tool-desc">
+          يفتح اتصال Raw TCP Socket مباشر عبر المنفذ 443 ويفحص شهادات X.509، الصلاحية بالأيام، الموقعة ذاتياً، ويختبر تفاوض الاتصال بالبروتوكولات الضعيفة (SSLv3, TLS 1.0, TLS 1.1).
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-active">Raw Socket 443</span>
+          <span class="pill pill-cwe">CWE-326 / CWE-295</span>
+          <span class="pill pill-tech">Node tls/net</span>
+        </div>
+      </div>
+
+      <!-- SSTI Auditor -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">🧩 Server-Side Template Injection</div>
+          <div class="tool-file">ssti-auditor.service.ts</div>
+        </div>
+        <div class="tool-desc">
+          يحقن تعبيرات رياضية تقييمية مثل <span class="pill-tech">{{7*7}}</span> و <span class="pill-tech">${7*7}</span> في معلمات الروابط مع إجراء **Baseline Verification** مسبق لمنع أي إيجابيات كاذبة.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-active">Active Injection</span>
+          <span class="pill pill-cwe">CWE-1336 / CWE-94</span>
+          <span class="pill pill-tech">Baseline Zero-FP</span>
+        </div>
+      </div>
+
+      <!-- LFI & Command Injection -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">📁 LFI & Safe OS Command Auditor</div>
+          <div class="tool-file">lfi-cmd-auditor.service.ts</div>
+        </div>
+        <div class="tool-desc">
+          يفحص تخطي المسارات للملفات الحساسة (<span class="pill-tech">/etc/passwd</span>, <span class="pill-tech">win.ini</span>) وحقن كواشف الـ Echo الآمنة تماماً بدون تخريب السيرفر أو تسريب بيانات.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-active">Safe Canary Echo</span>
+          <span class="pill pill-cwe">CWE-22 / CWE-78</span>
+          <span class="pill pill-tech">Regex Signature</span>
+        </div>
+      </div>
+
+      <!-- Cloud Leak Auditor -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">☁️ Cloud Storage Bucket Recon</div>
+          <div class="tool-file">cloud-leak-auditor.service.ts</div>
+        </div>
+        <div class="tool-desc">
+          يولد أسماء الحاويات السحابية بناءً على النطاق والاسم التجاري للمنظمة، ويفحص القراءة العامة لسلات **AWS S3**, **Google Cloud Storage**, و **Azure Blob Storage**.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-active">Multi-Cloud HEAD</span>
+          <span class="pill pill-cwe">CWE-200 / CWE-538</span>
+          <span class="pill pill-tech">S3 / GCS / Azure</span>
+        </div>
+      </div>
+
+      <!-- IDOR / BOLA Auditor -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">🆔 BOLA / IDOR Tampering Auditor</div>
+          <div class="tool-file">idor-auditor.service.ts</div>
+        </div>
+        <div class="tool-desc">
+          يرصد المعرفات الرقمية المتسلسلة في مسارات الـ APIs ويقوم بتجربة المعرف التالي (<span class="pill-tech">id + 1</span>) لفحص هل يرجع السيرفر كود 200 وبيانات مستخدم آخر دون تدقيق للصلاحيات.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-active">Path Tampering</span>
+          <span class="pill pill-cwe">CWE-639 / OWASP API1</span>
+          <span class="pill pill-tech">Session Prober</span>
+        </div>
+      </div>
+
+      <!-- Access Control & Admin Portal -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">🚪 Access Control & Bypass Auditor</div>
+          <div class="tool-file">access-control-auditor.service.ts</div>
+        </div>
+        <div class="tool-desc">
+          يفحص لوحات الإدارة غير المحمية (<span class="pill-tech">/admin</span>, <span class="pill-tech">/dashboard</span>)، وتخطي الـ Reverse Proxy عبر رؤوس <span class="pill-tech">X-Original-URL</span> و <span class="pill-tech">X-Rewrite-URL</span> وكشف قواعد البيانات المتروكة.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-active">Header Bypass Probe</span>
+          <span class="pill pill-cwe">CWE-306 / CWE-285</span>
+          <span class="pill pill-tech">Route Dictionary</span>
+        </div>
+      </div>
+
+      <!-- GraphQL & WebSocket -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">🕸️ GraphQL & WebSocket Auditor</div>
+          <div class="tool-file">graphql-auditor.service.ts</div>
+        </div>
+        <div class="tool-desc">
+          يفحص مسارات GraphQL لاكتشاف فتح خاصية الـ Introspection وسحب الـ Schema الكاملة، وتجربة تخطي الـ WebSocket handshake دون توكنات تحقق.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-active">Introspection Query</span>
+          <span class="pill pill-cwe">CWE-200 / CWE-284</span>
+          <span class="pill pill-tech">GraphQL AST</span>
+        </div>
+      </div>
+
+      <!-- JWT Token Auditor -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">🔑 JWT Token Security Auditor</div>
+          <div class="tool-file">jwt-auditor.service.ts</div>
+        </div>
+        <div class="tool-desc">
+          يفحص توكنات JWT ويختبر ثغرة التوقيع الفارغ (<span class="pill-tech">alg: none</span>)، ضعف المفاتيح السرية الشائعة، التوكنات منتهية الصلاحية، وفك التشفير لكشف البيانات الحساسة المضمنة بالـ Payload.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-active">Cryptographic Audit</span>
+          <span class="pill pill-cwe">CWE-347 / CWE-327</span>
+          <span class="pill pill-tech">JWT Signature</span>
+        </div>
+      </div>
+
+      <!-- Prototype Pollution -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">🧪 Prototype Pollution Prober</div>
+          <div class="tool-file">prototype-pollution.service.ts</div>
+        </div>
+        <div class="tool-desc">
+          يرسل حمولات اختبار الـ Prototype Pollution عبر معلمات الـ JSON والـ Query parameters مثل <span class="pill-tech">__proto__[sential_polluted]=1</span> ويرصد استجابة السيرفر وتلوث الكائنات.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-active">Object Injection</span>
+          <span class="pill pill-cwe">CWE-1321</span>
+          <span class="pill pill-tech">JSON Payload Prober</span>
+        </div>
+      </div>
+
+      <!-- SSRF & Cloud Metadata -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">🌐 SSRF & Cloud Metadata Hunter</div>
+          <div class="tool-file">ssrf-auditor.service.ts</div>
+        </div>
+        <div class="tool-desc">
+          يفحص معلمات الروابط وحقن عناوين الـ Loopback والـ Metadata السحابية مثل <span class="pill-tech">http://169.254.169.254/latest/meta-data/</span> لاكتشاف تسريب بيانات الـ IAM والتفويض.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-active">Metadata Traversal</span>
+          <span class="pill pill-cwe">CWE-918 / OWASP A10</span>
+          <span class="pill pill-tech">AWS / GCP / Localhost</span>
+        </div>
+      </div>
+
+      <!-- OAST Engine -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">📡 OAST Out-of-Band Callback Server</div>
+          <div class="tool-file">oast.service.ts</div>
+        </div>
+        <div class="tool-desc">
+          محرك التفاعل الخارجي لرصد الثغرات العمياء (Blind SQLi, Blind SSRF, Blind XSS) عن طريق رصد نداءات الـ DNS والـ HTTP الراجعة لسيرفر الاستماع الخاص بالمنصة.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-active">Out-of-Band Listener</span>
+          <span class="pill pill-cwe">CWE-918 / CWE-89</span>
+          <span class="pill pill-tech">DNS / HTTP Canaries</span>
+        </div>
+      </div>
+
+      <!-- OWASP ZAP & Nuclei Adapters -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">🎯 Nuclei & OWASP ZAP Adapters</div>
+          <div class="tool-file">nuclei.adapter.ts / zap.adapter.ts</div>
+        </div>
+        <div class="tool-desc">
+          محولات قياسية متوافقة مع مخرجات ZAP DAST وقوالب Nuclei المفتوحة، توفر مصفوفات فحص للثغرات الشائعة والـ CVEs المنشورة حديثاً.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-active">DAST Standards</span>
+          <span class="pill pill-cwe">CWE Multi-family</span>
+          <span class="pill pill-tech">Template Scanner</span>
+        </div>
+      </div>
+
+      <!-- Port Scanner & Fingerprinter -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">🛰️ Port Scanner & CMS Fingerprinter</div>
+          <div class="tool-file">whatweb.adapter.ts / wpscan.adapter.ts</div>
+        </div>
+        <div class="tool-desc">
+          مسح المنافذ القياسية (21, 22, 80, 443, 3000, 8080)، استخراج بصمات السيرفرات (Nginx, Apache, IIS)، وكشف أنظمة إدارة المحتوى وقوالب WordPress وإصداراتها.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-passive">Reconnaissance</span>
+          <span class="pill pill-cwe">CWE-200</span>
+          <span class="pill pill-tech">Socket / HTTP Banners</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 2. محركات فحص الكود المصدري (SAST) -->
+    <div class="category-title">
+      <span>2️⃣ محركات فحص الكود المصدري الساكن (SAST & Semantic Analysis)</span>
+      <span class="category-badge badge-sast">970+ قاعدة ومعالجة AST</span>
+    </div>
+
+    <div class="tool-grid">
+
+      <!-- 970+ CWE Knowledge Base -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">📚 SentinelAI 970+ CWE Knowledge Base</div>
+          <div class="tool-file">knowledge-base.service.ts</div>
+        </div>
+        <div class="tool-desc">
+          قاعدة بيانات ضخمة مدمجة تحتوي على 970 تعريف تفصيلي للضعف الأمني، تقدم لكل ثغرة: الوصف الدقيق، مسار الاستغلال، الأثر التشغيلي، وكود الترقيع الموصى به رسمياً.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-passive">Knowledge Engine</span>
+          <span class="pill pill-cwe">970 CWE Definitions</span>
+          <span class="pill pill-tech">JSON Micro-DB</span>
+        </div>
+      </div>
+
+      <!-- CodeQL & Taint Analysis -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">🔍 AST Semantic & Taint Tracking (CodeQL)</div>
+          <div class="tool-file">codeql.adapter.ts / ai-reasoning.service.ts</div>
+        </div>
+        <div class="tool-desc">
+          تحليل شجرة البنية المجردة (AST) وتتبع مسار تدفق البيانات من المدخلات غير الموثوقة (<span class="pill-tech">req.query</span>, <span class="pill-tech">req.body</span>) وصولاً إلى دوال التنفيذ الخطرة (Sinks) مثل <span class="pill-tech">eval()</span> و <span class="pill-tech">exec()</span>.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-passive">Taint Analysis</span>
+          <span class="pill pill-cwe">CWE-20 / CWE-78 / CWE-89</span>
+          <span class="pill pill-tech">Source-to-Sink</span>
+        </div>
+      </div>
+
+      <!-- Semgrep Pattern Engine -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">⚡ Semgrep AST Pattern Matcher</div>
+          <div class="tool-file">semgrep.adapter.ts</div>
+        </div>
+        <div class="tool-desc">
+          مطابقة الأنماط البرمجية الخطرة داخل كود JavaScript, TypeScript, Python, و PHP، لاكتشاف استخدام دوال التشفير الضعيفة مثل <span class="pill-tech">Math.random()</span> و <span class="pill-tech">md5</span>.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-passive">AST Regex / Patterns</span>
+          <span class="pill pill-cwe">CWE-330 / CWE-327</span>
+          <span class="pill pill-tech">Polyglot Rules</span>
+        </div>
+      </div>
+
+      <!-- Gitleaks Secret Detector -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">🗝️ Gitleaks Credential & Secret Hunter</div>
+          <div class="tool-file">gitleaks.adapter.ts</div>
+        </div>
+        <div class="tool-desc">
+          فحص الإنتروبيا (Shannon Entropy) والتعبيرات النمطية المتقدمة لكشف مفاتيح AWS، وتوكنات GitHub (<span class="pill-tech">ghp_</span>)، ومفاتيح Stripe، والشهادات الخاصة داخل ملفات الكود والـ Git History.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-passive">Secret Detection</span>
+          <span class="pill pill-cwe">CWE-798 / CWE-532</span>
+          <span class="pill pill-tech">High-Entropy Regex</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 3. فحص سلاسل التوريد والاعتماديات (SCA & Cloud) -->
+    <div class="category-title">
+      <span>3️⃣ فحص سلاسل التوريد والاعتماديات (SCA & Cloud IaC Layer)</span>
+      <span class="category-badge badge-sca">أمان المكتبات والـ Containers</span>
+    </div>
+
+    <div class="tool-grid">
+
+      <!-- npm-audit & OSV Scanner -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">📦 npm-audit & OSV Live Scanner</div>
+          <div class="tool-file">npm-audit.adapter.ts / osv-scanner.adapter.ts</div>
+        </div>
+        <div class="tool-desc">
+          مطابقة ملفات الاعتماديات (<span class="pill-tech">package.json</span>, <span class="pill-tech">package-lock.json</span>) مع قاعدة بيانات الثغرات المفتوحة OSV وقاعدة بيانات أمان GitHub لرصد الـ CVEs المنشورة.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-passive">Dependency Audit</span>
+          <span class="pill pill-cwe">CWE-1395 / OWASP A06</span>
+          <span class="pill pill-tech">OSV API Sync</span>
+        </div>
+      </div>
+
+      <!-- Trivy & Checkov -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">🛡️ Trivy & Checkov (IaC & Containers)</div>
+          <div class="tool-file">trivy.adapter.ts / checkov.adapter.ts</div>
+        </div>
+        <div class="tool-desc">
+          فحص ملفات Dockerfile وتكوينات الـ Infrastructure as Code (Terraform, Kubernetes, CloudFormation) لرصد التكوينات الخاطئة وتشغيل الحاويات بصلاحيات الـ Root.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-passive">IaC Misconfiguration</span>
+          <span class="pill pill-cwe">CWE-732 / CWE-250</span>
+          <span class="pill pill-tech">Container Security</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 4. محركات الترقيع الآلي وحماية السيرفرات -->
+    <div class="category-title">
+      <span>4️⃣ محركات الترقيع الآلي وحماية السيرفرات (Remediation & Hardening Layer)</span>
+      <span class="category-badge badge-remediation">توليد كود إنتاجي فوري</span>
+    </div>
+
+    <div class="tool-grid">
+
+      <!-- Platform Patch Service -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">⚙️ Multi-Platform Server Hardening Generator</div>
+          <div class="tool-file">platform-patch.service.ts</div>
+        </div>
+        <div class="tool-desc">
+          يولد تلقائياً قواعد ترقيع وتكوينات حماية جاهزة للتحميل الفوري لخمس منصات رئيسية: **Nginx** (<span class="pill-tech">nginx.conf</span>), **Apache** (<span class="pill-tech">.htaccess</span>), **Caddy** (<span class="pill-tech">Caddyfile</span>), **Express.js** (<span class="pill-tech">helmet</span>), و **Django** (<span class="pill-tech">settings.py</span>).
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-active">Auto Config Generator</span>
+          <span class="pill pill-cwe">Server Hardening</span>
+          <span class="pill pill-tech">5 Platforms Ready</span>
+        </div>
+      </div>
+
+      <!-- Git Remediation Service -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">🔧 In-Place Code Remediation Engine</div>
+          <div class="tool-file">git-remediation.service.ts</div>
+        </div>
+        <div class="tool-desc">
+          يولد Unified Diff قياسي بتنسيق Git، ويقوم بتصحيح الأكواد المصابة تلقائياً على القرص لثغرات SQL Injection عبر Prepared Statements، و XSS عبر DOMPurify، و Command Injection عبر execFile.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-active">Source Code Patch</span>
+          <span class="pill pill-cwe">Git Unified Diff</span>
+          <span class="pill pill-tech">Automatic Fix</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 5. محركات الارتباط، قياس الخطورة والتقارير -->
+    <div class="category-title">
+      <span>5️⃣ محركات الارتباط، قياس الخطورة والذكاء الاصطناعي (Core Intelligence)</span>
+      <span class="category-badge badge-intel">دقة حسابية وخوارزميات FIRST</span>
+    </div>
+
+    <div class="tool-grid">
+
+      <!-- Findings Correlation -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">🔗 Cross-Engine Correlation & Dedup</div>
+          <div class="tool-file">findings-deduplication.service.ts</div>
+        </div>
+        <div class="tool-desc">
+          توليد بصمات رقمية فريدة (Fingerprints) لمنع تكرار الثغرات، وربط نقاط الضعف السطحية (DAST) بأماكنها المباشرة في الكود (SAST) ورفع درجة الثقة إلى **CONFIRMED / VERIFIED**.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-passive">Data Normalization</span>
+          <span class="pill pill-tech">Fingerprint Hashing</span>
+        </div>
+      </div>
+
+      <!-- CVSS v3.1 Engine -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">📐 Mathematical CVSS v3.1 Calculator</div>
+          <div class="tool-file">cvss-calculator.service.ts</div>
+        </div>
+        <div class="tool-desc">
+          تطبيق معادلات FIRST الرسمية بدقة متناهية لحساب متجهات الخطورة الأساسية (AV, AC, PR, UI, S, C, I, A) وإخراج الدرجة الرقمية من 0.0 إلى 10.0.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-passive">Official Standard</span>
+          <span class="pill pill-tech">FIRST Equations</span>
+        </div>
+      </div>
+
+      <!-- AI Copilot -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">🤖 AI Security Copilot (On-Device NLP)</div>
+          <div class="tool-file">ai-chat.routes.ts</div>
+        </div>
+        <div class="tool-desc">
+          مساعد ذكي ثنائي اللغة متصل بالمعرفة الأمنية الحية وسياق الفحص يشرح الثغرات، يجيب على الأسئلة التقنية، ويوضح خطوات الاستخدام والترقيع الفورية.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-active">Conversational AI</span>
+          <span class="pill pill-tech">Bilingual AR / EN</span>
+        </div>
+      </div>
+
+      <!-- Headless Chromium PDF Generator -->
+      <div class="tool-box">
+        <div class="tool-header">
+          <div class="tool-name">🖨️ Headless Chromium Vector PDF Generator</div>
+          <div class="tool-file">scripts/export-pdf.js</div>
+        </div>
+        <div class="tool-desc">
+          محرك توليد ملفات الـ PDF عالي الدقة عبر محرك Chromium / Edge في وضعية Headless، يضمن إنتاج ملفات PDF رسمية بألوان متناسقة، نصوص متجهة قابلة للبحث، وطباعة A4 خالية من الأخطاء.
+        </div>
+        <div class="tool-meta">
+          <span class="pill pill-active">PDF Renderer</span>
+          <span class="pill pill-tech">Chromium Engine</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- جدول الحصر والمطابقة الشامل -->
+    <div class="category-title">
+      <span>6️⃣ جدول الحصر الشامل لكافة الأدوات ومجال عملها (Master Tool Inventory)</span>
+    </div>
+
+    <table class="master-table">
+      <thead>
+        <tr>
+          <th>اسم الأداة / الخدمة</th>
+          <th>الملف المصدري</th>
+          <th>التصنيف</th>
+          <th>طبيعة الفحص</th>
+          <th>الهدف الأمني الرئيسي</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>FormFuzzerService</strong></td>
+          <td><span class="tool-file">form-fuzzer.service.ts</span></td>
+          <td>DAST</td>
+          <td>Active Probing</td>
+          <td>حقن النماذج وكشف الـ XSS غير المشفر بالـ DOM</td>
+        </tr>
+        <tr>
+          <td><strong>SslCipherAuditorService</strong></td>
+          <td><span class="tool-file">ssl-cipher-auditor.service.ts</span></td>
+          <td>DAST / Network</td>
+          <td>Active Socket</td>
+          <td>فحص شهادات SSL وبروتوكولات TLS 1.0/1.1 على بورت 443</td>
+        </tr>
+        <tr>
+          <td><strong>SstiAuditorService</strong></td>
+          <td><span class="tool-file">ssti-auditor.service.ts</span></td>
+          <td>DAST</td>
+          <td>Active Injection</td>
+          <td>حقن قوالب السيرفر (Jinja2/Twig/ERB) مع Baseline Zero-FP</td>
+        </tr>
+        <tr>
+          <td><strong>LfiCmdAuditorService</strong></td>
+          <td><span class="tool-file">lfi-cmd-auditor.service.ts</span></td>
+          <td>DAST</td>
+          <td>Active Probing</td>
+          <td>كشف تخطي مسارات الملفات وحقن أوامر Echo الآمنة</td>
+        </tr>
+        <tr>
+          <td><strong>CloudLeakAuditorService</strong></td>
+          <td><span class="tool-file">cloud-leak-auditor.service.ts</span></td>
+          <td>DAST / Recon</td>
+          <td>Active Recon</td>
+          <td>كشف تسريب سلات التخزين السحابية (AWS S3, GCP, Azure)</td>
+        </tr>
+        <tr>
+          <td><strong>IdorAuditorService</strong></td>
+          <td><span class="tool-file">idor-auditor.service.ts</span></td>
+          <td>DAST / Auth</td>
+          <td>Active Tampering</td>
+          <td>فحص التلاعب بالمعرفات المتسلسلة لكسر الصلاحيات (BOLA)</td>
+        </tr>
+        <tr>
+          <td><strong>AccessControlAuditorService</strong></td>
+          <td><span class="tool-file">access-control-auditor.service.ts</span></td>
+          <td>DAST / Auth</td>
+          <td>Active Probing</td>
+          <td>كشف لوحات الأدمن غير المحمية وتخطي الـ Proxy Headers</td>
+        </tr>
+        <tr>
+          <td><strong>GraphqlAuditorService</strong></td>
+          <td><span class="tool-file">graphql-auditor.service.ts</span></td>
+          <td>DAST / API</td>
+          <td>Active Query</td>
+          <td>كشف فتح الـ Introspection وسحب الـ Schema والتسريبات</td>
+        </tr>
+        <tr>
+          <td><strong>JwtAuditorService</strong></td>
+          <td><span class="tool-file">jwt-auditor.service.ts</span></td>
+          <td>DAST / Crypto</td>
+          <td>Active Audit</td>
+          <td>فحص التوقيع الفارغ (alg: none) وضعف التشفير في الـ JWT</td>
+        </tr>
+        <tr>
+          <td><strong>PrototypePollutionService</strong></td>
+          <td><span class="tool-file">prototype-pollution.service.ts</span></td>
+          <td>DAST</td>
+          <td>Active Probing</td>
+          <td>حقن حمولات تلوث كائنات الـ JavaScript في السيرفر</td>
+        </tr>
+        <tr>
+          <td><strong>SsrfAuditorService</strong></td>
+          <td><span class="tool-file">ssrf-auditor.service.ts</span></td>
+          <td>DAST</td>
+          <td>Active Probing</td>
+          <td>حقن عناوين الـ Loopback والـ Cloud Metadata (169.254.169.254)</td>
+        </tr>
+        <tr>
+          <td><strong>OastService</strong></td>
+          <td><span class="tool-file">oast.service.ts</span></td>
+          <td>DAST / Out-of-Band</td>
+          <td>Active Listener</td>
+          <td>سيرفر استماع للنداءات الراجعة للثغرات العمياء (Blind SQLi/SSRF)</td>
+        </tr>
+        <tr>
+          <td><strong>KnowledgeBaseService</strong></td>
+          <td><span class="tool-file">knowledge-base.service.ts</span></td>
+          <td>SAST / KB</td>
+          <td>Knowledge Engine</td>
+          <td>970+ قاعدة بيانات تفصيلية وتوصيفات أمنية معتمدة عالمياً</td>
+        </tr>
+        <tr>
+          <td><strong>Semgrep Adapter</strong></td>
+          <td><span class="tool-file">semgrep.adapter.ts</span></td>
+          <td>SAST</td>
+          <td>Static Pattern</td>
+          <td>كشف الأنماط البرمجية الخطرة ومولدات العشوائية غير الآمنة</td>
+        </tr>
+        <tr>
+          <td><strong>CodeQL Adapter</strong></td>
+          <td><span class="tool-file">codeql.adapter.ts</span></td>
+          <td>SAST</td>
+          <td>Taint Analysis</td>
+          <td>تتبع تدفق المدخلات غير الموثوقة من المصدر إلى المصب</td>
+        </tr>
+        <tr>
+          <td><strong>Gitleaks Adapter</strong></td>
+          <td><span class="tool-file">gitleaks.adapter.ts</span></td>
+          <td>SAST / Secrets</td>
+          <td>Entropy Analysis</td>
+          <td>كشف مفاتيح السحابة، توكنات الـ API، والبيانات الحساسة بالكود</td>
+        </tr>
+        <tr>
+          <td><strong>npm-audit & OSV Scanner</strong></td>
+          <td><span class="tool-file">npm-audit.adapter.ts / osv-scanner.ts</span></td>
+          <td>SCA</td>
+          <td>Advisory Matching</td>
+          <td>مطابقة الاعتماديات مع الثغرات المنشورة عالمياً (CVEs)</td>
+        </tr>
+        <tr>
+          <td><strong>Checkov & Trivy Adapters</strong></td>
+          <td><span class="tool-file">checkov.adapter.ts / trivy.adapter.ts</span></td>
+          <td>IaC / Container</td>
+          <td>Static Config Audit</td>
+          <td>فحص ملفات Docker و Terraform وأمان البنية التحتية</td>
+        </tr>
+        <tr>
+          <td><strong>PlatformPatchService</strong></td>
+          <td><span class="tool-file">platform-patch.service.ts</span></td>
+          <td>Remediation</td>
+          <td>Config Synthesis</td>
+          <td>توليد إعدادات حماية إنتاجية لـ Nginx, Apache, Caddy, Express, Django</td>
+        </tr>
+        <tr>
+          <td><strong>GitRemediationService</strong></td>
+          <td><span class="tool-file">git-remediation.service.ts</span></td>
+          <td>Remediation</td>
+          <td>Automated In-Place</td>
+          <td>تصليح الكود المصدري محلياً وإنشاء Unified Diff قياسي</td>
+        </tr>
+        <tr>
+          <td><strong>CvssCalculatorService</strong></td>
+          <td><span class="tool-file">cvss-calculator.service.ts</span></td>
+          <td>Scoring Engine</td>
+          <td>Mathematical Calc</td>
+          <td>تطبيق معادلات FIRST الرسمية لمعيار CVSS v3.1 بدقة متناهية</td>
+        </tr>
+        <tr>
+          <td><strong>AI Security Assistant</strong></td>
+          <td><span class="tool-file">ai-chat.routes.ts</span></td>
+          <td>AI / UX</td>
+          <td>Conversational NLP</td>
+          <td>مساعد ذكي ثنائي اللغة يجيب على الأسئلة ويشرح خطوات العمل</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- التذييل الرسمي -->
+    <div class="footer-section">
+      <div>تم توثيق الفهرس الهندسي عبر <strong>Sential AI Core Architecture Team</strong></div>
+      <div>التاريخ: نوفمبر 2026 | وثيقة تدقيق الأدوات والمحركات الرسمية</div>
+    </div>
+
+  </div>
+
+</body>
+</html>
