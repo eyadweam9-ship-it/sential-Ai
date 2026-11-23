@@ -13,6 +13,12 @@ import { countFilesAndLines } from '../utils/file-counter';
 import { optionalAuth, AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { OastService } from '../services/oast.service';
 import { ApiSpecImporterService } from '../services/api-spec-importer.service';
+import { SecurityIntentCompilerService } from '../services/security-intent-compiler.service';
+import { ContinuousMonitoringService } from '../services/continuous-monitoring.service';
+import { OmnichannelAlertService } from '../services/omnichannel-alerts.service';
+import { AttackGraphService } from '../services/attack-graph.service';
+import { SecurityEvolutionService } from '../services/security-evolution.service';
+import { VulnerabilityChainService } from '../services/vulnerability-chain.service';
 
 export const scanRouter = Router();
 
@@ -2411,6 +2417,177 @@ scanRouter.post('/rescan/:targetId', async (req: Request, res: Response): Promis
     });
   } catch (error) {
     console.error('Rescan target error:', error);
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/scan/intent/compile-and-test
+ * Compiles user security/business logic intents into automated tests and runs them
+ */
+scanRouter.post('/intent/compile-and-test', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { targetUrl, intentText, customRules } = req.body;
+    if (!targetUrl) {
+      res.status(400).json({ success: false, error: 'targetUrl is required' });
+      return;
+    }
+
+    let rules = customRules;
+    if (!rules || !Array.isArray(rules) || rules.length === 0) {
+      rules = SecurityIntentCompilerService.parseNaturalLanguageIntent(intentText || 'user data isolation, role escalation, negative price checkout', targetUrl);
+    }
+
+    const report = await SecurityIntentCompilerService.executeIntentAudit(targetUrl, rules);
+    res.status(200).json({
+      success: true,
+      report,
+    });
+  } catch (error) {
+    console.error('Intent compile and test error:', error);
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/scan/:id/attack-graph
+ * Builds topological attack graph for a scan
+ */
+scanRouter.get('/:id/attack-graph', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const scanId = Number(req.params.id);
+    const graph = await AttackGraphService.buildAttackGraph(scanId);
+    res.status(200).json({ success: true, graph });
+  } catch (error) {
+    console.error('Get attack graph error:', error);
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/scan/:id/what-if
+ * Counterfactual "What-If Fixed?" attack path simulator
+ */
+scanRouter.post('/:id/what-if', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const scanId = Number(req.params.id);
+    const { fixedFindingIds } = req.body;
+    const simResult = await AttackGraphService.simulateWhatIf(scanId, Array.isArray(fixedFindingIds) ? fixedFindingIds : []);
+    res.status(200).json({ success: true, simulation: simResult });
+  } catch (error) {
+    console.error('What-if simulation error:', error);
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/scan/:id/evolution
+ * Historical vulnerability evolution and regression trend
+ */
+scanRouter.get('/:id/evolution', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const scanId = Number(req.params.id);
+    const evolution = await SecurityEvolutionService.analyzeEvolution(scanId);
+    res.status(200).json({ success: true, evolution });
+  } catch (error) {
+    console.error('Get evolution error:', error);
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/scan/:id/chains
+ * Predicts multi-step exploit chains and future compound risk
+ */
+scanRouter.get('/:id/chains', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const scanId = Number(req.params.id);
+    const chains = await VulnerabilityChainService.predictChains(scanId);
+    res.status(200).json({ success: true, report: chains });
+  } catch (error) {
+    console.error('Get exploit chains error:', error);
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * Continuous Attack Surface Monitoring Routes
+ */
+scanRouter.post('/monitoring/register', (req: Request, res: Response): void => {
+  try {
+    const { url, frequency } = req.body;
+    if (!url) {
+      res.status(400).json({ success: false, error: 'Target URL is required.' });
+      return;
+    }
+    const status = ContinuousMonitoringService.registerTarget(url, frequency || 'DAILY');
+    res.status(200).json({ success: true, message: 'Target registered for continuous monitoring.', status });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+scanRouter.get('/monitoring/targets', (req: Request, res: Response): void => {
+  try {
+    const targets = ContinuousMonitoringService.getAllMonitoredTargets();
+    res.status(200).json({ success: true, targets });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+scanRouter.post('/monitoring/run-pass', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { url } = req.body;
+    if (!url) {
+      res.status(400).json({ success: false, error: 'Target URL is required.' });
+      return;
+    }
+    const result = await ContinuousMonitoringService.executeMonitoringPass(url);
+    res.status(200).json({ success: true, result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * Omnichannel Alerting Routes
+ */
+scanRouter.post('/alerts/configure', (req: Request, res: Response): void => {
+  try {
+    const updated = OmnichannelAlertService.configure(req.body);
+    res.status(200).json({ success: true, config: updated });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+scanRouter.post('/alerts/test', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { webhookUrl, channelType, targetUrl } = req.body;
+    if (webhookUrl && channelType) {
+      if (channelType === 'slack') OmnichannelAlertService.configure({ slackWebhookUrl: webhookUrl });
+      else if (channelType === 'discord') OmnichannelAlertService.configure({ discordWebhookUrl: webhookUrl });
+      else if (channelType === 'teams') OmnichannelAlertService.configure({ teamsWebhookUrl: webhookUrl });
+    }
+
+    const testAlert = {
+      title: 'Test Critical Vulnerability Notification',
+      severity: 'CRITICAL' as const,
+      cwe: 'CWE-89 (SQL Injection)',
+      cvssScore: 9.8,
+      targetUrl: targetUrl || 'https://demo.sential-ai.internal',
+      evidenceSummary: 'Simulated high-priority alert dispatched via Sential AI Omnichannel Dispatcher.',
+      recommendation: 'Verify webhook connectivity and alerts channel notifications.',
+    };
+
+    const dispatchResult = await OmnichannelAlertService.broadcastAlert(testAlert);
+    res.status(200).json({
+      success: true,
+      message: 'Alert test broadcast attempted.',
+      dispatchResult,
+    });
+  } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }
 });

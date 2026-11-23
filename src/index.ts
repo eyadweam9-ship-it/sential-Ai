@@ -88,11 +88,15 @@ app.use('/api/admin', adminRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/authorization', authorizationRouter);
 app.use('/api/scans', scanRouter);
+app.use('/api/scan', scanRouter);
 app.use('/api/findings', findingsRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/threat-intel', threatIntelRouter);
 app.use('/api/ai', aiChatRouter);
 app.use('/api', scanRouter);
+
+// Keepalive timer for persistent server process
+setInterval(() => {}, 60000);
 
 app.get('/api/health', async (req: Request, res: Response) => {
   try {

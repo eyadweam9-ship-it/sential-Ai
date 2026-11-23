@@ -109,7 +109,7 @@ export class SslCipherAuditorService {
     return findings;
   }
 
-  private static getCertificateInfo(hostname: string, port: number): Promise<any> {
+  public static getCertificateInfo(hostname: string, port: number = 443): Promise<any> {
     return new Promise((resolve) => {
       const socket = tls.connect(
         {

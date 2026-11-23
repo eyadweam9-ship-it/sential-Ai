@@ -26,6 +26,9 @@ import { SslCipherAuditorService } from './ssl-cipher-auditor.service';
 import { SstiAuditorService } from './ssti-auditor.service';
 import { LfiCmdAuditorService } from './lfi-cmd-auditor.service';
 import { CloudLeakAuditorService } from './cloud-leak-auditor.service';
+import { SecurityIntentCompilerService } from './security-intent-compiler.service';
+import { ContinuousMonitoringService } from './continuous-monitoring.service';
+import { OmnichannelAlertService } from './omnichannel-alerts.service';
 
 export const activeScanState = new Map<number, { activeTool: string; activeMessage: string; progress: number }>();
 
@@ -499,6 +502,17 @@ export async function orchestrateScan(scanId: number): Promise<void> {
           } catch (cloudErr) {
             console.warn('[ScanOrchestrator] Cloud leak auditor notice:', (cloudErr as Error).message);
           }
+
+          // 11. Security Intent & Business Logic Compiler Probes
+          try {
+            const defaultIntents = SecurityIntentCompilerService.parseNaturalLanguageIntent('user data isolation, role escalation, negative price checkout', target.url);
+            const intentReport = await SecurityIntentCompilerService.executeIntentAudit(target.url, defaultIntents);
+            if (intentReport.findings.length > 0) {
+              await normalizeAndSaveFindings(scanId, 'INTENT_COMPILER', intentReport.findings);
+            }
+          } catch (intentErr) {
+            console.warn('[ScanOrchestrator] Intent compiler notice:', (intentErr as Error).message);
+          }
         } catch (modernErr) {
           console.warn('[ScanOrchestrator] Modern threat auditor notice:', (modernErr as Error).message);
         }
@@ -602,6 +616,28 @@ export async function orchestrateScan(scanId: number): Promise<void> {
 
     // 9. Generate Final Security Assessment Report
     await generateScanReport(scanId);
+
+    // 9.1 Omnichannel Alerts Broadcast for Critical Findings
+    try {
+      const critFindings = findings.filter(f => f.severity === 'CRITICAL');
+      for (const cf of critFindings.slice(0, 3)) {
+        await OmnichannelAlertService.broadcastAlert({
+          title: cf.title,
+          severity: 'CRITICAL',
+          cwe: cf.cwe || 'N/A',
+          targetUrl: target.url,
+          evidenceSummary: cf.description || 'Verified critical vulnerability during scan.',
+          scanId,
+        }).catch(() => {});
+      }
+    } catch (alertErr) {
+      console.warn('[ScanOrchestrator] Alert broadcast notice:', (alertErr as Error).message);
+    }
+
+    // 9.2 Continuous Monitoring Drift Update
+    try {
+      await ContinuousMonitoringService.executeMonitoringPass(target.url).catch(() => {});
+    } catch {}
 
     // 10. Determine final Scan Status
     const allTasks = await prisma.scanTask.findMany({ where: { scanId } });
