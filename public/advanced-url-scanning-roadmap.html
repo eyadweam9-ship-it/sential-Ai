@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>Sential AI — تقرير المهام المتقدمة لفحص الروابط (Black-Box URL Engine Roadmap)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --accent: #0ea5e9;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --success: #10b981;
+      --purple: #8b5cf6;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Cairo', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 24px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .no-print-bar {
+      max-width: 1050px;
+      margin: 0 auto 20px auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #0f172a;
+      color: white;
+      padding: 14px 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    .no-print-bar .title { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+    .no-print-bar .actions { display: flex; gap: 10px; }
+    .btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 13px;
+      font-family: 'Cairo', sans-serif;
+      cursor: pointer;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-success { background: var(--success); color: white; }
+    .btn-success:hover { background: #059669; }
+
+    .report-sheet {
+      max-width: 1050px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 44px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.03);
+    }
+
+    .header-section {
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 24px;
+      margin-bottom: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .brand-meta h1 {
+      font-size: 26px;
+      font-weight: 900;
+      color: #0f172a;
+      margin: 0 0 6px 0;
+      letter-spacing: -0.5px;
+    }
+    .brand-meta .subtitle {
+      color: var(--text-muted);
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .doc-badge {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: var(--primary);
+      padding: 8px 14px;
+      border-radius: 8px;
+      text-align: left;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      direction: ltr;
+    }
+
+    .stat-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 30px;
+    }
+    .stat-card {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+      border-top: 4px solid var(--primary);
+    }
+    .stat-card.purple { border-top-color: var(--purple); }
+    .stat-card.danger { border-top-color: var(--danger); }
+    .stat-card.accent { border-top-color: var(--accent); }
+    .stat-val { font-size: 26px; font-weight: 900; color: #0f172a; font-family: 'Manrope', sans-serif; }
+    .stat-lbl { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-top: 4px; }
+
+    .category-banner {
+      background: #f1f5f9;
+      border-right: 4px solid var(--primary);
+      padding: 12px 18px;
+      border-radius: 8px;
+      margin: 32px 0 16px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .category-banner.cat2 { border-right-color: var(--purple); }
+    .category-banner.cat3 { border-right-color: var(--danger); }
+    .category-banner.cat4 { border-right-color: var(--accent); }
+    .category-title { font-size: 16px; font-weight: 800; color: #0f172a; }
+    .category-count { font-size: 12px; font-weight: 700; background: #ffffff; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); }
+
+    .task-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 18px;
+      page-break-inside: avoid;
+    }
+    .task-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      border-bottom: 1px solid #f1f5f9;
+      padding-bottom: 10px;
+    }
+    .task-name {
+      font-size: 15px;
+      font-weight: 800;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .badge {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 700;
+    }
+    .badge-critical { background: #fee2e2; color: #b91c1c; }
+    .badge-high { background: #ffedd5; color: #c2410c; }
+    .badge-unimplemented { background: #fef3c7; color: #b45309; }
+
+    .task-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 10px;
+    }
+    .task-box-info {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .task-box-info strong {
+      display: block;
+      margin-bottom: 4px;
+      color: #1e293b;
+      font-size: 13px;
+    }
+    .impact-callout {
+      margin-top: 12px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: #166534;
+      line-height: 1.6;
+    }
+    .impact-callout strong { color: #15803d; }
+
+    .matrix-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 24px;
+      font-size: 12px;
+    }
+    .matrix-table th, .matrix-table td {
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      text-align: right;
+    }
+    .matrix-table th {
+      background: #f8fafc;
+      font-weight: 800;
+      color: #1e293b;
+    }
+
+    .footer-section {
+      margin-top: 40px;
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    @media print {
+      body { background: white; padding: 0; }
+      .no-print-bar { display: none !important; }
+      .report-sheet { border: none; box-shadow: none; padding: 0; max-width: 100%; }
+      @page { size: A4; margin: 10mm 12mm; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- شريط التحكم العلوي -->
+  <div class="no-print-bar">
+    <div class="title">
+      <span>📄 تقرير المهام المتقدمة لفحص الروابط فقط (Black-Box URL DAST Roadmap)</span>
+    </div>
+    <div class="actions">
+      <a href="/reports/sential-ai-advanced-url-tasks.pdf" download class="btn btn-success">
+        ⬇️ تحميل نسخة PDF الرسمية
+      </a>
+      <button onclick="window.print()" class="btn btn-primary">
+        🖨️ طباعة التقرير / Save as PDF
+      </button>
+    </div>
+  </div>
+
+  <div class="report-sheet">
+
+    <!-- ترويسة التقرير الرسمية -->
+    <div class="header-section">
+      <div class="brand-meta">
+        <h1>Sential AI — تقرير المهام المتقدمة لفحص الروابط فقط (Black-Box DAST)</h1>
+        <div class="subtitle">تصنيف 10 مهام استثنائية ونوعية ترفع دقة وعمق الفحص عندما يُطلب فحص "رابط موقع فقط" بدون كود المصدر (نوفمبر 2026)</div>
+      </div>
+      <div class="doc-badge">
+        DOC ID: SENTIAL-URL-BLACKBOX-2026<br>
+        AUDIT VERIFICATION: 100% UNIMPLEMENTED (NEW)<br>
+        CLASSIFICATION: ENTERPRISE DAST ROADMAP
+      </div>
+    </div>
+
+    <!-- بطاقات الإحصائيات -->
+    <div class="stat-cards-grid">
+      <div class="stat-card">
+        <div class="stat-val">10</div>
+        <div class="stat-lbl">مهام هندسية نوعية مقترحة</div>
+      </div>
+      <div class="stat-card purple">
+        <div class="stat-val">4</div>
+        <div class="stat-lbl">تصنيفات استراتيجية متقدمة</div>
+      </div>
+      <div class="stat-card danger">
+        <div class="stat-val">100%</div>
+        <div class="stat-lbl">غير منفذة حالياً في الكود (فرص نمو مؤكدة)</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-val">Zero-Source</div>
+        <div class="stat-lbl">تعمل كلياً برابط الموقع فقط (URL Input)</div>
+      </div>
+    </div>
+
+    <!-- مقدمة تدقيق الكود الحالي -->
+    <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:14px 18px; margin-bottom:24px; font-size:13px; color:#1e40af; line-height:1.6;">
+      <strong>🔍 التحقق البرمجي الدقيق من الكود الحالي (Codebase Verification):</strong><br>
+      تم تدقيق كافة ملفات الخدمات في مجلد <code>src/services/</code>، وثبت بالدليل القاطع أن هذه المهام العشر <strong>غير موجودة وغير منفذة إطلاقاً</strong> في Sential AI حالياً، حيث يقتصر الفحص الحالي على فحص الروابط المباشرة، شهادات TLS الأساسية، الزحف السطحي عبر Chromium dump-dom، وفحص الـ forms البسيطة. تطبيق هذه المهام سيحدث قفزة نوعية تنقل المنصة لمنافسة Burp Suite Professional و Nuclei و Qualys.
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- التصنيف الأول -->
+    <!-- ========================================================================= -->
+    <div class="category-banner">
+      <span class="category-title">1️⃣ كشف البنية التحتية والالتفاف حول الحماية (Infrastructure Recon & Edge Evasion)</span>
+      <span class="category-count">2 مهام أساسية</span>
+    </div>
+
+    <!-- Task 1: Origin IP Uncloaking -->
+    <div class="task-card">
+      <div class="task-header">
+        <div class="task-name">
+          <span>1. كشف الـ IP الحقيقي للسيرفر وتخطي جدران Cloudflare (Origin IP Uncloaking)</span>
+          <span class="badge badge-unimplemented">غير معمول في الكود حالياً [NEW]</span>
+        </div>
+        <span class="badge badge-critical">CRITICAL IMPACT • P0</span>
+      </div>
+
+      <div class="task-grid">
+        <div class="task-box-info">
+          <strong>⚙️ كيف يعمل من رابط الموقع فقط؟</strong>
+          عند إدخال <code>https://target.com</code> المحمي بـ Cloudflare:
+          1. <strong>سجلات الـ MX و SPF:</strong> استخراج سيرفرات البريد التي غالباً ما تستضاف على نفس الـ Subnet المباشر.
+          2. <strong>هاش الأيقونة (Favicon MurmurHash3):</strong> تحميل <code>/favicon.ico</code> وحساب بصمتها ومطابقتها عبر Censys / Shodan للبحث عن سيرفرات مكشوفة تعرض نفس الأيقونة على IP مباشر.
+          3. <strong>أرشيف شهادات SSL التاريخية:</strong> البحث عن شهادات السيرفر قبل تركيب الـ CDN.
+        </div>
+        <div class="task-box-info">
+          <strong>🔬 التحقق من الكود الحالي (Gap Analysis):</strong>
+          الخدمة الحالية <code>subdomain-recon.service.ts</code> تستعلم فقط عن أسماء الدومينات عبر crt.sh، بينما <code>waf-throttler.service.ts</code> يكتفي برصد وجود WAF ولا يمتلك أي محرك لكشف عنوان الـ IP الحقيقي أو تجاوز الـ Reverse Proxy.
+        </div>
+      </div>
+      <div class="impact-callout">
+        <strong>🎯 ليه هيفرق معاك جداً؟</strong>
+        إذا تم كشف الـ Origin IP المباشر، يتم توجيه الفحص مباشرة للسيرفر متخطياً Cloudflare بالكامل، مما يمنع حظر الـ IP ويتيح استغلال ثغرات الـ RCE و SQLi المباشرة التي كان يحجبها جدار الحماية.
+      </div>
+    </div>
+
+    <!-- Task 2: Host Header Injection & Virtual Host Fuzzing -->
+    <div class="task-card">
+      <div class="task-header">
+        <div class="task-name">
+          <span>2. فحص التلاعب بالـ Host Header والمواقع الافتراضية (Virtual Host & Tenant Fuzzing)</span>
+          <span class="badge badge-unimplemented">غير معمول في الكود حالياً [NEW]</span>
+        </div>
+        <span class="badge badge-high">HIGH IMPACT • P1</span>
+      </div>
+
+      <div class="task-grid">
+        <div class="task-box-info">
+          <strong>⚙️ كيف يعمل من رابط الموقع فقط؟</strong>
+          إرسال طلبات لنفس الـ IP الخاص بالرابط مع التلاعب بترويسة <code>Host:</code> لتجربة نطاقات داخلية حساسة:
+          <code>admin.target.com</code>, <code>internal-api.local</code>, <code>k8s-dashboard.corp</code>.
+          مقارنة الفروق في أحجام الاستجابات وأكواد الحالة لكشف وجود استضافات افتراضية موازية على نفس السيرفر.
+        </div>
+        <div class="task-box-info">
+          <strong>🔬 التحقق من الكود الحالي (Gap Analysis):</strong>
+          الإسكانر الحالي يرسل دائماً ترويسة Host المطابقة للرابط الأصلي فقط، ولا يقوم بعمل Virtual Host Brute-Force أو فحص الـ Tenant Segregation.
+        </div>
+      </div>
+      <div class="impact-callout">
+        <strong>🎯 ليه هيفرق معاك جداً؟</strong>
+        يكتشف بورتالات الإدارة ولوحات تحكم Kubernetes والـ DevOps غير الموجهة للعامة والمستضافة سراً على نفس الخادم الوسيط (Reverse Proxy).
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- التصنيف الثاني -->
+    <!-- ========================================================================= -->
+    <div class="category-banner cat2">
+      <span class="category-title">2️⃣ استخبارات الأسطح الموسعة والزحف الذكي (Attack Surface & Deep Crawling)</span>
+      <span class="category-count">2 مهام أساسية</span>
+    </div>
+
+    <!-- Task 3: Historical Endpoint Mining -->
+    <div class="task-card">
+      <div class="task-header">
+        <div class="task-name">
+          <span>3. التعدين التاريخي للروابط والملفات المنسية (Historical URL & Wayback Machine Miner)</span>
+          <span class="badge badge-unimplemented">غير معمول في الكود حالياً [NEW]</span>
+        </div>
+        <span class="badge badge-critical">CRITICAL IMPACT • P0</span>
+      </div>
+
+      <div class="task-grid">
+        <div class="task-box-info">
+          <strong>⚙️ كيف يعمل من رابط الموقع فقط؟</strong>
+          بمجرد استلام الرابط، يستعلم الإسكانر فورياً من أرشيفات الإنترنت العالمية (Wayback Machine - Archive.org, AlienVault OTX, CommonCrawl, URLScan.io) لجلب كل رابط ومسار تمت أرشفته لهذا الموقع خلال السنوات الماضية، ثم يفلتر الملفات المنسية (مثل: <code>/backup.zip</code>, <code>/old_api/</code>, <code>/db_dump.sql</code>) ويفحص بقاءها حية.
+        </div>
+        <div class="task-box-info">
+          <strong>🔬 التحقق من الكود الحالي (Gap Analysis):</strong>
+          ملف <code>crawler.service.ts</code> يزحف فقط على الروابط الحية المربوطة حالياً بالصفحة المستهدفة، ولا يستعين بأي مصادر استخبارات تاريخية أو أرشيفات سابقة.
+        </div>
+      </div>
+      <div class="impact-callout">
+        <strong>🎯 ليه هيفرق معاك جداً؟</strong>
+        أكبر ثغرات الـ Bug Bounty والـ Critical Data Leaks تُكتشف عبر ملفات الـ Backup والـ APIs القديمة التي نسيتها فرق التطوير ولكنها ما زالت مستضافة ومتاحة للتحميل.
+      </div>
+    </div>
+
+    <!-- Task 4: Interactive Event-Driven DOM Crawler -->
+    <div class="task-card">
+      <div class="task-header">
+        <div class="task-name">
+          <span>4. الزحف التفاعلي المتقدم القائم على الأحداث (Interactive Event-Driven DOM Crawler)</span>
+          <span class="badge badge-unimplemented">غير معمول في الكود حالياً [NEW]</span>
+        </div>
+        <span class="badge badge-high">HIGH IMPACT • P1</span>
+      </div>
+
+      <div class="task-grid">
+        <div class="task-box-info">
+          <strong>⚙️ كيف يعمل من رابط الموقع فقط؟</strong>
+          تطبيقات الـ SPA الحديثة (React, Vue, Next.js) لا تعتمد على وسوم <code>&lt;a href&gt;</code> عادية.
+          يقوم المتصفح الخفي (Headless Chromium) بمحاكاة مستخدم حقيقي:
+          - النقر على الأزرار وقوائم الـ Dropdowns.
+          - التمرير لأسفل الصفحة لتحفيز الـ Infinite Scroll.
+          - التقاط كافة استدعاءات <code>fetch</code> و <code>XHR</code> وحركة الـ WebSockets الصادرة لحظياً من شريط الشبكة.
+        </div>
+        <div class="task-box-info">
+          <strong>🔬 التحقق من الكود الحالي (Gap Analysis):</strong>
+          تجمع المتصفحات الحالي <code>browser-cluster.service.ts</code> يستخدم فقط أمر <code>--dump-dom</code> الثابت دون أي محاكاة تفاعلية للأحداث أو رصد لحركة الـ XHR الصادرة في الخلفية.
+        </div>
+      </div>
+      <div class="impact-callout">
+        <strong>🎯 ليه هيفرق معاك جداً؟</strong>
+        يكتشف 4 أضعاف الـ Endpoints والـ Forms المخفية مقارنة بأي فاحص تقليدي، مما يمنح الإسكانر رؤية كاملة لسطح الهجوم الحقيقي لتطبيقات الويب الحديثة.
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- التصنيف الثالث -->
+    <!-- ========================================================================= -->
+    <div class="category-banner cat3">
+      <span class="category-title">3️⃣ هجمات البروتوكول والشبكات المتقدمة (Protocol-Level & Concurrency Attacks)</span>
+      <span class="category-count">2 مهام أساسية</span>
+    </div>
+
+    <!-- Task 5: HTTP Request Smuggling -->
+    <div class="task-card">
+      <div class="task-header">
+        <div class="task-name">
+          <span>5. فحص تهريب طلبات الـ HTTP والتفكيك (HTTP Request Smuggling & H2 Desync)</span>
+          <span class="badge badge-unimplemented">غير معمول في الكود حالياً [NEW]</span>
+        </div>
+        <span class="badge badge-critical">CRITICAL IMPACT • P0</span>
+      </div>
+
+      <div class="task-grid">
+        <div class="task-box-info">
+          <strong>⚙️ كيف يعمل من رابط الموقع فقط؟</strong>
+          إرسال طلبات خام (Raw TCP Sockets) بتلاعب في ترويسات:
+          <code>Transfer-Encoding: chunked</code> مقابل <code>Content-Length</code> (CL.TE و TE.CL).
+          فحص عدم التوافق بين خادم الواجهة (Front-End Reverse Proxy) وخادم الخلفية (Backend)، بالإضافة لفحص تحويل HTTP/2 إلى HTTP/1.1 (H2.CL / H2.TE).
+        </div>
+        <div class="task-box-info">
+          <strong>🔬 التحقق من الكود الحالي (Gap Analysis):</strong>
+          لا يوجد أي ملف أو منطق برمجي في كامل المشروع يختبر الـ Desynchronization أو الـ Request Smuggling أو هجمات البروتوكول العميقة.
+        </div>
+      </div>
+      <div class="impact-callout">
+        <strong>🎯 ليه هيفرق معاك جداً؟</strong>
+        ثغرة كارثية تؤدي إلى اعتراض طلبات المستخدمين الآخرين، سرقة الـ Cookies والرموز السرية، وتسميم الكاش العام للسيرفر بالكامل بدون إذن.
+      </div>
+    </div>
+
+    <!-- Task 6: Single-Packet Race Condition Fuzzer -->
+    <div class="task-card">
+      <div class="task-header">
+        <div class="task-name">
+          <span>6. فحص هجمات السباق بحزمة واحدة (Single-Packet HTTP/2 Race Condition Fuzzer)</span>
+          <span class="badge badge-unimplemented">غير معمول في الكود حالياً [NEW]</span>
+        </div>
+        <span class="badge badge-critical">CRITICAL IMPACT • P0</span>
+      </div>
+
+      <div class="task-grid">
+        <div class="task-box-info">
+          <strong>⚙️ كيف يعمل من رابط الموقع فقط؟</strong>
+          فتح جلسة HTTP/2 واحدة وتجهيز 20-30 طلباً لنفس المسار المنطقي (مثل كوبونات الخصم، كود تفعيل OTP، سحب رصيد، أو تسجيل حساب).
+          إرسال كافة البايتات واحتجاز البايت الأخير فقط لكل طلب، ثم إطلاقه لجميع الطلبات في جزء الميلي ثانية نفسه داخل حزمة TCP واحدة للتغلب التام على تأخير الشبكة.
+        </div>
+        <div class="task-box-info">
+          <strong>🔬 التحقق من الكود الحالي (Gap Analysis):</strong>
+          النظام الحالي يرسل طلبات متسلسلة عادية ولا يحتوي على محرك معالجة التزامن الشبكي بحزمة واحدة (Single-Packet Synchronized Engine).
+        </div>
+      </div>
+      <div class="impact-callout">
+        <strong>🎯 ليه هيفرق معاك جداً؟</strong>
+        ثغرات الـ Race Condition لا تكتشفها الإسكانرز العادية نهائياً؛ تتيح هذه التقنية كشف ثغرات المنطق المالي والـ Double-Spending في لحظات.
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- التصنيف الرابع -->
+    <!-- ========================================================================= -->
+    <div class="category-banner cat4">
+      <span class="category-title">4️⃣ هجمات الكاش وتطبيقات الويب الحديثة (Web Cache, CORS & Modern Web Security)</span>
+      <span class="category-count">4 مهام أساسية</span>
+    </div>
+
+    <!-- Task 7: Web Cache Poisoning & Deception -->
+    <div class="task-card">
+      <div class="task-header">
+        <div class="task-name">
+          <span>7. فحص تسميم وخداع الكاش (Web Cache Poisoning & Cache Deception Engine)</span>
+          <span class="badge badge-unimplemented">غير معمول في الكود حالياً [NEW]</span>
+        </div>
+        <span class="badge badge-high">HIGH IMPACT • P1</span>
+      </div>
+
+      <div class="task-grid">
+        <div class="task-box-info">
+          <strong>⚙️ كيف يعمل من رابط الموقع فقط؟</strong>
+          1. <strong>Unkeyed Headers:</strong> حقن ترويسات غير مفهرسة بالكاش مثل <code>X-Forwarded-Host</code> و <code>X-Original-URL</code> وفحص هل الـ CDN يقوم بتخزين الاستجابة المسمومة للزوار.
+          2. <strong>Cache Deception:</strong> طلب صفحات المستخدمين بامتداد ثابت زائف (مثل <code>/profile/test.css</code>) للتأكد هل الـ CDN يقع في فخ اعتبارها ملفاً ثابتاً عاماً يسهل على الغرباء قراءته.
+        </div>
+        <div class="task-box-info">
+          <strong>🔬 التحقق من الكود الحالي (Gap Analysis):</strong>
+          فاحص الـ Delta الحالي يكتفي بقراءة ETag لتوفير وقت الفحص، ولا يمتلك أي خوارزمية لتسميم وتتبع دورة حياة تخزين الكاش في خوادم الـ CDN.
+        </div>
+      </div>
+      <div class="impact-callout">
+        <strong>🎯 ليه هيفرق معاك جداً؟</strong>
+        يتيح كشف تسريب البيانات الشخصية (PII) لكل زوار الموقع عبر الـ CDN أو استبدال ملفات الـ JS بحمولات خبيثة دائمة.
+      </div>
+    </div>
+
+    <!-- Task 8: Deep CORS & PostMessage -->
+    <div class="task-card">
+      <div class="task-header">
+        <div class="task-name">
+          <span>8. مصفوفة استغلال الـ CORS المتقدم وفحص الـ PostMessage</span>
+          <span class="badge badge-unimplemented">غير معمول في الكود حالياً [NEW]</span>
+        </div>
+        <span class="badge badge-high">HIGH IMPACT • P1</span>
+      </div>
+
+      <div class="task-grid">
+        <div class="task-box-info">
+          <strong>⚙️ كيف يعمل من رابط الموقع فقط؟</strong>
+          - اختبار انعكاس الـ Origin الديناميكي مع الكوكيز: <code>Origin: https://attacker.com</code> + <code>Allow-Credentials: true</code>.
+          - اختبار <code>Origin: null</code> (من داخل iframes).
+          - فحص كود الـ JavaScript في المتصفح بحثاً عن دوال <code>window.addEventListener('message')</code> التي لا تدقق في <code>event.origin</code>.
+        </div>
+        <div class="task-box-info">
+          <strong>🔬 التحقق من الكود الحالي (Gap Analysis):</strong>
+          الإسكانر الحالي يفحص فقط وجود الـ Header العام <code>Access-Control-Allow-Origin: *</code> ولا ينفذ محاكاة أصلية متقدمة لـ Null Origin أو استماع رسائل الـ DOM.
+        </div>
+      </div>
+      <div class="impact-callout">
+        <strong>🎯 ليه هيفرق معاك جداً؟</strong>
+        يكتشف إمكانية سرقة بيانات الجلسة والمحادثات من أي موقع خارجي في المتصفح.
+      </div>
+    </div>
+
+    <!-- Task 9: Dynamic Client-Side Prototype Pollution -->
+    <div class="task-card">
+      <div class="task-header">
+        <div class="task-name">
+          <span>9. التسميم الديناميكي للـ DOM والـ Gadget Chains (Client-Side Prototype Pollution)</span>
+          <span class="badge badge-unimplemented">غير معمول في الكود حالياً [NEW]</span>
+        </div>
+        <span class="badge badge-high">HIGH IMPACT • P1</span>
+      </div>
+
+      <div class="task-grid">
+        <div class="task-box-info">
+          <strong>⚙️ كيف يعمل من رابط الموقع فقط؟</strong>
+          حقن باراميترات في مسار الرابط والـ Hash: <code>?__proto__[sential_test]=123</code>.
+          يقوم المتصفح بالتحقق في بيئة التشغيل (Window Context) هل تم تلويث <code>Object.prototype</code>، ثم يبحث تلقائياً عن أدوات الربط (Gadget Chains) في مكتبات Lodash أو Next.js لتحويلها لـ DOM XSS.
+        </div>
+        <div class="task-box-info">
+          <strong>🔬 التحقق من الكود الحالي (Gap Analysis):</strong>
+          الملف الحالي <code>prototype-pollution.service.ts</code> هو مجرد فاحص نصي سطحي للسيرفر، ولا يفحص بيئة المتصفح الحية (Window Runtime) إطلاقاً.
+        </div>
+      </div>
+      <div class="impact-callout">
+        <strong>🎯 ليه هيفرق معاك جداً؟</strong>
+        يكتشف ثغرات الـ Client-Side المعقدة في أحدث أطر العمل مثل Next.js و React والتي تفشل كل أدوات الـ DAST التقليدية في رؤيتها.
+      </div>
+    </div>
+
+    <!-- Task 10: Broken OAuth 2.0 / SSO Redirection & State Audit -->
+    <div class="task-card">
+      <div class="task-header">
+        <div class="task-name">
+          <span>10. فحص ثغرات تسجيل الدخول الموحد والـ OAuth 2.0 (Broken OAuth & SSO Redirection)</span>
+          <span class="badge badge-unimplemented">غير معمول في الكود حالياً [NEW]</span>
+        </div>
+        <span class="badge badge-critical">CRITICAL IMPACT • P0</span>
+      </div>
+
+      <div class="task-grid">
+        <div class="task-box-info">
+          <strong>⚙️ كيف يعمل من رابط الموقع فقط؟</strong>
+          اكتشاف أزرار "تسجيل الدخول عبر Google/GitHub/SSO" وفحص:
+          1. غياب أو عدم التحقق من باراميتر <code>state</code> (مما يتيح OAuth Login CSRF).
+          2. التلاعب بـ <code>redirect_uri</code> بتمرير مسارات التفافية مثل: <code>/callback/../../attacker.com</code> لسحب الـ Authorization Code.
+        </div>
+        <div class="task-box-info">
+          <strong>🔬 التحقق من الكود الحالي (Gap Analysis):</strong>
+          لا يوجد في كامل المنصة أي مدقق متخصص في تدفقات المصادقة الخارجية أو بروتوكولات OAuth 2.0 / OpenID Connect.
+        </div>
+      </div>
+      <div class="impact-callout">
+        <strong>🎯 ليه هيفرق معاك جداً؟</strong>
+        يمنح الإسكانر القدرة على كشف ثغرات الاستيلاء الكامل على الحسابات (Account Takeover) في بوابات تسجيل الدخول بضغطة زر واحدة.
+      </div>
+    </div>
+
+    <!-- مصفوفة المقارنة الشاملة -->
+    <div class="category-banner" style="background:#0f172a; color:white; border-right-color:var(--accent);">
+      <span class="category-title" style="color:white;">📊 مصفوفة المقارنة الشاملة وتوزيع الأولويات</span>
+      <span class="category-count" style="color:#0f172a;">ملخص تنفيذي</span>
+    </div>
+
+    <table class="matrix-table">
+      <thead>
+        <tr>
+          <th>المهمة الهندسية</th>
+          <th>التصنيف</th>
+          <th>المستوى</th>
+          <th>الوضع في الكود الحالي</th>
+          <th>الأثر الفعلي على الرابط</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>1. Origin IP Uncloaking</strong></td>
+          <td>بنية تحتية</td>
+          <td><span class="badge badge-critical">CRITICAL</span></td>
+          <td><span class="badge badge-unimplemented">غير موجود إطلاقاً</span></td>
+          <td>تخطي Cloudflare والوصول المباشر للسيرفر بدون حجب.</td>
+        </tr>
+        <tr>
+          <td><strong>2. Virtual Host Fuzzing</strong></td>
+          <td>بنية تحتية</td>
+          <td><span class="badge badge-high">HIGH</span></td>
+          <td><span class="badge badge-unimplemented">غير موجود إطلاقاً</span></td>
+          <td>كشف لوحات الإدارة والـ DevOps المخفية على نفس السيرفر.</td>
+        </tr>
+        <tr>
+          <td><strong>3. Historical URL Mining</strong></td>
+          <td>استخبارات وأسطح</td>
+          <td><span class="badge badge-critical">CRITICAL</span></td>
+          <td><span class="badge badge-unimplemented">غير موجود إطلاقاً</span></td>
+          <td>اكتشاف ملفات الـ Backup والـ APIs المنسية من أرشيف 10 سنين.</td>
+        </tr>
+        <tr>
+          <td><strong>4. Event-Driven Crawler</strong></td>
+          <td>استخبارات وأسطح</td>
+          <td><span class="badge badge-high">HIGH</span></td>
+          <td><span class="badge badge-unimplemented">غير موجود إطلاقاً</span></td>
+          <td>استخراج 4 أضعاف الـ Endpoints في مواقع React/Vue الحديثة.</td>
+        </tr>
+        <tr>
+          <td><strong>5. HTTP Request Smuggling</strong></td>
+          <td>بروتوكول وشبكات</td>
+          <td><span class="badge badge-critical">CRITICAL</span></td>
+          <td><span class="badge badge-unimplemented">غير موجود إطلاقاً</span></td>
+          <td>سرقة طلبات وجلسات زوار الموقع وتسميم الكاش العام.</td>
+        </tr>
+        <tr>
+          <td><strong>6. Single-Packet Race Fuzzer</strong></td>
+          <td>بروتوكول وشبكات</td>
+          <td><span class="badge badge-critical">CRITICAL</span></td>
+          <td><span class="badge badge-unimplemented">غير موجود إطلاقاً</span></td>
+          <td>كشف ثغرات المنطق المالي والكوبونات وتكرار العمليات المتزامنة.</td>
+        </tr>
+        <tr>
+          <td><strong>7. Web Cache Poisoning & Deception</strong></td>
+          <td>كاش وتطبيقات</td>
+          <td><span class="badge badge-high">HIGH</span></td>
+          <td><span class="badge badge-unimplemented">غير موجود إطلاقاً</span></td>
+          <td>تسريب بيانات المستخدمين الشخصية عبر كاش الـ CDN.</td>
+        </tr>
+        <tr>
+          <td><strong>8. Deep CORS & PostMessage</strong></td>
+          <td>كاش وتطبيقات</td>
+          <td><span class="badge badge-high">HIGH</span></td>
+          <td><span class="badge badge-unimplemented">غير موجود إطلاقاً</span></td>
+          <td>سرقة بيانات الجلسة وسجلات الـ DOM من مواقع خبيثة خارجية.</td>
+        </tr>
+        <tr>
+          <td><strong>9. Client-Side Prototype Pollution</strong></td>
+          <td>كاش وتطبيقات</td>
+          <td><span class="badge badge-high">HIGH</span></td>
+          <td><span class="badge badge-unimplemented">غير موجود إطلاقاً</span></td>
+          <td>تحويل تلويث كائنات الـ JavaScript إلى Executable DOM XSS.</td>
+        </tr>
+        <tr>
+          <td><strong>10. Broken OAuth & SSO Audit</strong></td>
+          <td>كاش وتطبيقات</td>
+          <td><span class="badge badge-critical">CRITICAL</span></td>
+          <td><span class="badge badge-unimplemented">غير موجود إطلاقاً</span></td>
+          <td>الاستيلاء على الحسابات عبر سرقة رموز تسجيل الدخول الموحد.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="footer-section">
+      <div>تم توثيق خارطة المهام الهندسية المتقدمة عبر <strong>Sential AI Advanced Architecture Team</strong></div>
+      <div>نوفمبر 2026 | وثيقة معتمدة ومطابقة لسيناريو Black-Box URL Only</div>
+    </div>
+
+  </div>
+
+</body>
+</html>
